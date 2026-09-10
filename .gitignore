@@ -1,0 +1,14 @@
+.DS_Store
+.env
+.env.*
+!.env.example
+.venv/
+__pycache__/
+*.py[cod]
+node_modules/
+dist/
+build/
+harness/reports/*
+!harness/reports/.gitkeep
+evals/reports/*
+!evals/reports/README.md
