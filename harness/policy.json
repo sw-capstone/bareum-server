@@ -73,7 +73,7 @@
     "scripts/test-harness.sh",
     "docs/guide/development-guide.md",
     "docs/runbooks/local-harness.md",
-    ".github/ISSUE_TEMPLATE/feature.md",
+    ".github/ISSUE_TEMPLATE/feature.yml",
     ".github/pull_request_template.md"
   ],
   "checks": {
