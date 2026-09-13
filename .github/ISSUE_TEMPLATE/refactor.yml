@@ -1,0 +1,62 @@
+name: "♻️ Refactor"
+description: "기존 기능과 판정 기준을 유지하면서 코드·파이프라인 구조를 정리하거나, 처리 속도·자원 사용량·실행 비용을 개선하는 작업에 사용합니다."
+title: "[Refactor] "
+labels: [":recycle: refactor"]
+
+body:
+  - type: markdown
+    attributes:
+      value: 성능 개선과 관련된 작업이라면 `perf` 라벨로 변경해주세요.
+
+  - type: textarea
+    id: target
+    attributes:
+      label: 개선 대상
+      description: 개선하고자 하는 대상을 적어주세요.
+      placeholder: |
+        e.g. AI 분석 파이프라인의 근거 검색 로직
+    validations:
+      required: true
+
+  - type: textarea
+    id: reason
+    attributes:
+      label: 개선이 필요한 이유
+      description: 현재의 문제와 개선 목표를 설명해주세요.
+      placeholder: |
+        e.g. 하나의 모듈에 검색과 판정 로직이 함께 있어 테스트가 어렵고 변경 시 영향 범위가 넓습니다.
+    validations:
+      required: true
+
+  - type: textarea
+    id: approach
+    attributes:
+      label: 개선 방법
+      description: 어떻게 개선할 것인지 구체적인 방법을 적어주세요.
+      placeholder: |
+        e.g. 근거 검색 로직을 별도 모듈로 분리하고, 동일한 검색 요청의 중복 실행을 줄입니다.
+    validations:
+      required: true
+
+  - type: textarea
+    id: todo
+    attributes:
+      label: 작업 목록
+      description: 개선에 필요한 세부 작업을 작성해주세요.
+      placeholder: |
+        e.g.
+
+        - [ ] 작업 1
+        - [ ] 작업 2
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: 확인사항
+      options:
+        - label: 동일하거나 유사한 이슈가 없는지 확인했습니다.
+          required: true
+        - label: 적절한 라벨과 Assignee를 설정했습니다.
+          required: true

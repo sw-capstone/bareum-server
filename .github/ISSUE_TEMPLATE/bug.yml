@@ -1,0 +1,67 @@
+name: "🐛 Bug"
+description: "오류를 제보하고 수정하는 작업에 사용합니다."
+title: "[Bug] "
+labels: [":bug: bug"]
+
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: 어떤 버그인가요?
+      description: 실제 발생한 문제와 영향을 설명해주세요.
+      placeholder: |
+        e.g. 분석 결과 조회 API 호출 시 완료된 작업이 진행 중 상태로 반환됩니다.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: 재현 방법
+      description: 요청이나 입력 데이터, 실행 순서를 적어주세요. 재현이 어렵다면 발생 당시 조건과 빈도를 적어주세요.
+      placeholder: |
+        e.g.
+
+        1. 문서를 업로드하고 분석을 요청합니다.
+        2. 분석이 완료된 후 결과 조회 API를 호출합니다.
+        3. 진행 중 상태가 반환됩니다.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 기대 동작
+      description: 정상적으로 어떤 결과가 나와야 하나요?
+      placeholder: |
+        e.g. 200 OK와 함께 완료 상태와 분석 결과가 반환되어야 합니다.
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: 발생 환경 및 참고 자료
+      description: 재현에 필요한 실행 환경, 버전, 입력·출력과 로그를 적어주세요. 파악한 원인이나 수정 방향도 함께 적고, 민감한 정보는 마스킹해주세요.
+      placeholder: |
+        e.g.
+
+        - 발생 일시:
+        - Trace ID:
+        - 에러 코드:
+        - cURL:
+        - 로그:
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: 확인사항
+      options:
+        - label: 동일하거나 유사한 이슈가 없는지 확인했습니다.
+          required: true
+        - label: 첨부한 입력·로그에 개인정보, 토큰 등 민감한 정보가 없는지 확인했습니다.
+          required: true
+        - label: 적절한 라벨과 Assignee를 설정했습니다.
+          required: true
