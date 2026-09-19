@@ -1,0 +1,61 @@
+name: "📝 Docs"
+description: "문서를 작성하거나 기존 내용을 수정하는 작업에 사용합니다."
+title: "[Docs] "
+labels: [":memo: docs"]
+
+body:
+  - type: textarea
+    id: target
+    attributes:
+      label: 문서화 대상
+      description: 작성하거나 수정할 문서 유형을 적어주세요.
+      placeholder: |
+        e.g. Readme, API 명세, 설계 등
+    validations:
+      required: true
+
+  - type: textarea
+    id: reason
+    attributes:
+      label: 문서화가 필요한 이유
+      description: 어떤 정보가 없거나, 현재 내용에서 무엇이 달라졌나요?
+      placeholder: |
+        e.g. 새롭게 도입된 아키텍처에 대한 공통 참고 문서가 필요합니다.
+    validations:
+      required: false
+
+  - type: textarea
+    id: content
+    attributes:
+      label: 주요 내용
+      description: 문서에 추가하거나 수정할 내용을 작성해주세요.
+      placeholder: |
+        e.g.
+
+        - 항목 1
+        - 항목 2
+    validations:
+      required: false
+
+  - type: textarea
+    id: references
+    attributes:
+      label: 참고 자료
+      description: 관련 이슈, 코드, 기획, 계약, 결정 기록 등을 연결해주세요.
+      placeholder: |
+        e.g.
+
+        - related to #이슈번호
+        - https://...
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: 확인사항
+      options:
+        - label: 동일하거나 유사한 이슈가 없는지 확인했습니다.
+          required: true
+        - label: 적절한 라벨과 Assignee를 설정했습니다.
+          required: true
