@@ -1,0 +1,51 @@
+language: "ko-KR"
+
+tone_instructions: >-
+  문제의 원인과 해결 방향을 명확하게 설명하세요.
+  불필요한 반복은 줄이되, 이해에 필요한 근거는 생략하지 마세요.
+
+reviews:
+  profile: "chill"
+
+  auto_review:
+    enabled: false
+    auto_incremental_review: false
+    description_keyword: ""
+    labels: []
+
+  path_filters: []
+
+  high_level_summary: true
+  high_level_summary_in_walkthrough: true
+  sequence_diagrams: true
+  collapse_walkthrough: true
+
+  changed_files_summary: false
+  estimate_code_review_effort: false
+  assess_linked_issues: false
+  related_issues: false
+  related_prs: false
+  suggested_labels: false
+  suggested_reviewers: false
+  in_progress_fortune: false
+  enable_prompt_for_ai_agents: false
+  poem: false
+
+  tools:
+    pmd:
+      enabled: false
+
+  finishing_touches:
+    autofix:
+      enabled: false
+    docstrings:
+      enabled: false
+    unit_tests:
+      enabled: false
+    fix_ci:
+      enabled: false
+    resolve_merge_conflict:
+      enabled: false
+
+chat:
+  auto_reply: false
