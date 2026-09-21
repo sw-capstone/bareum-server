@@ -13,3 +13,17 @@ spring:
     properties:
       hibernate:
         format_sql: true
+
+springdoc:
+  api-docs:
+    enabled: true
+  override-with-generic-response: false
+  remove-broken-reference-definitions: false
+
+scalar:
+  enabled: true
+  url: /v3/api-docs
+  path: /scalar
+  page-title: Bareum API
+  theme: default
+  layout: classic
