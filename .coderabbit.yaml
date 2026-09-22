@@ -1,3 +1,5 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+
 language: "ko-KR"
 
 tone_instructions: >-
@@ -14,6 +16,48 @@ reviews:
     labels: []
 
   path_filters: []
+
+  path_instructions:
+    - path: "**/*"
+      instructions: |
+        변경된 파일만 고립해서 판단하지 말고, 관련 호출 흐름과 기존 구현,
+        설정 파일 및 테스트를 함께 확인하세요.
+        현재 PR이 새로 만든 구체적이고 재현 가능한 문제를 우선해서 지적하세요.
+        단순한 스타일 취향이나 근거 없는 추측은 리뷰하지 마세요.
+        문제를 지적할 때는 원인, 실제 영향, 해결 방향을 함께 설명하세요.
+
+    - path: "src/main/java/**/*.java"
+      instructions: |
+        컴파일 오류와 런타임 오류 가능성, null 처리, 예외 처리,
+        상태 불변식 위반 및 잘못된 Spring Bean 사용을 확인하세요.
+        의존성 주입은 생성자 주입을 우선하고, 공유 Bean에 요청별 가변 상태를
+        저장하여 동시성 문제가 발생하지 않는지 확인하세요.
+
+    - path: "src/main/java/**/*Controller.java"
+      instructions: |
+        요청 본문과 파라미터에 필요한 Bean Validation이 적용되었는지 확인하세요.
+        HTTP 상태 코드와 응답 형식이 API 동작과 일치하는지 확인하세요.
+        내부 예외나 민감한 정보가 응답 또는 로그에 노출되지 않는지 확인하세요.
+        컨트롤러에 불필요한 비즈니스 로직이 포함되어 있으면 지적하세요.
+
+    - path: "src/test/java/**/*.java"
+      instructions: |
+        변경된 동작의 정상 흐름뿐 아니라 경계값과 실패 흐름이 검증되는지 확인하세요.
+        실제 검증 없이 애플리케이션 컨텍스트만 실행하는 테스트나
+        구현 세부사항에 지나치게 결합된 테스트를 지적하세요.
+        임의의 커버리지 수치를 요구하지 마세요.
+
+    - path: "src/main/resources/application*.yml"
+      instructions: |
+        비밀값이나 운영 환경별 값이 직접 작성되어 있지 않은지 확인하세요.
+        프로파일과 환경 변수 기본값이 의도하지 않은 환경에서도 안전한지 확인하세요.
+        코드에서 사용하는 설정 키와 YAML의 설정 키가 일치하는지 확인하세요.
+
+    - path: "build.gradle.kts"
+      instructions: |
+        플러그인과 의존성이 Java 25 및 Spring Boot 4와 호환되는지 확인하세요.
+        implementation, runtimeOnly, testImplementation 등 의존성 범위가 적절한지 확인하세요.
+        불필요하거나 중복된 의존성과 테스트 실행 설정 문제를 확인하세요.
 
   high_level_summary: true
   high_level_summary_in_walkthrough: true
