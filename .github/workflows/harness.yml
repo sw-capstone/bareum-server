@@ -1,0 +1,37 @@
+name: Server checks
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  server-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "25"
+          cache: gradle
+      - run: ./gradlew test
+
+  harness:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: python -m pip install -r harness/requirements.txt
+      - run: ./scripts/run-harness.sh check
+      - run: ./scripts/test-harness.sh
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: harness-report
+          path: harness/reports/report.json
+          if-no-files-found: warn
