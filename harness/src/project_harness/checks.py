@@ -42,6 +42,11 @@ TEXT_SUFFIXES = {
 }
 ID_PATTERN = re.compile(r"^[A-Z]+-[A-Z0-9]+-[0-9]{3}$")
 ALLOWED_ID_TYPES = {"FEAT", "API", "RULE", "DATA", "EVAL", "TEST", "HAR", "DEC"}
+ALLOWED_ID_DOMAINS = {
+    "DOC", "AUTH", "WEB", "SERVER", "AI", "REG", "LAW", "FLOW",
+    "CI", "REPO", "ID", "COMMON", "STRUCT", "JSON", "SCHEMA", "SEC",
+}
+ALLOWED_ID_STATUSES = {"draft", "active", "deprecated"}
 ID_RELATION_FIELDS = ("implements", "depends", "verified_by")
 LINK_PATTERN = re.compile(r"(?<!!)\[[^\]]+\]\(([^)]+)\)")
 
@@ -208,23 +213,39 @@ def check_id_registry(root: Path) -> list[Finding]:
         if isinstance(item_id, str):
             seen.add(item_id)
 
-        required_fields = {"id", "type", "status", "owner", "description", "path"}
+        required_fields = {"id", "type", "status", "owner", "description"}
         missing_fields = sorted(required_fields.difference(item))
+        if missing_fields:
+            findings.append(Finding("HAR-ID-003", "error", location, f"누락 필드: {', '.join(missing_fields)}"))
+
         item_type = item.get("type", "")
         valid_type = isinstance(item_type, str) and item_type in ALLOWED_ID_TYPES
-        type_matches = isinstance(item_id, str) and valid_type and item_id.startswith(f"{item_type}-")
-        if missing_fields or not valid_type or not type_matches:
-            detail = f"누락 필드: {', '.join(missing_fields)}" if missing_fields else "ID 접두사와 type이 일치하지 않습니다."
-            findings.append(Finding("HAR-ID-003", "error", location, detail))
+        if not valid_type:
+            findings.append(Finding("HAR-ID-003", "error", location, f"허용되지 않은 ID type: {item_type}"))
+
+        id_parts = item_id.split("-") if isinstance(item_id, str) else []
+        if len(id_parts) == 3 and id_parts[1] not in ALLOWED_ID_DOMAINS:
+            findings.append(Finding("HAR-ID-003", "error", location, f"허용되지 않은 ID domain: {id_parts[1]}"))
+        if isinstance(item_id, str) and valid_type and id_parts and id_parts[0] != item_type:
+            findings.append(Finding("HAR-ID-003", "error", location, "ID 접두사와 type이 일치하지 않습니다."))
+
+        status = item.get("status")
+        if not isinstance(status, str) or status not in ALLOWED_ID_STATUSES:
+            findings.append(Finding("HAR-ID-003", "error", location, f"허용되지 않은 ID status: {status}"))
+
+        owner = item.get("owner")
+        if not isinstance(owner, str) or not owner.strip():
+            findings.append(Finding("HAR-ID-003", "error", location, "owner는 비어 있지 않은 역할명이어야 합니다."))
 
         registered_path = item.get("path")
-        if registered_path:
-            if not isinstance(registered_path, str):
-                findings.append(Finding("HAR-ID-003", "error", location, "path는 문자열이어야 합니다."))
+        if "path" in item:
+            if not isinstance(registered_path, str) or not registered_path.strip():
+                findings.append(Finding("HAR-ID-003", "error", location, "path는 비어 있지 않은 문자열이어야 합니다."))
                 continue
-            asset_path = (root / registered_path).resolve()
+            resolved_root = root.resolve()
+            asset_path = (resolved_root / registered_path).resolve()
             try:
-                asset_path.relative_to(root)
+                asset_path.relative_to(resolved_root)
             except ValueError:
                 path_exists = False
             else:

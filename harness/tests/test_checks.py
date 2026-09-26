@@ -1,3 +1,4 @@
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -118,10 +119,21 @@ class HarnessChecksTest(unittest.TestCase):
             findings = check_schema_headers(root)
             self.assertEqual([finding.check_id for finding in findings], ["HAR-SCHEMA-001"])
 
-    def test_fallback_schema_validator_checks_any_of(self) -> None:
+    def test_schema_validation_fails_closed_without_dependency(self) -> None:
         with patch.object(schema_module, "Draft202012Validator", None):
-            with self.assertRaises(SchemaValidationError):
-                schema_module.validate(123, {"anyOf": [{"type": "string"}, {"type": "boolean"}]})
+            with patch.object(schema_module, "FormatChecker", None):
+                with self.assertRaisesRegex(SchemaValidationError, "jsonschema 의존성이 없어"):
+                    schema_module.validate("valid", {"type": "string"})
+
+    @unittest.skipIf(schema_module.Draft202012Validator is None, "jsonschema 의존성이 없습니다")
+    def test_invalid_schema_definition_is_reported(self) -> None:
+        with self.assertRaisesRegex(SchemaValidationError, "Schema가 유효하지 않습니다"):
+            schema_module.validate("value", {"type": "not-a-json-schema-type"})
+
+    @unittest.skipIf(schema_module.Draft202012Validator is None, "jsonschema 의존성이 없습니다")
+    def test_invalid_schema_pattern_is_reported(self) -> None:
+        with self.assertRaises(SchemaValidationError):
+            schema_module.validate("value", {"type": "string", "pattern": "["})
 
     def test_schema_example_validation_checks_types_and_enums(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -267,6 +279,54 @@ class HarnessChecksTest(unittest.TestCase):
             (contracts / "id-registry.json").write_text(registry, encoding="utf-8")
             findings = check_id_registry(root)
             self.assertIn("HAR-ID-004", [finding.check_id for finding in findings])
+
+    def test_registry_path_may_be_omitted_but_not_empty_or_non_string(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            contracts = root / "packages" / "contracts"
+            contracts.mkdir(parents=True)
+            base = {
+                "id": "HAR-ID-001",
+                "type": "HAR",
+                "status": "active",
+                "owner": "harness-maintainers",
+                "description": "",
+            }
+            (contracts / "id-registry.json").write_text(
+                json.dumps({"items": [base]}), encoding="utf-8"
+            )
+            self.assertEqual(check_id_registry(root), [])
+
+            for invalid_path in ("", None, False, 0):
+                with self.subTest(path=invalid_path):
+                    entry = {**base, "path": invalid_path}
+                    (contracts / "id-registry.json").write_text(
+                        json.dumps({"items": [entry]}), encoding="utf-8"
+                    )
+                    findings = check_id_registry(root)
+                    self.assertTrue(
+                        any("path는 비어 있지 않은 문자열" in finding.message for finding in findings)
+                    )
+
+    def test_registry_rejects_undocumented_status_domain_and_empty_owner(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            contracts = root / "packages" / "contracts"
+            contracts.mkdir(parents=True)
+            item = {
+                "id": "HAR-UNKNOWN-001",
+                "type": "HAR",
+                "status": "pending",
+                "owner": "  ",
+                "description": "",
+            }
+            (contracts / "id-registry.json").write_text(
+                json.dumps({"items": [item]}), encoding="utf-8"
+            )
+            messages = [finding.message for finding in check_id_registry(root)]
+            self.assertTrue(any("허용되지 않은 ID domain" in message for message in messages))
+            self.assertTrue(any("허용되지 않은 ID status" in message for message in messages))
+            self.assertTrue(any("owner는 비어 있지 않은 역할명" in message for message in messages))
 
     def test_id_type_mismatch_is_reported(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
