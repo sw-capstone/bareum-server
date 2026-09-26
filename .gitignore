@@ -64,3 +64,11 @@ out/
 .env
 .env.*
 !.env.example
+
+# Local harness
+.DS_Store
+.venv/
+__pycache__/
+*.py[cod]
+harness/reports/*
+!harness/reports/.gitkeep
