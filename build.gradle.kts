@@ -23,6 +23,8 @@ dependencies {
 	annotationProcessor("org.projectlombok:lombok")
 
 	implementation("org.springframework.boot:spring-boot-starter-data-jpa")
+	implementation("org.springframework.boot:spring-boot-starter-flyway")
+	runtimeOnly("org.flywaydb:flyway-database-postgresql")
 	runtimeOnly("org.postgresql:postgresql")
 
 	implementation("org.springframework.boot:spring-boot-starter-validation")
@@ -33,6 +35,4 @@ dependencies {
 	testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
-tasks.test {
-	useJUnitPlatform()
-}
+apply(from = "gradle/testing.gradle.kts")

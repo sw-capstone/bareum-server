@@ -7,12 +7,17 @@ spring:
     password: ${DB_PASSWORD}
   sql:
     init:
-      mode: always
+      mode: never
+  flyway:
+    enabled: true
+    baseline-on-migrate: false
+    out-of-order: false
+    clean-disabled: true
   jpa:
     open-in-view: true
     show-sql: true
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate
     properties:
       hibernate:
         format_sql: true
