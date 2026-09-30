@@ -8,17 +8,6 @@ permissions:
   contents: read
 
 jobs:
-  server-test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v6
-        with:
-          distribution: temurin
-          java-version: "25"
-          cache: gradle
-      - run: ./gradlew test
-
   harness:
     runs-on: ubuntu-latest
     steps:

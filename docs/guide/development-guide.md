@@ -333,7 +333,7 @@ cd bareum-server
   - `.env`·Dockerfile과 지원 텍스트 파일에서 `API_KEY`, `CLIENT_SECRET`, `SECRET`, `TOKEN`, `PASSWORD`, `PASSWD` 대입값(8자 이상)과 `sk-` 뒤 20자 이상 토큰 패턴을 확인한다. `replace-me`, `example` 같은 예시값은 제외하며, 모든 비밀정보를 찾아내는 검사는 아니다.
 - 제품 구현 요약 문서 기준 — 실행 중
   - `docs/product/service-spec.md`에 정책이 요구하는 구성이 있는지 확인한다. 문서 내용의 정확성은 판정하지 않는다.
-백엔드·AI 동작, 계약 호환성, 근거·상태 보존 등 안전 불변식, 평가 데이터·성능 회귀 검사는 관련 구현과 자산이 준비된 뒤 각 저장소에 추가한다. 서버의 Spring Boot 코드는 `src/main/`, `src/test/`에 있으며 Java 25 환경에서 `./gradlew test`로 검증한다. 서버 CI는 Gradle 테스트와 하네스 검사를 별도 작업으로 실행한다.
+백엔드·AI 동작, 계약 호환성, 근거·상태 보존 등 안전 불변식, 평가 데이터·성능 회귀 검사는 관련 구현과 자산이 준비된 뒤 각 저장소에 추가한다. 서버의 Spring Boot 코드는 `src/main/`, `src/test/`에 있으며 Java 25와 백엔드에서 정한 로컬 DB 연결 환경에서 `./gradlew test`로 검증할 수 있다. 현재 서버 CI는 하네스 검사만 실행하며, Gradle 테스트는 CI용 DB와 접속 기준이 확정된 뒤 연결한다.
 
 `test-harness.sh`는 하네스 검사기의 자체 회귀 테스트를 실행한다. 서버 제품 코드는 `./gradlew test`로 별도 검증한다.
 
@@ -474,13 +474,12 @@ PR 작성자가 필요한 리뷰어를 직접 지정한다.
 서버:
 
 ```text
-Server checks / server-test
-└── ./gradlew test
-
 Server checks / harness
 ├── ./scripts/run-harness.sh check
 └── ./scripts/test-harness.sh
 ```
+
+Gradle 테스트는 로컬에서 백엔드 담당자가 정한 DB 연결 환경을 갖춘 뒤 실행한다. CI용 DB와 접속 기준이 확정되기 전까지 GitHub Actions에는 연결하지 않는다.
 
 웹:
 
@@ -550,6 +549,7 @@ git diff
 서버:
 
 ```bash
+# 백엔드에서 정한 DB 연결 환경을 준비한 경우에만 실행
 ./gradlew test
 ./scripts/run-harness.sh check
 ./scripts/test-harness.sh
@@ -591,6 +591,7 @@ git merge origin/develop
 
 ```bash
 # 서버
+# Gradle 테스트는 백엔드에서 정한 DB 연결 환경을 준비한 경우에만 실행
 ./gradlew test
 ./scripts/run-harness.sh check
 ./scripts/test-harness.sh

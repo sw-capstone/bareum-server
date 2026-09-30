@@ -13,12 +13,12 @@
 
 ## 서버 실행 환경
 
-GitHub develop의 초기 설정은 Java 25, Spring Boot 4.1.1, Gradle Wrapper 9.7.1을 사용한다. Java 25 설치 후 `./gradlew test`로 테스트하고 `./gradlew bootRun`으로 실행한다. Pull Request에서는 서버 CI가 `./gradlew test`와 하네스 검사를 각각 실행한다.
+GitHub develop의 초기 설정은 Java 25, Spring Boot 4.1.1, Gradle Wrapper 9.7.1을 사용한다. Java 25와 로컬 PostgreSQL 환경을 준비한 뒤 `./gradlew test`로 테스트하고 `./gradlew bootRun`으로 실행한다. Pull Request의 서버 CI는 현재 하네스 검사만 실행한다. Gradle 테스트의 CI 연결은 테스트용 DB와 접속 기준이 백엔드에서 확정된 뒤 진행한다.
 
 ## 저장소 구조
 
 ```text
-.github/        이슈·PR 템플릿과 서버 테스트·하네스 CI
+.github/        이슈·PR 템플릿과 하네스 CI
 docs/           기획·아키텍처·결정·개발·하네스 문서
 harness/        하네스 정책·검사기·자체 테스트
 scripts/        로컬과 CI의 공통 실행 진입점
