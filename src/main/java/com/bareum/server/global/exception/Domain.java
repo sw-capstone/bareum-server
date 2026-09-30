@@ -5,6 +5,8 @@ package com.bareum.server.global.exception;
  */
 public enum Domain {
 	DOCUMENT,
+	REPORT,
+	TERM,
 	ANALYSIS,
 	MEMBER,
 	ISSUE
