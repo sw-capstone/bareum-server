@@ -8,7 +8,7 @@
 | --- | --- |
 | `sw-capstone/bareum-web` | 화면과 공개 API 계약 소비 |
 | `sw-capstone/bareum-server` | 백엔드 API, 서버 문서, 공유 계약과 서버 하네스 |
-| `sw-capstone/bareum-server-ai` | AI 처리 코드와 관련 테스트·평가 |
+| `sw-capstone/bareum-ai` | AI 처리 코드와 관련 테스트·평가 |
 
 백엔드와 AI는 별도 Git 저장소에서 관리한다. 저장소를 분리한다고 해서 실행·배포 방식이나 내부 아키텍처까지 확정된 것은 아니다.
 
@@ -50,7 +50,7 @@ bareum-server/
 │   └── reports/             # 생성 결과(Git 제외)
 └── scripts/                 # 서버 검사 실행 명령
 
-bareum-server-ai/
+bareum-ai/
 ├── README.md                # AI 저장소 범위와 현재 상태
 ├── AGENTS.md                # AI 저장소 작업 지침
 ├── .github/                 # 협업 템플릿·하네스 CI
@@ -60,7 +60,7 @@ bareum-server-ai/
 └── .gitignore               # 제외 규칙
 ```
 
-`bareum-server-ai`는 AI 저장소의 문서·협업 템플릿·하네스 CI를 관리한다. AI 실행 코드의 경로와 실행·배포 단위는 관련 결정이 완료된 뒤 구현과 함께 추가한다.
+`bareum-ai`는 AI 저장소의 문서·협업 템플릿·하네스 CI를 관리한다. AI 실행 코드의 경로와 실행·배포 단위는 관련 결정이 완료된 뒤 구현과 함께 추가한다.
 
 웹·서버 루트의 README, AGENTS와 설정 파일도 각 저장소에서 관리한다. 발표용 HTML·다이어그램 원본은 제품 레포 밖에서 관리하며, 서버 검사의 대상으로 포함하지 않는다.
 

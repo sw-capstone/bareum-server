@@ -10,7 +10,7 @@
 | --------------------------------------- | --------------------------- |
 | 화면, 입력, 상태 표시, 공개 API 소비    | `sw-capstone/bareum-web`    |
 | 백엔드 API, 작업 관리, 서버 문서, 서버 하네스 | `sw-capstone/bareum-server` |
-| AI 처리와 관련 테스트                    | `sw-capstone/bareum-server-ai`     |
+| AI 처리와 관련 테스트                    | `sw-capstone/bareum-ai`     |
 
 `bareum-web`은 서버의 공개 API 계약만 소비한다. 서버와 AI의 내부 구현, DB, 프롬프트와 규칙 파일을 직접 참조하지 않는다.
 
@@ -75,7 +75,7 @@ bareum-server/AGENTS.md
 bareum-server/README.md
 ```
 
-AI 작업은 `bareum-server-ai/README.md`와 `bareum-server-ai/AGENTS.md`를 먼저 확인한다. 아래 추가 문서 경로는 별도 표기가 없으면 `bareum-server` 기준이다.
+AI 작업은 `bareum-ai/README.md`와 `bareum-ai/AGENTS.md`를 먼저 확인한다. 아래 추가 문서 경로는 별도 표기가 없으면 `bareum-server` 기준이다.
 
 그 다음 변경 범위에 직접 연결된 문서만 선택해서 확인한다.
 
@@ -83,8 +83,8 @@ AI 작업은 `bareum-server-ai/README.md`와 `bareum-server-ai/AGENTS.md`를 먼
 | --- | --- |
 | 제품 기능·정책 변경 | Notion 기획 원문, `docs/product/service-spec.md` |
 | 백엔드 책임·실행 경계 변경 | `docs/architecture/repository-structure.md`, `docs/architecture/repository-boundaries.md`와 관련 결정 문서 |
-| AI와 서버의 책임·인터페이스 변경 | `bareum-server-ai`의 `AGENTS.md`, 관련 결정 문서와 계약 기준 |
-| AI 규칙·프롬프트·평가 기준 변경 | `bareum-server-ai`의 승인된 원천과 관련 결정 문서 |
+| AI와 서버의 책임·인터페이스 변경 | `bareum-ai`의 `AGENTS.md`, 관련 결정 문서와 계약 기준 |
+| AI 규칙·프롬프트·평가 기준 변경 | `bareum-ai`의 승인된 원천과 관련 결정 문서 |
 | 웹·서버·AI의 책임·계약·경계 변경 | `docs/architecture/repository-structure.md`, `docs/architecture/repository-boundaries.md`와 관련 결정 문서 |
 | 하네스 검사·정책·CI 변경 | `docs/harness/harness-v1.4.md`, `docs/harness/harness-file-roadmap.md` |
 | 이슈·브랜치·PR·리뷰·병합 방식 변경 | `docs/guide/development-guide.md` |
@@ -142,7 +142,7 @@ AI 모델 SDK
 
 이 표는 작업 책임을 설명한 것이지 현재 구현 경로를 의미하지 않는다. 백엔드 코드, 공유 계약과 서버 문서의 실제 경로, 별도 프로세스·이미지 운영 여부는 관련 결정 후 생성한다. 현재는 이를 위한 임시 디렉터리를 만들지 않는다.
 
-### 3.3 `bareum-server-ai`에서 작업하는 경우
+### 3.3 `bareum-ai`에서 작업하는 경우
 
 - 문서 파싱, 규칙·검색·판정 등 AI 처리
 - AI 영역의 테스트와 평가
@@ -173,7 +173,7 @@ git pull --ff-only origin develop
 AI 작업:
 
 ```bash
-cd bareum-server-ai
+cd bareum-ai
 git switch develop
 git pull --ff-only origin develop
 ```
@@ -362,7 +362,7 @@ Mock API 성공은 실제 서버 연동 성공을 의미하지 않는다. 실제
 
 ### 7.3 AI 검사
 
-`bareum-server-ai`에서 `./scripts/run-harness.sh check`와 `./scripts/test-harness.sh`를 실행한다. AI CI도 같은 명령을 실행한다. 현재 필수 경로·JSON·Markdown 링크·비밀정보 의심 패턴을 검사하며 제품 AI의 성능·정확성은 아직 검사하지 않는다.
+`bareum-ai`에서 `./scripts/run-harness.sh check`와 `./scripts/test-harness.sh`를 실행한다. AI CI도 같은 명령을 실행한다. 현재 필수 경로·JSON·Markdown 링크·비밀정보 의심 패턴을 검사하며 제품 AI의 성능·정확성은 아직 검사하지 않는다.
 
 AI 담당자와 하네스 담당자는 기존 검사 정책을 유지하며 정상·실패 사례를 검증한다. 이후 AI 기능과 평가 기준이 준비되는 작업에 맞춰 검사를 추가한다. 서버 CI의 성공으로 AI 변경을 검증했다고 판단하지 않는다.
 

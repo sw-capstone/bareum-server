@@ -4,7 +4,7 @@
 - 결정일: 2026-09-08
 - 소유 역할: `harness-maintainers`
 - 기준 파일(생성 예정): `bareum-server/packages/contracts/id-registry.json`
-- 현재 검사기의 `path`는 서버 저장소 내부 경로다. 웹·AI 자산을 등록하려면 저장소 식별자와 버전 참조 형식, 검증 방식을 먼저 확정한다. `../bareum-server-ai` 같은 상대 경로를 등록하지 않는다.
+- 현재 검사기의 `path`는 서버 저장소 내부 경로다. 웹·AI 자산을 등록하려면 저장소 식별자와 버전 참조 형식, 검증 방식을 먼저 확정한다. `../bareum-ai` 같은 상대 경로를 등록하지 않는다.
 
 ## 목적
 

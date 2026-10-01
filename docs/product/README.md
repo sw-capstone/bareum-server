@@ -11,5 +11,5 @@
 
 1. 팀에서 확정된 변경만 이 요약 문서에 반영한다.
 2. API·상태·오류·데이터 구조가 확정되면 `packages/contracts/`를 생성하고, 이후 변경에는 해당 계약을 함께 수정한다.
-3. 백엔드·AI 책임이나 실행 조건의 변경은 `docs/architecture/repository-structure.md`, `docs/architecture/repository-boundaries.md`와 하네스 기준을 함께 검토한다. 백엔드 변경은 `bareum-server`, AI 변경은 `bareum-server-ai`에 반영하며 구체 경로는 관련 아키텍처 결정 뒤 추가한다.
+3. 백엔드·AI 책임이나 실행 조건의 변경은 `docs/architecture/repository-structure.md`, `docs/architecture/repository-boundaries.md`와 하네스 기준을 함께 검토한다. 백엔드 변경은 `bareum-server`, AI 변경은 `bareum-ai`에 반영하며 구체 경로는 관련 아키텍처 결정 뒤 추가한다.
 4. 미확정 내용은 `결정 대기` 또는 결정 기록으로 남기고 확정된 것처럼 작성하지 않는다.
