@@ -1,6 +1,6 @@
 # bareum-server — 백엔드 서비스 저장소
 
-`sw-capstone/bareum-server`는 바름 서비스의 백엔드 API와 서버 운영 경계를 관리하는 저장소다. 세션·분석 작업·영속성·공개 API를 담당하며, AI 처리는 별도 `bareum-ai` 저장소에서 관리한다. 프론트엔드는 `bareum-web`에서 공개 계약을 소비한다.
+`sw-capstone/bareum-server`는 바름 서비스의 백엔드 API와 서버 운영 경계를 관리하는 저장소다. 인증·분석 작업·영속성·공개 API를 담당하며, AI 처리는 별도 `bareum-ai` 저장소에서 관리한다. 프론트엔드는 `bareum-web`에서 공개 계약을 소비한다.
 
 ## 담당 범위
 
