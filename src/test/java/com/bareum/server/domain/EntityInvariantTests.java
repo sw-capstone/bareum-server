@@ -11,6 +11,13 @@ import com.bareum.server.domain.analysis.exception.AnalysisErrorCode;
 import com.bareum.server.domain.report.exception.ReportException;
 import com.bareum.server.domain.report.exception.ReportErrorCode;
 import com.bareum.server.domain.member.entity.Member;
+import com.bareum.server.domain.issue.entity.IssueGroup;
+import com.bareum.server.domain.issue.entity.IssueSuggestion;
+import com.bareum.server.domain.issue.enums.SuggestionGenerationType;
+import com.bareum.server.domain.issue.exception.IssueException;
+import com.bareum.server.domain.issue.exception.IssueErrorCode;
+import com.bareum.server.domain.issue.enums.IssueScope;
+import com.bareum.server.domain.issue.enums.IssueStatus;
 import com.bareum.server.domain.report.entity.Report;
 import com.bareum.server.domain.report.entity.ReportContent;
 import com.bareum.server.domain.report.enums.ReportType;
@@ -21,6 +28,48 @@ import tools.jackson.databind.node.ObjectNode;
 import static org.junit.jupiter.api.Assertions.*;
 
 class EntityInvariantTests {
+
+	@Test
+	void replacingSuggestionCopiesJsonAndPreservesGroupState() {
+		ReportContent content = ReportContent.create(report(), JsonNodeFactory.instance.objectNode());
+		content.freeze();
+		ReportAnalysis analysis = ReportAnalysis.request(content, UUID.randomUUID(), "v1", "v1");
+		IssueGroup group = IssueGroup.forTarget(analysis, IssueScope.SENTENCE, "sentence-1");
+		group.ignore();
+		var original = JsonNodeFactory.instance.arrayNode().add("original");
+		IssueSuggestion suggestion = IssueSuggestion.create(group, original, SuggestionGenerationType.RULE);
+		var replacement = JsonNodeFactory.instance.arrayNode().add("replacement");
+		suggestion.replaceSuggestion(replacement, SuggestionGenerationType.LLM);
+		replacement.add("external mutation");
+		((tools.jackson.databind.node.ArrayNode) suggestion.getChanges()).add("getter mutation");
+		assertEquals(JsonNodeFactory.instance.arrayNode().add("replacement"), suggestion.getChanges());
+		assertEquals(SuggestionGenerationType.LLM, suggestion.getGenerationType());
+		assertSame(group, suggestion.getIssueGroup());
+		assertEquals(IssueStatus.IGNORED, group.getStatus());
+		assertEquals(IssueErrorCode.INVALID_CHANGES, assertThrows(IssueException.class,
+			() -> suggestion.replaceSuggestion(JsonNodeFactory.instance.objectNode(), SuggestionGenerationType.RULE)).getBaseErrorCode());
+		assertThrows(NullPointerException.class,
+			() -> suggestion.replaceSuggestion(original, null));
+		assertEquals(JsonNodeFactory.instance.arrayNode().add("replacement"), suggestion.getChanges());
+		assertEquals(SuggestionGenerationType.LLM, suggestion.getGenerationType());
+	}
+
+	@Test
+	void groupRestoreResetsProcessedStateButPreservesIgnoredState() {
+		ReportContent content = ReportContent.create(report(), JsonNodeFactory.instance.objectNode());
+		content.freeze();
+		ReportAnalysis analysis = ReportAnalysis.request(content, UUID.randomUUID(), "v1", "v1");
+		IssueGroup group = IssueGroup.forTarget(analysis, IssueScope.SENTENCE, "sentence-1");
+		assertEquals(IssueStatus.UNPROCESSED, group.getStatus());
+		group.markProcessed();
+		group.resetProcessingStatusAfterRestore();
+		assertEquals(IssueStatus.UNPROCESSED, group.getStatus());
+		group.ignore();
+		group.resetProcessingStatusAfterRestore();
+		assertEquals(IssueStatus.IGNORED, group.getStatus());
+		group.unignore();
+		assertEquals(IssueStatus.UNPROCESSED, group.getStatus());
+	}
 
 	@Test
 	void jsonCopiesProtectFrozenContentAndDrafts() {

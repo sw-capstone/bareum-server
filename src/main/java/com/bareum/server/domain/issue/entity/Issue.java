@@ -1,11 +1,7 @@
 package com.bareum.server.domain.issue.entity;
 
-import com.bareum.server.domain.issue.exception.IssueException;
-import com.bareum.server.domain.issue.exception.IssueErrorCode;
-
 import com.bareum.server.domain.analysis.entity.ReportAnalysisAreaResult;
 import com.bareum.server.domain.issue.enums.IssueSeverity;
-import com.bareum.server.domain.issue.enums.IssueStatus;
 import com.bareum.server.global.entity.BaseTimeEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -23,7 +19,6 @@ import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import org.hibernate.annotations.ColumnDefault;
 
 @Entity
 @Table(name = "issue")
@@ -48,11 +43,6 @@ public class Issue extends BaseTimeEntity {
 	@Column(name = "severity", nullable = false, length = 30)
 	private IssueSeverity severity;
 
-	@Enumerated(EnumType.STRING)
-	@Column(name = "status", nullable = false, length = 30)
-	@ColumnDefault("'UNPROCESSED'")
-	private IssueStatus status;
-
 	@Column(name = "title", nullable = false, length = 255)
 	private String title;
 
@@ -76,7 +66,6 @@ public class Issue extends BaseTimeEntity {
 		this.analysisAreaResult = analysisAreaResult;
 		this.issueGroup = issueGroup;
 		this.severity = severity;
-		this.status = IssueStatus.UNPROCESSED;
 		this.title = title;
 		this.reason = reason;
 		this.reviewGuidance = reviewGuidance;
@@ -100,30 +89,4 @@ public class Issue extends BaseTimeEntity {
 			.build();
 	}
 
-	public void markProcessed() {
-		if (status == IssueStatus.IGNORED) {
-			throw new IssueException(IssueErrorCode.ISSUE_IGNORED);
-		}
-		status = IssueStatus.PROCESSED;
-	}
-
-	public void markUnprocessedAfterRestore() {
-		if (status == IssueStatus.PROCESSED) {
-			status = IssueStatus.UNPROCESSED;
-		}
-	}
-
-	public void ignore() {
-		if (status != IssueStatus.UNPROCESSED) {
-			throw new IssueException(IssueErrorCode.ISSUE_NOT_UNPROCESSED);
-		}
-		status = IssueStatus.IGNORED;
-	}
-
-	public void unignore() {
-		if (status != IssueStatus.IGNORED) {
-			throw new IssueException(IssueErrorCode.ISSUE_NOT_IGNORED);
-		}
-		status = IssueStatus.UNPROCESSED;
-	}
 }
