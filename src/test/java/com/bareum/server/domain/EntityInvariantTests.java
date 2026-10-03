@@ -30,28 +30,75 @@ import static org.junit.jupiter.api.Assertions.*;
 class EntityInvariantTests {
 
 	@Test
-	void replacingSuggestionCopiesJsonAndPreservesGroupState() {
-		ReportContent content = ReportContent.create(report(), JsonNodeFactory.instance.objectNode());
-		content.freeze();
-		ReportAnalysis analysis = ReportAnalysis.request(content, UUID.randomUUID(), "v1", "v1");
-		IssueGroup group = IssueGroup.forTarget(analysis, IssueScope.SENTENCE, "sentence-1");
+	void replacingSuggestionUpdatesContentAndPreservesGroupState() {
+		IssueGroup group = group();
 		group.ignore();
-		var original = JsonNodeFactory.instance.arrayNode().add("original");
-		IssueSuggestion suggestion = IssueSuggestion.create(group, original, SuggestionGenerationType.RULE);
-		var replacement = JsonNodeFactory.instance.arrayNode().add("replacement");
-		suggestion.replaceSuggestion(replacement, SuggestionGenerationType.LLM);
-		replacement.add("external mutation");
-		((tools.jackson.databind.node.ArrayNode) suggestion.getChanges()).add("getter mutation");
+		IssueSuggestion suggestion = IssueSuggestion.create(group,
+			JsonNodeFactory.instance.arrayNode().add("original"), SuggestionGenerationType.RULE);
+		suggestion.replaceSuggestion(JsonNodeFactory.instance.arrayNode().add("replacement"), SuggestionGenerationType.LLM);
 		assertEquals(JsonNodeFactory.instance.arrayNode().add("replacement"), suggestion.getChanges());
 		assertEquals(SuggestionGenerationType.LLM, suggestion.getGenerationType());
 		assertSame(group, suggestion.getIssueGroup());
 		assertEquals(IssueStatus.IGNORED, group.getStatus());
-		assertEquals(IssueErrorCode.INVALID_CHANGES, assertThrows(IssueException.class,
-			() -> suggestion.replaceSuggestion(JsonNodeFactory.instance.objectNode(), SuggestionGenerationType.RULE)).getBaseErrorCode());
-		assertThrows(NullPointerException.class,
-			() -> suggestion.replaceSuggestion(original, null));
+	}
+
+	@Test
+	void suggestionCopiesJsonOnCreationAndReplacement() {
+		var original = JsonNodeFactory.instance.arrayNode().add("original");
+		IssueSuggestion suggestion = IssueSuggestion.create(group(), original, SuggestionGenerationType.RULE);
+		original.add("external mutation");
+		assertEquals(JsonNodeFactory.instance.arrayNode().add("original"), suggestion.getChanges());
+		var replacement = JsonNodeFactory.instance.arrayNode().add("replacement");
+		suggestion.replaceSuggestion(replacement, SuggestionGenerationType.LLM);
+		replacement.add("external mutation");
 		assertEquals(JsonNodeFactory.instance.arrayNode().add("replacement"), suggestion.getChanges());
-		assertEquals(SuggestionGenerationType.LLM, suggestion.getGenerationType());
+	}
+
+	@Test
+	void suggestionReturnsJsonCopy() {
+		IssueSuggestion suggestion = IssueSuggestion.create(group(),
+			JsonNodeFactory.instance.arrayNode().add("original"), SuggestionGenerationType.RULE);
+		((tools.jackson.databind.node.ArrayNode) suggestion.getChanges()).add("getter mutation");
+		assertEquals(JsonNodeFactory.instance.arrayNode().add("original"), suggestion.getChanges());
+	}
+
+	@Test
+	void invalidSuggestionChangesPreserveExistingValues() {
+		var original = JsonNodeFactory.instance.arrayNode().add("original");
+		IssueSuggestion suggestion = IssueSuggestion.create(group(), original, SuggestionGenerationType.RULE);
+		assertEquals(IssueErrorCode.INVALID_CHANGES, assertThrows(IssueException.class,
+			() -> suggestion.replaceSuggestion(JsonNodeFactory.instance.objectNode(), SuggestionGenerationType.LLM)).getBaseErrorCode());
+		assertEquals(IssueErrorCode.INVALID_CHANGES, assertThrows(IssueException.class,
+			() -> suggestion.replaceSuggestion(null, SuggestionGenerationType.LLM)).getBaseErrorCode());
+		assertEquals(original, suggestion.getChanges());
+		assertEquals(SuggestionGenerationType.RULE, suggestion.getGenerationType());
+	}
+
+	@Test
+	void missingSuggestionGenerationTypePreservesExistingValues() {
+		var original = JsonNodeFactory.instance.arrayNode().add("original");
+		IssueSuggestion suggestion = IssueSuggestion.create(group(), original, SuggestionGenerationType.RULE);
+		assertThrows(NullPointerException.class, () -> suggestion.replaceSuggestion(
+			JsonNodeFactory.instance.arrayNode().add("replacement"), null));
+		assertEquals(original, suggestion.getChanges());
+		assertEquals(SuggestionGenerationType.RULE, suggestion.getGenerationType());
+	}
+
+	@Test
+	void ignoredGroupCanBeProcessedDirectly() {
+		IssueGroup group = group();
+		group.ignore();
+		group.markProcessed();
+		assertEquals(IssueStatus.PROCESSED, group.getStatus());
+	}
+
+	@Test
+	void processedGroupCannotBeIgnored() {
+		IssueGroup group = group();
+		group.markProcessed();
+		assertEquals(IssueErrorCode.ISSUE_NOT_UNPROCESSED,
+			assertThrows(IssueException.class, group::ignore).getBaseErrorCode());
+		assertEquals(IssueStatus.PROCESSED, group.getStatus());
 	}
 
 	@Test
@@ -113,6 +160,13 @@ class EntityInvariantTests {
 		assertNull(report.getFileFormat());
 		assertNull(report.getOriginalFilename());
 		assertNull(report.getFileSizeBytes());
+	}
+
+	private IssueGroup group() {
+		ReportContent content = ReportContent.create(report(), JsonNodeFactory.instance.objectNode());
+		content.freeze();
+		return IssueGroup.forTarget(ReportAnalysis.request(content, UUID.randomUUID(), "v1", "v1"),
+			IssueScope.SENTENCE, "sentence-1");
 	}
 
 	private Report report() {
