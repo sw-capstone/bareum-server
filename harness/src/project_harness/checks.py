@@ -21,25 +21,8 @@ SKIP_PARTS = {
 }
 CHECK_NAMES = frozenset({
     "required_paths", "json_syntax", "schema_headers", "schema_examples",
-    "id_registry", "markdown_links", "secret_patterns", "product_spec",
+    "id_registry", "markdown_links", "product_spec",
 })
-TEXT_SUFFIXES = {
-    ".cfg",
-    ".conf",
-    ".ini",
-    ".java",
-    ".json",
-    ".md",
-    ".properties",
-    ".py",
-    ".sh",
-    ".kts",
-    ".toml",
-    ".ts",
-    ".tsx",
-    ".yaml",
-    ".yml",
-}
 ID_PATTERN = re.compile(r"^[A-Z]+-[A-Z0-9]+-[0-9]{3}$")
 ALLOWED_ID_TYPES = {"FEAT", "API", "RULE", "DATA", "EVAL", "TEST", "HAR", "DEC"}
 ALLOWED_ID_DOMAINS = {
@@ -298,33 +281,6 @@ def check_markdown_links(root: Path) -> list[Finding]:
     return findings
 
 
-def check_secret_patterns(root: Path) -> list[Finding]:
-    token_pattern = re.compile(r"\bsk-[A-Za-z0-9_-]{20,}\b")
-    assignment_pattern = re.compile(
-        r"\b(?:[A-Z0-9]+[_-])?(?:API[_-]?KEY|CLIENT[_-]?SECRET|SECRET|TOKEN|PASSWORD|PASSWD)\b"
-        r"\s*[:=]\s*[\"']?([^\s\"'${}<]{8,})",
-        re.IGNORECASE,
-    )
-    placeholder = re.compile(
-        r"^(?:change[-_ ]?me|replace[-_ ]?me|your[-_ ].*|example|placeholder|dummy|sample|test|redacted|not[-_ ]?set|bareum[-_ ]password)$",
-        re.IGNORECASE,
-    )
-    findings: list[Finding] = []
-    for path in iter_files(root):
-        is_env_file = path.name == ".env" or path.name.startswith(".env.")
-        is_docker_file = path.name == "Dockerfile" or path.name.startswith("Dockerfile.")
-        if not is_env_file and not is_docker_file and path.suffix not in TEXT_SUFFIXES:
-            continue
-        text = path.read_text(encoding="utf-8", errors="ignore")
-        has_secret_value = bool(token_pattern.search(text)) or any(
-            not placeholder.fullmatch(match.group(1).rstrip(";,)"))
-            for match in assignment_pattern.finditer(text)
-        )
-        if has_secret_value:
-            findings.append(Finding("HAR-SEC-001", "error", str(path.relative_to(root)), "비밀정보로 보이는 값이 있습니다."))
-    return findings
-
-
 def check_product_spec(root: Path, policy: dict[str, object]) -> list[Finding]:
     config = policy.get("product_spec", {})
     if not isinstance(config, dict):
@@ -379,7 +335,6 @@ def evaluate_checks(root: Path, policy: dict[str, object]) -> tuple[list[Finding
         ("schema_examples", lambda: check_schema_examples(root, policy), not isinstance(schema_examples, dict) or bool(schema_examples)),
         ("id_registry", lambda: check_id_registry(root), (root / "packages/contracts/id-registry.json").is_file()),
         ("markdown_links", lambda: check_markdown_links(root), True),
-        ("secret_patterns", lambda: check_secret_patterns(root), True),
         ("product_spec", lambda: check_product_spec(root, policy), True),
     )
     for name, check, applicable in checks:

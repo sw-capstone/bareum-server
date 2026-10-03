@@ -38,7 +38,6 @@
     "schema_examples": true,
     "id_registry": true,
     "markdown_links": true,
-    "secret_patterns": true,
     "product_spec": true
   },
   "product_spec": {

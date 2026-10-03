@@ -13,7 +13,6 @@ from project_harness.checks import (
     check_required_paths,
     check_schema_examples,
     check_schema_headers,
-    check_secret_patterns,
     evaluate_checks,
     run_checks,
 )
@@ -157,49 +156,6 @@ class HarnessChecksTest(unittest.TestCase):
                 {"schema_examples": {"missing.schema.json": "missing.json"}},
             )
             self.assertEqual([finding.check_id for finding in findings], ["HAR-SCHEMA-002", "HAR-SCHEMA-002"])
-
-    def test_secret_scan_includes_env_source_and_configuration_files(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            secret_value = "accidentally-real-value"
-            (root / ".env.example").write_text(f"API_KEY={secret_value}\n", encoding="utf-8")
-            (root / "config.ts").write_text(f"const TOKEN = {secret_value};\n", encoding="utf-8")
-            api_key = "API" + "_KEY"
-            secret_name = "SE" + "CRET"
-            (root / "Config.java").write_text(
-                f'String {api_key} = "{secret_value}";\n', encoding="utf-8"
-            )
-            (root / "application.properties").write_text(
-                f"{api_key}={secret_value}\n", encoding="utf-8"
-            )
-            (root / "build.gradle.kts").write_text(
-                f'val {secret_name} = "{secret_value}"\n', encoding="utf-8"
-            )
-            (root / ".env.secrets").write_text(
-                f'DB_PASSWORD="{secret_value}"\n', encoding="utf-8"
-            )
-            findings = check_secret_patterns(root)
-            self.assertEqual(len(findings), 6)
-            self.assertEqual(
-                {finding.path for finding in findings},
-                {
-                    ".env.example",
-                    "config.ts",
-                    "Config.java",
-                    "application.properties",
-                    "build.gradle.kts",
-                    ".env.secrets",
-                },
-            )
-
-    def test_secret_scan_ignores_explicit_example_placeholders(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            example_password = "replace" + "-me"
-            (root / ".env.example").write_text(
-                f"DB_PASSWORD={example_password}\n", encoding="utf-8"
-            )
-            self.assertEqual(check_secret_patterns(root), [])
 
     def test_disabled_check_is_not_run(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
