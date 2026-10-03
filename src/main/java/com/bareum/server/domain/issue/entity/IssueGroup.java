@@ -2,6 +2,7 @@ package com.bareum.server.domain.issue.entity;
 
 import com.bareum.server.domain.analysis.entity.ReportAnalysis;
 import com.bareum.server.domain.issue.enums.IssueScope;
+import com.bareum.server.domain.issue.enums.IssueStatus;
 import com.bareum.server.domain.issue.exception.IssueErrorCode;
 import com.bareum.server.domain.issue.exception.IssueException;
 import com.bareum.server.global.entity.BaseTimeEntity;
@@ -19,6 +20,7 @@ import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.ColumnDefault;
 
 @Entity
 @Table(name = "issue_group")
@@ -42,10 +44,16 @@ public class IssueGroup extends BaseTimeEntity {
 	@Column(name = "scope", nullable = false, length = 30)
 	private IssueScope scope;
 
+	@Enumerated(EnumType.STRING)
+	@Column(name = "status", nullable = false, length = 30)
+	@ColumnDefault("'UNPROCESSED'")
+	private IssueStatus status;
+
 	private IssueGroup(ReportAnalysis reportAnalysis, String targetId, IssueScope scope) {
 		this.reportAnalysis = reportAnalysis;
 		this.targetId = targetId;
 		this.scope = scope;
+		this.status = IssueStatus.UNPROCESSED;
 	}
 
 	public static IssueGroup forTarget(ReportAnalysis analysis, IssueScope scope, String targetId) {
@@ -61,5 +69,29 @@ public class IssueGroup extends BaseTimeEntity {
 
 	public boolean isEditable() {
 		return scope == IssueScope.SENTENCE;
+	}
+
+	public void markProcessed() {
+		status = IssueStatus.PROCESSED;
+	}
+
+	public void resetProcessingStatusAfterRestore() {
+		if (status == IssueStatus.PROCESSED) {
+			status = IssueStatus.UNPROCESSED;
+		}
+	}
+
+	public void ignore() {
+		if (status != IssueStatus.UNPROCESSED) {
+			throw new IssueException(IssueErrorCode.ISSUE_NOT_UNPROCESSED);
+		}
+		status = IssueStatus.IGNORED;
+	}
+
+	public void unignore() {
+		if (status != IssueStatus.IGNORED) {
+			throw new IssueException(IssueErrorCode.ISSUE_NOT_IGNORED);
+		}
+		status = IssueStatus.UNPROCESSED;
 	}
 }
