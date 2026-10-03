@@ -3,11 +3,52 @@ name: Server checks
 on:
   push:
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
+  secret-scan:
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install pinned Gitleaks
+        shell: bash
+        run: |
+          curl -fsSL https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz -o "$RUNNER_TEMP/gitleaks.tar.gz"
+          printf '%s  %s\n' 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb "$RUNNER_TEMP/gitleaks.tar.gz" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/gitleaks-bin"
+          tar -xzf "$RUNNER_TEMP/gitleaks.tar.gz" -C "$RUNNER_TEMP/gitleaks-bin" gitleaks
+          echo "$RUNNER_TEMP/gitleaks-bin" >> "$GITHUB_PATH"
+      - name: Test secret detection
+        env:
+          GITLEAKS_BINARY: gitleaks
+          PYTHONPATH: harness/src
+        run: python -m unittest discover -s harness/tests -p 'test_secret_scan.py' -v
+      - name: Scan Git history
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if [ "$EVENT_NAME" = pull_request ]; then
+            ./scripts/run-secret-scan.sh --log-opts="$BASE_SHA..$HEAD_SHA"
+          else
+            ./scripts/run-secret-scan.sh
+          fi
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: secret-scan-report
+          path: harness/reports/secret-scan.json
+          if-no-files-found: warn
   harness:
     runs-on: ubuntu-latest
     steps:
