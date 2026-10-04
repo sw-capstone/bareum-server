@@ -1,0 +1,53 @@
+[extend]
+useDefault = true
+
+[[rules]]
+id = "password-quoted"
+description = "Quoted password or credential literal"
+regex = '''(?i)\b[a-z0-9_.-]*(?:password|passwd|pwd|credential)["']?[\t ]*[:=][\t ]*(?:"((?:\\[^\r\n]|[^"\\\r\n])+)"|'((?:\\[^\r\n]|[^'\\\r\n])+)')'''
+[[rules.allowlists]]
+regexTarget = "match"
+regexes = ['''(?i)[:=][\t ]*["'](?:replace[-_]?me|change[-_]?me|placeholder|dummy|example|redacted|your[-_][^"']*|\$\{[^"']*\}|\{\{[^"']*\}\}|<[^"']*>)["']$''']
+
+[[rules]]
+id = "password-config-unquoted-v2"
+description = "Unquoted configuration password or credential"
+path = '''(?i)(?:\.env(?:\.[^/]*)?$|\.(?:ya?ml|properties|ini|cfg|conf)$)'''
+regex = '''(?im)^[\t ]*(?:#[\t ]*)?(?:export[\t ]+)?[a-z0-9_.-]*(?:password|passwd|pwd|credential)[\t ]*[:=][\t ]*([^\s"'|>{}][^\r\n]*)'''
+secretGroup = 1
+[[rules.allowlists]]
+regexes = ['''(?i)^(?:replace[-_]?me|change[-_]?me|placeholder|dummy|example|redacted|null|~|your[-_].*)(?:[\t ]*(?:#.*)?)?$''','''^\$\{.*\}(?:[\t ]*(?:#.*)?)?$''','''^<[^>]*>(?:[\t ]*(?:#.*)?)?$''']
+
+[[rules]]
+id = "password-yaml-block"
+description = "YAML block scalar password"
+path = '''(?i)\.ya?ml$'''
+regex = '''(?im)^[\t ]*[a-z0-9_.-]*(?:password|passwd|pwd|credential)[\t ]*:[\t ]*[|>][-+]?[1-9]?[\t ]*(?:#[^\r\n]*)?\r?\n[\t ]+([^\r\n]+)'''
+secretGroup = 1
+
+[[rules]]
+id = "password-java-text-block"
+description = "Java text block password"
+path = '''\.java$'''
+regex = '''(?is)\b[a-z0-9_]*(?:password|passwd|pwd|credential)[\t ]*=[\t ]*"""[\t ]*\r?\n(.*?)"""'''
+secretGroup = 1
+
+[[rules]]
+id = "generic-api-key"
+[[rules.allowlists]]
+description = "Hex password hash assignment, not arbitrary test paths"
+condition = "AND"
+regexTarget = "match"
+regexes = ['''(?i)\bpasswordHash\b[\t ]*=[\t ]*["'][a-f0-9]{32,128}["']''']
+
+[[rules]]
+id = "database-url-userinfo"
+description = "Password in database URL userinfo"
+regex = '''(?i)(?:jdbc:)?(?:postgres(?:ql)?|mysql|mariadb|mongodb(?:\+srv)?|redis)://[^\s/:@"']+:([^\s/@"']+)@'''
+secretGroup = 1
+
+[[rules]]
+id = "database-url-password-query"
+description = "Password query parameter in database URL"
+regex = '''(?i)(?:jdbc:)?(?:postgres(?:ql)?|mysql|mariadb|mongodb(?:\+srv)?|redis)://[^\s"']*[?&](?:password|passwd|pwd)=([^\s&"']+)'''
+secretGroup = 1

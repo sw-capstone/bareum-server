@@ -35,7 +35,7 @@ AI 하네스는 필수 경로·JSON·문서 링크·비밀정보 의심 패턴�
 | 경로 | 역할 |
 | --- | --- |
 | `harness/policy.json` | 필수 경로, 활성 검사와 문서 표식 설정 |
-| `harness/src/project_harness/checks.py` | 저장소·JSON·Schema·ID·문서·비밀정보 검사 |
+| `harness/src/project_harness/checks.py` | 저장소·JSON·Schema·ID·문서 검사 |
 | `harness/src/project_harness/schema.py` | JSON Schema 검증 |
 | `harness/src/project_harness/cli.py` | 검사 실행과 JSON 리포트 생성 |
 | `harness/tests/test_checks.py` | 하네스 검사기 자체 회귀 테스트 |

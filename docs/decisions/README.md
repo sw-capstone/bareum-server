@@ -9,3 +9,4 @@
 | [`DEC-REPO-001`](DEC-REPO-001-repository-strategy.md) | 결정 | 프론트엔드·백엔드·AI 세 저장소 구성 방식 |
 | [`DEC-ID-001`](DEC-ID-001-id-governance.md) | 결정 | 프로젝트 ID 형식·발급·상태·연결 규칙 |
 | [`DEC-RULE-001`](DEC-RULE-001-rule-catalog-authority.md) | 검토 필요 | 최신 규칙 카탈로그를 제품 규칙 공식 원천으로 지정하는 안 |
+| [`DEC-SEC-001`](DEC-SEC-001-secret-detection.md) | 결정 | Gitleaks 도입과 민감정보 검사 차단·경고 기준 |

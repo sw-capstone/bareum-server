@@ -120,12 +120,12 @@ GitHub Actions에서 동일한 검사와 자체 테스트 실행
 | `schema_examples` | `HAR-SCHEMA-002` | 해당 없음 | Schema 예시가 정책에 등록되면 예시를 확인 |
 | `id_registry` | `HAR-ID-001`~`HAR-ID-005` | 해당 없음 | ID 레지스트리가 추가되면 형식·중복·참조를 확인 |
 | `markdown_links` | `HAR-DOC-001`~`HAR-DOC-002` | 실행 중 | Markdown의 저장소 내부 링크가 실제 파일을 가리키는지 확인 |
-| `secret_patterns` | `HAR-SEC-001` | 실행 중 | 비밀정보로 보이는 패턴이 포함되었는지 확인 |
+| Gitleaks 별도 CI 작업 | `HAR-SEC-001` | 실행 중 | 인증정보 형식은 차단, 일반 후보는 경고 |
 | `product_spec` | `HAR-PRODUCT-001` | 실행 중 | 서버 구현 요약 문서에 필요한 표식이 있는지 확인 |
 
 `실행 중`은 현재 대상에 대해 검사를 수행한다는 의미다. `해당 없음`은 검사 코드가 없다는 뜻이 아니라, 현재 저장소에 검사 대상 자산이 없어 실행할 수 없다는 의미다. 대상 자산이 실제로 추가되고 기준이 확정되면 정책과 테스트를 함께 갱신한다.
 
-비밀정보 검사는 `.env`·Dockerfile과 지원 텍스트 파일에서 `API_KEY`, `CLIENT_SECRET`, `SECRET`, `TOKEN`, `PASSWORD`, `PASSWD` 대입값(8자 이상)과 `sk-` 뒤 20자 이상 토큰 패턴을 찾는다. `replace-me`, `example` 같은 예시값은 제외하며, 모든 비밀정보를 찾아내는 검사는 아니다.
+민감정보는 Gitleaks 별도 작업으로 검사한다. Git 이력을 포함하며, 차단 규칙과 경고 기준은 [하네스 안내](../../harness/README.md)를 따른다.
 
 ## 5. 검사 결과와 실패 처리
 
