@@ -39,7 +39,12 @@ public enum AuthErrorCode implements BaseErrorCode {
             HttpStatus.SERVICE_UNAVAILABLE,
             "AUTH-0006",
             "이메일 인증 서비스가 아직 준비되지 않았습니다. 잠시 후 다시 시도해 주세요."
-    );
+    ),
+    EMAIL_VERIFICATION_INVALID(HttpStatus.BAD_REQUEST, "AUTH-0007", "유효하지 않은 이메일 인증 요청입니다."),
+    EMAIL_VERIFICATION_EXPIRED(HttpStatus.BAD_REQUEST, "AUTH-0008", "이메일 인증번호가 만료되었습니다."),
+    EMAIL_VERIFICATION_CODE_MISMATCH(HttpStatus.BAD_REQUEST, "AUTH-0009", "이메일 인증번호가 일치하지 않습니다."),
+    EMAIL_VERIFICATION_ATTEMPTS_EXCEEDED(HttpStatus.TOO_MANY_REQUESTS, "AUTH-0010", "이메일 인증번호 확인 횟수를 초과했습니다."),
+    EMAIL_VERIFICATION_ALREADY_VERIFIED(HttpStatus.CONFLICT, "AUTH-0011", "이미 이메일 인증이 완료된 요청입니다.");
 
     private final HttpStatus httpStatus;
     private final String code;
