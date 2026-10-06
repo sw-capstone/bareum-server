@@ -9,5 +9,6 @@ public enum Domain {
 	TERM,
 	ANALYSIS,
 	MEMBER,
-	ISSUE
+	ISSUE,
+	AUTH
 }
