@@ -1,4 +1,4 @@
-package com.bareum.server;
+package com.bareum.server.domain.auth.service;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
