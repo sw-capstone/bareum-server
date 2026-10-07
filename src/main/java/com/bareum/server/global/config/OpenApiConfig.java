@@ -42,6 +42,7 @@ public class OpenApiConfig {
 						.addSchemas("ValidationErrorDetail", validationErrorSchema())
 						.addExamples("InternalServerError", problemExample(CommonErrorCode.INTERNAL_SERVER_ERROR))
 						.addExamples("InvalidRequestBody", problemExample(CommonErrorCode.INVALID_REQUEST_BODY))
+						.addExamples("MissingRequestParameter", problemExample(CommonErrorCode.MISSING_REQUEST_PARAMETER))
 						.addExamples("ValidationFailed", validationExample()));
 	}
 

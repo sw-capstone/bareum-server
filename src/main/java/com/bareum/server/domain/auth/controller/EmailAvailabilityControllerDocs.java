@@ -39,13 +39,14 @@ public interface EmailAvailabilityControllerDocs {
             ),
             @ApiResponse(
                     responseCode = "400",
-                    description = "이메일 누락 또는 빈 값·형식·길이 검증 실패",
+                    description = "이메일 파라미터 누락(COMMON-0004) 또는 빈 값·형식·길이 검증 실패(COMMON-0002)",
                     content = @Content(
                             mediaType = "application/problem+json",
-                            schema = @Schema(ref = "#/components/schemas/ProblemDetail"),
-                            examples = @ExampleObject(
-                                    ref = "#/components/examples/ValidationFailed"
-                            )
+                            schema = @Schema(ref = "#/components/schemas/BadRequestProblemDetail"),
+                            examples = {
+                                    @ExampleObject(name = "MissingRequestParameter", ref = "#/components/examples/MissingRequestParameter"),
+                                    @ExampleObject(name = "ValidationFailed", ref = "#/components/examples/ValidationFailed")
+                            }
                     )
             ),
             @ApiResponse(
