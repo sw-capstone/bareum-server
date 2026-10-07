@@ -6,6 +6,7 @@ import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.examples.Example;
 import io.swagger.v3.oas.models.info.Info;
 import io.swagger.v3.oas.models.media.ArraySchema;
+import io.swagger.v3.oas.models.media.ComposedSchema;
 import io.swagger.v3.oas.models.media.IntegerSchema;
 import io.swagger.v3.oas.models.media.ObjectSchema;
 import io.swagger.v3.oas.models.media.Schema;
@@ -35,9 +36,13 @@ public class OpenApiConfig {
 				.components(new Components()
 						.addSchemas("ProblemDetail", problemSchema())
 						.addSchemas("ValidationProblemDetail", validationProblemSchema())
+						.addSchemas("BadRequestProblemDetail", new ComposedSchema()
+								.addAnyOfItem(new Schema<>().$ref("#/components/schemas/ProblemDetail"))
+								.addAnyOfItem(new Schema<>().$ref("#/components/schemas/ValidationProblemDetail")))
 						.addSchemas("ValidationErrorDetail", validationErrorSchema())
 						.addExamples("InternalServerError", problemExample(CommonErrorCode.INTERNAL_SERVER_ERROR))
 						.addExamples("InvalidRequestBody", problemExample(CommonErrorCode.INVALID_REQUEST_BODY))
+						.addExamples("MissingRequestParameter", problemExample(CommonErrorCode.MISSING_REQUEST_PARAMETER))
 						.addExamples("ValidationFailed", validationExample()));
 	}
 
