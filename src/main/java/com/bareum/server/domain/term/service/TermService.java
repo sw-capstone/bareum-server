@@ -15,7 +15,7 @@ public class TermService {
     private final TermRepository termRepository;
 
     public List<TermResponse> getTerms() {
-        return termRepository.findAllByOrderByIdAsc()
+        return termRepository.findAll()
                 .stream()
                 .map(TermResponse::from)
                 .toList();
