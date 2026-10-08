@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import asdict, dataclass
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from urllib.parse import unquote
 
 from .schema import SchemaValidationError, validate
@@ -61,6 +61,90 @@ def iter_files(root: Path):
             yield path
 
 
+def policy_path_error(root: Path, value: object) -> str | None:
+    if not isinstance(value, str) or not value.strip() or "\x00" in value:
+        return "비어 있지 않은 경로 문자열이어야 합니다."
+    if Path(value).is_absolute() or PureWindowsPath(value).is_absolute():
+        return "저장소 내부의 상대 경로여야 합니다."
+    try:
+        (root / value).resolve().relative_to(root.resolve())
+    except (ValueError, OSError, RuntimeError):
+        return "경로가 저장소 밖을 가리키거나 해석할 수 없습니다."
+    return None
+
+
+def validate_policy(root: Path, policy: object, *, require_metadata: bool = False) -> Finding | None:
+    def error(field: str, message: str) -> Finding:
+        return Finding("HAR-POLICY-001", "error", f"harness/policy.json#{field}", f"{field}: {message}")
+
+    if not isinstance(policy, dict):
+        return error("policy", "JSON 객체여야 합니다.")
+    checks = policy.get("checks", {})
+    if not isinstance(checks, dict):
+        return error("checks", "검사 이름과 true 또는 false 값으로 구성된 객체여야 합니다.")
+    unknown = set(checks) - CHECK_NAMES
+    if unknown:
+        return error("checks", f"알 수 없는 검사 이름: {', '.join(sorted(map(str, unknown)))}")
+    for name, value in checks.items():
+        if not isinstance(value, bool):
+            return error(f"checks.{name}", "true 또는 false여야 합니다.")
+    if require_metadata:
+        for field in ("version", "required_paths", "checks"):
+            if field not in policy:
+                return error(field, "필수 항목이 없습니다.")
+    if "version" in policy:
+        version = policy["version"]
+        if not isinstance(version, str) or not version.strip():
+            return error("version", "비어 있지 않은 문자열이어야 합니다.")
+    allowed = {"version", "required_paths", "checks", "autofix", "schema_examples", "product_spec"}
+    unknown_fields = set(policy) - allowed
+    if unknown_fields:
+        return error("policy", f"알 수 없는 항목: {', '.join(sorted(map(str, unknown_fields)))}")
+    paths = policy.get("required_paths", [])
+    if not isinstance(paths, list):
+        return error("required_paths", "경로 문자열 배열이어야 합니다.")
+    for index, value in enumerate(paths):
+        message = policy_path_error(root, value)
+        if message:
+            return error(f"required_paths[{index}]", message)
+    if "schema_examples" in policy:
+        examples = policy["schema_examples"]
+        if not isinstance(examples, dict):
+            return error("schema_examples", "Schema 경로와 예시 경로의 객체여야 합니다.")
+        for schema_path, example_path in examples.items():
+            configured_paths = (
+                (f"schema_examples.{schema_path}", schema_path),
+                (f"schema_examples.{schema_path}.example", example_path),
+            )
+            for field, value in configured_paths:
+                message = policy_path_error(root, value)
+                if message:
+                    return error(field, message)
+    if "product_spec" in policy:
+        product = policy["product_spec"]
+        if not isinstance(product, dict):
+            return error("product_spec", "객체여야 합니다.")
+        unknown_fields = set(product) - {"path", "required_markers"}
+        if unknown_fields:
+            return error("product_spec", f"알 수 없는 항목: {', '.join(sorted(map(str, unknown_fields)))}")
+        message = policy_path_error(root, product.get("path", "docs/product/service-spec.md"))
+        if message:
+            return error("product_spec.path", message)
+        markers = product.get("required_markers", [])
+        if not isinstance(markers, list) or any(not isinstance(marker, str) or not marker.strip() for marker in markers):
+            return error("product_spec.required_markers", "비어 있지 않은 문자열의 배열이어야 합니다.")
+    if "autofix" in policy:
+        autofix = policy["autofix"]
+        if not isinstance(autofix, dict):
+            return error("autofix", "객체여야 합니다.")
+        for field, value in autofix.items():
+            if field not in {"enabled", "semantic_changes"}:
+                return error("autofix", f"알 수 없는 항목: {field}")
+            if not isinstance(value, bool):
+                return error(f"autofix.{field}", "true 또는 false여야 합니다.")
+    return None
+
+
 def check_required_paths(root: Path, policy: dict[str, object]) -> list[Finding]:
     required_paths = policy.get("required_paths", [])
     if not isinstance(required_paths, list):
@@ -74,13 +158,14 @@ def check_required_paths(root: Path, policy: dict[str, object]) -> list[Finding]
         ]
     findings: list[Finding] = []
     for index, value in enumerate(required_paths):
-        if not isinstance(value, str):
+        message = policy_path_error(root, value)
+        if message:
             findings.append(
                 Finding(
                     "HAR-STRUCT-001",
                     "error",
                     f"harness/policy.json#required_paths[{index}]",
-                    "필수 경로는 문자열이어야 합니다.",
+                    message,
                 )
             )
         elif not (root / value).exists():
@@ -120,20 +205,14 @@ def check_schema_headers(root: Path) -> list[Finding]:
 
 def check_schema_examples(root: Path, policy: dict[str, object]) -> list[Finding]:
     """Validate declared fixtures against their JSON Schemas without external packages."""
+    policy_finding = validate_policy(root, policy)
+    if policy_finding:
+        return [policy_finding]
     findings: list[Finding] = []
     config = policy.get("schema_examples", {})
-    if not isinstance(config, dict):
-        return [
-            Finding(
-                "HAR-SCHEMA-002",
-                "error",
-                "harness/policy.json",
-                "schema_examples는 Schema 경로와 예시 경로의 객체여야 합니다.",
-            )
-        ]
     for schema_value, example_value in config.items():
-        schema_path = root / str(schema_value)
-        example_path = root / str(example_value)
+        schema_path = root / schema_value
+        example_path = root / example_value
         missing_paths = [path for path in (schema_path, example_path) if not path.is_file()]
         if missing_paths:
             findings.extend(
@@ -282,26 +361,19 @@ def check_markdown_links(root: Path) -> list[Finding]:
 
 
 def check_product_spec(root: Path, policy: dict[str, object]) -> list[Finding]:
+    policy_finding = validate_policy(root, policy)
+    if policy_finding:
+        return [policy_finding]
     config = policy.get("product_spec", {})
-    if not isinstance(config, dict):
-        return [Finding("HAR-PRODUCT-001", "error", "harness/policy.json", "product_spec 설정이 객체가 아닙니다.")]
     path_value = config.get("path", "docs/product/service-spec.md")
-    if not isinstance(path_value, str):
-        return [Finding("HAR-PRODUCT-001", "error", "harness/policy.json", "product_spec.path는 문자열이어야 합니다.")]
     path = root / path_value
-    if not path.exists():
+    if not path.is_file():
         return [Finding("HAR-PRODUCT-001", "error", str(path_value), "서버 구현 요약 문서가 없습니다.")]
-    content = path.read_text(encoding="utf-8")
+    try:
+        content = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as error:
+        return [Finding("HAR-PRODUCT-001", "error", str(path_value), f"구현 요약 문서를 읽을 수 없습니다: {error}")]
     required_markers = config.get("required_markers", [])
-    if not isinstance(required_markers, list) or not all(isinstance(marker, str) for marker in required_markers):
-        return [
-            Finding(
-                "HAR-PRODUCT-001",
-                "error",
-                "harness/policy.json",
-                "product_spec.required_markers는 문자열 배열이어야 합니다.",
-            )
-        ]
     return [
         Finding("HAR-PRODUCT-001", "error", str(path_value), f"구현 요약 문서 필수 표식이 없습니다: {marker}")
         for marker in required_markers
@@ -310,21 +382,10 @@ def check_product_spec(root: Path, policy: dict[str, object]) -> list[Finding]:
 
 
 def evaluate_checks(root: Path, policy: dict[str, object]) -> tuple[list[Finding], list[CheckExecution]]:
+    policy_finding = validate_policy(root, policy)
+    if policy_finding:
+        return [policy_finding], [CheckExecution("policy", "failed", 1)]
     enabled = policy.get("checks", {})
-    if isinstance(enabled, dict) and set(enabled) - CHECK_NAMES:
-        finding = Finding(
-            "HAR-POLICY-001", "error", "harness/policy.json",
-            f"알 수 없는 검사 이름: {', '.join(sorted(set(enabled) - CHECK_NAMES))}",
-        )
-        return [finding], [CheckExecution("policy", "failed", 1)]
-    if not isinstance(enabled, dict) or any(not isinstance(value, bool) for value in enabled.values()):
-        finding = Finding(
-            "HAR-POLICY-001",
-            "error",
-            "harness/policy.json",
-            "checks는 검사 이름과 true 또는 false 값으로 구성된 객체여야 합니다.",
-        )
-        return [finding], [CheckExecution("policy", "failed", 1)]
     findings: list[Finding] = []
     executions: list[CheckExecution] = []
     schema_examples = policy.get("schema_examples", {})
