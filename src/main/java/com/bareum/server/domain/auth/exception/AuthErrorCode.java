@@ -39,6 +39,11 @@ public enum AuthErrorCode implements BaseErrorCode {
             HttpStatus.SERVICE_UNAVAILABLE,
             "AUTH-0006",
             "이메일 인증 서비스가 아직 준비되지 않았습니다. 잠시 후 다시 시도해 주세요."
+    ),
+    EMAIL_VERIFICATION_INVALID(
+            HttpStatus.BAD_REQUEST,
+            "AUTH-0007",
+            "유효하지 않은 이메일 인증 요청입니다."
     );
 
     private final HttpStatus httpStatus;
