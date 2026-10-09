@@ -9,6 +9,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verify;
 
 import com.bareum.server.domain.auth.dto.request.EmailVerificationRequest;
@@ -19,6 +21,12 @@ import com.bareum.server.domain.auth.exception.AuthException;
 import com.bareum.server.domain.auth.repository.EmailVerificationRepository;
 import com.bareum.server.domain.auth.repository.EmailVerificationSendLogRepository;
 import java.time.Instant;
+import java.time.Clock;
+import java.util.Locale;
+import com.bareum.server.domain.auth.support.TestSmtpServer;
+import com.bareum.server.domain.member.entity.Member;
+import com.bareum.server.domain.member.repository.MemberRepository;
+import org.junit.jupiter.api.BeforeEach;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -30,6 +38,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 @SpringBootTest(properties = {
         "auth.email-verification.signup-code-ttl-seconds=300",
+        "auth.email-verification.password-reset-code-ttl-seconds=420",
         "auth.email-verification.minimum-send-interval-seconds=60",
         "auth.email-verification.max-sends-per-hour=5",
         "auth.email-verification.max-sends-per-day=20",
@@ -57,6 +66,19 @@ class EmailVerificationSendServiceIntegrationTests {
     @MockitoBean
     private EmailVerificationMailSender mailSender;
 
+    @Autowired
+    private MemberRepository memberRepository;
+
+    @MockitoBean
+    private Clock emailVerificationClock;
+
+    private static final Instant NOW = Instant.parse("2026-10-09T08:00:00Z");
+
+    @BeforeEach
+    void fixedClock() {
+        when(emailVerificationClock.instant()).thenReturn(NOW);
+    }
+
     private final String email =
             "send-test-" + UUID.randomUUID() + "@example.invalid";
 
@@ -71,6 +93,7 @@ class EmailVerificationSendServiceIntegrationTests {
                 "DELETE FROM email_verification WHERE email = ?",
                 email
         );
+        jdbcTemplate.update("DELETE FROM member WHERE email = ?", email);
     }
 
     @Test
@@ -180,4 +203,43 @@ class EmailVerificationSendServiceIntegrationTests {
         assertTrue(response.expiresIn() > 0);
         assertTrue(response.expiresIn() <= 300);
     }
+    @Test
+    void delayedSmtpAcceptanceCommitsFullValidityAndAcceptedTimestamp() {
+        when(emailVerificationClock.instant()).thenReturn(
+                NOW, NOW, NOW.plusSeconds(301), NOW.plusSeconds(301));
+        var response = sendService.send(new EmailVerificationRequest(email, VerificationPurpose.SIGNUP));
+        var verification = verificationRepository
+                .findFirstByEmailIgnoreCaseAndPurposeOrderByIdDesc(email, VerificationPurpose.SIGNUP)
+                .orElseThrow();
+        assertEquals(300L, response.expiresIn());
+        assertEquals(NOW.plusSeconds(601), verification.getExpiresAt());
+        assertEquals(NOW.plusSeconds(301), verification.getLastSentAt());
+        assertEquals(NOW.plusSeconds(301), sendLogRepository
+                .findFirstByEmailIgnoreCaseOrderBySentAtDesc(email).orElseThrow().getSentAt());
+    }
+
+    @Test
+    void resetSmtpProtocolAndDatabaseUseRegisteredAddressDespiteRequestCase() throws Exception {
+        memberRepository.saveAndFlush(Member.createLocal(email, "test", "test-password-hash"));
+        try (var server = new TestSmtpServer(false, false)) {
+            var smtp = SmtpEmailVerificationMailSenderTests.sender(
+                    SmtpEmailVerificationMailSenderTests.transport(server.port(), 1000),
+                    "sender@example.invalid");
+            doAnswer(invocation -> {
+                smtp.sendVerificationCode(invocation.getArgument(0), invocation.getArgument(1),
+                        invocation.getArgument(2));
+                return null;
+            }).when(mailSender).sendVerificationCode(eq(email), anyString(), eq(VerificationPurpose.PASSWORD_RESET));
+            var response = sendService.send(new EmailVerificationRequest(
+                    email.toUpperCase(Locale.ROOT), VerificationPurpose.PASSWORD_RESET));
+            assertEquals(420L, response.expiresIn());
+            assertEquals("RCPT TO:<" + email + ">", server.recipient());
+            assertEquals(email, verificationRepository
+                    .findFirstByEmailIgnoreCaseAndPurposeOrderByIdDesc(email, VerificationPurpose.PASSWORD_RESET)
+                    .orElseThrow().getEmail());
+            assertEquals(email, sendLogRepository.findFirstByEmailIgnoreCaseOrderBySentAtDesc(email)
+                    .orElseThrow().getEmail());
+        }
+    }
+
 }

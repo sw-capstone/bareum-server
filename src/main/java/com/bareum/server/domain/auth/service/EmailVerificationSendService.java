@@ -5,8 +5,6 @@ import com.bareum.server.domain.auth.dto.request.EmailVerificationRequest;
 import com.bareum.server.domain.auth.dto.response.EmailVerificationSendResponse;
 import com.bareum.server.domain.auth.entity.EmailVerification;
 import com.bareum.server.domain.auth.entity.EmailVerificationSendLog;
-import com.bareum.server.domain.auth.exception.AuthErrorCode;
-import com.bareum.server.domain.auth.exception.AuthException;
 import com.bareum.server.domain.auth.repository.EmailVerificationRepository;
 import com.bareum.server.domain.auth.repository.EmailVerificationSendLogRepository;
 import java.time.Clock;
@@ -40,14 +38,13 @@ public class EmailVerificationSendService {
 
         requestLock.lockForEmail(request.email());
 
-        accountValidator.checkCanSend(
-                request.email(),
-                request.purpose()
+        String recipient = accountValidator.resolveRecipient(
+                request.email(), request.purpose()
         );
 
         int previousAttemptCount = verificationRepository
                 .findFirstByEmailIgnoreCaseAndPurposeOrderByIdDesc(
-                        request.email(),
+                        recipient,
                         request.purpose()
                 )
                 .map(EmailVerification::getAttemptCount)
@@ -56,20 +53,20 @@ public class EmailVerificationSendService {
         Instant now = emailVerificationClock.instant();
 
         limitChecker.checkCanSend(
-                request.email(),
+                recipient,
                 request.purpose(),
                 now
         );
 
         String code = codeGenerator.generate();
         String codeHash = codeHasher.hash(
-                request.email(),
+                recipient,
                 request.purpose(),
                 code
         );
 
         EmailVerification verification = EmailVerification.request(
-                request.email(),
+                recipient,
                 request.purpose(),
                 codeHash,
                 now.plusSeconds(ttlSeconds),
@@ -78,22 +75,16 @@ public class EmailVerificationSendService {
 
         verificationRepository.saveAndFlush(verification);
 
-        Instant sentAt = emailVerificationClock.instant();
-        verification.markSent(sentAt);
-
-        sendLogRepository.saveAndFlush(
-                EmailVerificationSendLog.sent(
-                        request.email(),
-                        request.purpose(),
-                        sentAt
-                )
+        EmailVerificationSendLog sendLog = EmailVerificationSendLog.sent(
+                recipient, request.purpose(), emailVerificationClock.instant()
         );
+        sendLogRepository.saveAndFlush(sendLog);
 
-        mailSender.sendVerificationCode(
-                request.email(),
-                code,
-                request.purpose()
-        );
+        mailSender.sendVerificationCode(recipient, code, request.purpose());
+
+        Instant acceptedAt = emailVerificationClock.instant();
+        verification.markSent(acceptedAt, ttlSeconds);
+        sendLog.markAccepted(acceptedAt);
 
         Duration remaining = Duration.between(
                 emailVerificationClock.instant(),
@@ -101,7 +92,7 @@ public class EmailVerificationSendService {
         );
 
         if (remaining.isNegative() || remaining.isZero()) {
-            throw new AuthException(AuthErrorCode.EMAIL_SEND_FAILED);
+            return EmailVerificationSendResponse.of(0);
         }
 
         long expiresIn = remaining.getSeconds();

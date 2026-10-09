@@ -71,12 +71,10 @@ class EmailVerificationSendServiceTests {
 
     @BeforeEach
     void setUp() {
-        properties = new EmailVerificationProperties();
-
         // 테스트 전용 제한 값이며 실제 서비스 정책이 아닙니다.
-        properties.setMinimumSendIntervalSeconds(60L);
-        properties.setMaxSendsPerHour(5);
-        properties.setMaxSendsPerDay(20);
+        properties = new EmailVerificationProperties(300, 420L, 60L, 5, 20);
+        when(accountValidator.resolveRecipient(EMAIL, VerificationPurpose.SIGNUP))
+                .thenReturn(EMAIL);
 
         when(codeGenerator.generate()).thenReturn(CODE);
 
@@ -129,7 +127,7 @@ class EmailVerificationSendServiceTests {
 
         verify(requestLock).lockForEmail(EMAIL);
 
-        verify(accountValidator).checkCanSend(
+        verify(accountValidator).resolveRecipient(
                 EMAIL,
                 VerificationPurpose.SIGNUP
         );
@@ -149,7 +147,8 @@ class EmailVerificationSendServiceTests {
 
     @Test
     void missingConfigurationStopsBeforeLockAndSending() {
-        properties.setMinimumSendIntervalSeconds(null);
+        properties = new EmailVerificationProperties(300, null, null, 5, 20);
+        service = createService(Clock.fixed(NOW, ZoneOffset.UTC));
 
         assertSendFails(
                 AuthErrorCode.EMAIL_VERIFICATION_NOT_CONFIGURED
@@ -169,7 +168,7 @@ class EmailVerificationSendServiceTests {
     void accountRejectionStopsBeforeCodeGenerationAndSending() {
         doThrow(new AuthException(
                 AuthErrorCode.EMAIL_ALREADY_REGISTERED
-        )).when(accountValidator).checkCanSend(
+        )).when(accountValidator).resolveRecipient(
                 EMAIL,
                 VerificationPurpose.SIGNUP
         );
@@ -246,24 +245,57 @@ class EmailVerificationSendServiceTests {
     }
 
     @Test
-    void expirationDuringSendingRejectsSuccessResponse() {
+    void slowSmtpStartsValidityAtAcceptanceWithoutExpirationRollback() {
         Clock advancingClock = mock(Clock.class);
 
         when(advancingClock.instant()).thenReturn(
                 NOW,
                 NOW,
+                NOW.plusSeconds(300),
                 NOW.plusSeconds(300)
         );
 
         service = createService(advancingClock);
 
-        assertSendFails(AuthErrorCode.EMAIL_SEND_FAILED);
+        EmailVerificationSendResponse response = service.send(request);
+        assertEquals(300L, response.expiresIn());
+        ArgumentCaptor<EmailVerification> saved = ArgumentCaptor.forClass(EmailVerification.class);
+        verify(verificationRepository).saveAndFlush(saved.capture());
+        assertEquals(NOW.plusSeconds(600), saved.getValue().getExpiresAt());
+        assertEquals(NOW.plusSeconds(300), saved.getValue().getLastSentAt());
 
         verify(mailSender).sendVerificationCode(
                 EMAIL,
                 CODE,
                 VerificationPurpose.SIGNUP
         );
+    }
+
+    @Test
+    void clockJumpAfterAcceptanceReturnsZeroWithoutSendFailure() {
+        Clock clock = mock(Clock.class);
+        when(clock.instant()).thenReturn(NOW, NOW, NOW, NOW.plusSeconds(301));
+        service = createService(clock);
+        assertEquals(0L, service.send(request).expiresIn());
+    }
+
+    @Test
+    void passwordResetUsesRegisteredEmailForHashStorageAndDelivery() {
+        String registered = "Registered@Example.com";
+        when(accountValidator.resolveRecipient(EMAIL, VerificationPurpose.PASSWORD_RESET))
+                .thenReturn(registered);
+        when(codeHasher.hash(registered, VerificationPurpose.PASSWORD_RESET, CODE))
+                .thenReturn(CODE_HASH);
+        service.send(new EmailVerificationRequest(EMAIL, VerificationPurpose.PASSWORD_RESET));
+        ArgumentCaptor<EmailVerification> saved = ArgumentCaptor.forClass(EmailVerification.class);
+        verify(verificationRepository).saveAndFlush(saved.capture());
+        assertEquals(registered, saved.getValue().getEmail());
+        assertEquals(CODE_HASH, saved.getValue().getCodeHash());
+        ArgumentCaptor<EmailVerificationSendLog> log = ArgumentCaptor.forClass(EmailVerificationSendLog.class);
+        verify(sendLogRepository).saveAndFlush(log.capture());
+        assertEquals(registered, log.getValue().getEmail());
+        verify(mailSender).sendVerificationCode(registered, CODE, VerificationPurpose.PASSWORD_RESET);
+        verify(requestLock).lockForEmail(EMAIL);
     }
 
     private EmailVerificationSendService createService(Clock clock) {

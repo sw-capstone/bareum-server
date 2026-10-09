@@ -1,6 +1,7 @@
 package com.bareum.server.domain.auth.service;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -83,5 +84,11 @@ class EmailVerificationAccountValidatorTests {
                 EMAIL,
                 VerificationPurpose.PASSWORD_RESET
         ));
+    }
+    @Test
+    void caseVariantResetResolvesStoredRecipient() {
+        Member member = Member.createLocal("User@Example.com", "테스트 사용자", "test-password-hash");
+        when(memberRepository.findByEmailIgnoreCase(EMAIL)).thenReturn(Optional.of(member));
+        assertEquals("User@Example.com", validator.resolveRecipient(EMAIL, VerificationPurpose.PASSWORD_RESET));
     }
 }

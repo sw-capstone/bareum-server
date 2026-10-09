@@ -54,4 +54,8 @@ public class EmailVerificationSendLog extends BaseTimeEntity {
     ) {
         return new EmailVerificationSendLog(email, purpose, sentAt);
     }
+
+    public void markAccepted(Instant acceptedAt) {
+        this.sentAt = Objects.requireNonNull(acceptedAt, "acceptedAt");
+    }
 }

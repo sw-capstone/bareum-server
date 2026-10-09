@@ -33,12 +33,7 @@ class EmailVerificationSendLimitCheckerTests {
     @BeforeEach
     void setUp() {
         EmailVerificationProperties properties =
-                new EmailVerificationProperties();
-
-        // 테스트 전용 값이며 실제 서비스 정책이 아닙니다.
-        properties.setMinimumSendIntervalSeconds(60L);
-        properties.setMaxSendsPerHour(5);
-        properties.setMaxSendsPerDay(20);
+                new EmailVerificationProperties(300, null, 60L, 5, 20);
 
         checker = new EmailVerificationSendLimitChecker(
                 repository,
@@ -49,7 +44,7 @@ class EmailVerificationSendLimitCheckerTests {
     @Test
     void missingConfigurationRejectsBeforeDatabaseQueries() {
         EmailVerificationProperties emptyProperties =
-                new EmailVerificationProperties();
+                new EmailVerificationProperties(300, null, null, null, null);
 
         EmailVerificationSendLimitChecker unconfiguredChecker =
                 new EmailVerificationSendLimitChecker(
