@@ -29,6 +29,8 @@ dependencies {
 
 	implementation("org.springframework.boot:spring-boot-starter-validation")
 	implementation("org.springframework.boot:spring-boot-starter-webmvc")
+	implementation("org.springframework.boot:spring-boot-starter-mail")
+	implementation("org.springframework.security:spring-security-crypto")
 	implementation("org.springdoc:springdoc-openapi-starter-webmvc-scalar:3.1.1")
 	testImplementation("org.springframework.boot:spring-boot-starter-validation-test")
 	testImplementation("org.springframework.boot:spring-boot-starter-webmvc-test")

@@ -37,3 +37,7 @@ scalar:
   page-title: Bareum API
   theme: default
   layout: classic
+
+auth:
+  email-verification:
+    hash-secret: ${EMAIL_VERIFICATION_HASH_SECRET}

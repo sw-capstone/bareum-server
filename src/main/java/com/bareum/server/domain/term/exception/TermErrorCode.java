@@ -9,7 +9,10 @@ import org.springframework.http.HttpStatus;
 @Getter
 @RequiredArgsConstructor
 public enum TermErrorCode implements BaseErrorCode {
-	INVALID_CONSENT_STATE(HttpStatus.BAD_REQUEST, "TERM-0001", "약관 동의 상태와 동의·철회 시각이 일치하지 않습니다.");
+	INVALID_CONSENT_STATE(HttpStatus.BAD_REQUEST, "TERM-0001", "약관 동의 상태와 동의·철회 시각이 일치하지 않습니다."),
+	INVALID_CONSENT_REQUEST(HttpStatus.BAD_REQUEST, "TERM-0002", "약관 ID·버전·동의 정보를 다시 확인해 주세요."),
+	REQUIRED_TERM_NOT_AGREED(HttpStatus.BAD_REQUEST, "TERM-0003", "필수 약관에 동의해 주세요."),
+	SIGNUP_TERMS_NOT_CONFIGURED(HttpStatus.SERVICE_UNAVAILABLE, "TERM-0004", "가입 약관이 아직 준비되지 않았습니다.");
 
 	private final HttpStatus httpStatus;
 	private final String code;
