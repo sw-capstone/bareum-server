@@ -1,9 +1,10 @@
 # 이메일 인증 구현 초안과 협의 사항
 
 - 상태: 구현 초안 / 팀 확정 아님
+- 소유 역할: backend-team, frontend-team
 - 최종 확인일: 2026-10-06
 - 관련 작업: GitHub #12, 기존 이메일 조회 PR #11
-- 목적: 명세 근거와 구현 과정에서 선택한 사항을 구분하여 추적
+- 목적: 명세 근거, 구현 초안, 협의 사항과 검증 결과 기록
 - 공식 결정 ID는 발급하지 않은 작업 메모
 
 ## 명세에 확인된 사항
@@ -18,7 +19,7 @@
 - 기술 정책서의 회원가입 인증번호 유효기간은 5분이다.
 - 기술 정책서의 인증 완료 후 가입 가능 시간은 10분이다.
 
-## 구현 과정에서 선택한 초안
+## 구현 선택과 근거
 
 아래 내용은 팀에서 확정한 정책으로 취급하지 않는다.
 
@@ -138,15 +139,8 @@
 - 실제 발송 전 타임아웃, 실패 기록, 재시도 및 중복 처리 방식을 검토한다.
 - SMTP 요청 성공은 수신함 도착을 보장하지 않는다.
 
-## 2026-10-06 인수인계 교차 확인 및 HTTP 연결
+## 2026-10-06 AUTH-005 계약과 검증
 
-- 인수인계 당시 `feat/12-email-verification`의 미커밋 구현에서 작업을 이어갔다.
-- 인수인계 당시 GitHub develop 최신 커밋은 `f72bb4b`이며, 당시 HEAD `8f957da`와의
-  공통 조상은 `f2396ff`다. develop의 하네스·CI 변경은 아직 병합하지 않았다.
-- TERM-001은 `feat/8-terms` / PR #9에 있고 AUTH-008은 현재 브랜치에 있다.
-  PR #9와 #11은 모두 열려 있으며 승인 리뷰가 있다.
-- GitHub 댓글과 Jira를 대조해 #12 ↔ BRM-9, #10 ↔ BRM-10,
-  #8 ↔ BRM-11 연결을 확인했다. BRM-9는 진행 중, 나머지는 검토 중이다.
 - [공유 API 명세](https://app.notion.com/p/3e311880adea8014af6bcc19f68c8a59)의
   실제 마지막 수정은 2026-10-04 14:24:07 KST,
   [기술·정책 명세](https://app.notion.com/p/3e311880adea8077a667c9a8eae3d107)는
@@ -162,7 +156,7 @@
 | 요청·응답·상태 코드 미확정 | 기존 DTO·오류 매핑 유지 또는 협의 후 변경. 프론트와 테스트에 영향 | 기존 초안에 HTTP 계층만 연결. 공식 계약은 팀 협의 후 확정 |
 | 인증 완료 전후 계정 연결 범위 | 기술 정책의 표·본문과 화면 기획에 범위 차이가 있음 | 이번 발송 구현에서 연결·병합 정책을 추가하지 않음. Google 인증수단 연결 구현 전에 협의 |
 
-### 이번 연결의 의미
+### HTTP 계약
 
 - 기존 빈 `EmailVerificationSendController`를 구현해 POST 요청을 검증한 뒤
   기존 `EmailVerificationSendService.send()`에 전달한다.
@@ -181,19 +175,11 @@
 
 ### 검증 결과
 
-- 기존 PowerShell 기록에서 로컬 PostgreSQL URL·사용자 설정을 확인했으나,
-  현재 Codex 실행 환경에는 DB_URL·DB_USERNAME·DB_PASSWORD가 없다.
-  비밀번호 값은 복원하지 못했으며 출력하거나 새 파일에 기록하지 않았다.
-- 설정 없이 실행한 서비스 통합 테스트는 DB URL 설정 누락으로 시작에 실패했다.
-- 설치된 PostgreSQL 17로 build 폴더에 일회용 DB를 생성하고 기존 Flyway
-  migration과 Hibernate validate를 적용했다. 기존 개발 DB에는 접속하지 않았다.
+- PostgreSQL 17에서 Flyway migration과 Hibernate 매핑을 검증했다.
 - 기존 EmailVerificationSendServiceIntegrationTests 2개가 모두 통과했다.
   정상 발송의 해시·발송 기록 커밋과 메일 실패 시 롤백을 재확인했다.
 - Controller 테스트 22개와 실제 OpenAPI 생성·HTTP·Scalar 응답 테스트 1개를 추가했다.
 - `gradlew.bat check --no-daemon`: 전체 84개 테스트 통과, 실패·오류·건너뜀 0개.
-- 테스트 후 일회용 PostgreSQL을 종료했다. 메일 발송은 mock으로 검증했으며
-  실제 SMTP 계정·수신함 도착 검증은 아직 수행하지 않았다.
-- 현재 작업 브랜치에는 harness 및 실행 스크립트가 없어 하네스 검사는 실행하지 않았다.
 
 ## 2026-10-06 현재 미정 정책과 후속 작업
 
@@ -202,10 +188,7 @@
 - [AUTH-005 공유 명세](https://app.notion.com/p/4f311880adea82bfa8b301d6b27b2b20): 마지막 수정 2026-10-04 14:24:12 KST.
 - [기술·정책 공유 명세](https://app.notion.com/p/3e311880adea8077a667c9a8eae3d107): 마지막 수정 2026-10-04 14:25:35 KST.
 - 위 두 문서를 재조회했으며, 발송 제한 수치와 계정 존재 안내에 대한 새로운 확정 내용은 확인되지 않았다.
-- 현재 구현 커밋은 `1d95169`이며 `origin/feat/12-email-verification`에 push했다.
-- develop은 여전히 `f72bb4b`다. 현재 브랜치에 최신 develop 변경을 병합하지 않았다.
-- GitHub의 열린 PR은 #9와 #11이다. AUTH-005 PR은 아직 생성되지 않았으며 작성 화면을 준비했다.
-- [Issue #12](https://github.com/sw-capstone/bareum-server/issues/12)는 열려 있다. 체크리스트는 실제 로컬 구현 상태와 구분한다.
+- 관련 작업: [Issue #12](https://github.com/sw-capstone/bareum-server/issues/12).
 - 아래 내용은 팀 결정 기록이 아닌 협의 목록이다. 이번 문서 수정으로 정책을 확정하지 않는다.
 
 ### 확정 기준
@@ -242,10 +225,8 @@
 
 ### 정책 결정과 구분할 검증·개발 잔여 작업
 
-- 기존 서비스 통합 테스트 2개와 전체 84개 테스트 통과 결과는 앞 절에 기록했다. 이번 문서 수정에서는 테스트를 다시 실행하지 않았다.
+- AUTH-005의 서비스 통합 테스트 2개와 전체 84개 테스트 통과 결과는 앞 절에 기록했다.
 - 실제 SMTP 발송·수신함 도착 검증, 전체 발송의 동시 요청 검증, SMTP 및 코드 생성기 독립 테스트는 남아 있다.
-- 최신 develop 및 PR #11 병합 상태 반영 후 하네스와 관련 검사를 수행해야 한다. merge/rebase는 사용자 승인 없이 수행하지 않는다.
-- Draft PR은 미정 사항을 공유하기 위한 제안이다. PR 생성이나 승인 자체를 정책 확정 또는 실제 메일 검증 완료로 취급하지 않는다.
 
 ## 2026-10-06 AUTH-006 인증 코드 확인 구현 초안
 
@@ -253,10 +234,8 @@
 
 - [AUTH-006 공유 명세](https://app.notion.com/p/18311880adea83dea34c81850a8ea665)의 마지막 수정은 2026-10-04 14:24:13 KST다.
 - [AUTH-007 공유 명세](https://app.notion.com/p/90411880adea83bdbdfc816914012c67)의 마지막 수정도 같은 날 14:24:13 KST다.
-- AUTH-005는 일반 [PR #18](https://github.com/sw-capstone/bareum-server/pull/18)로 생성됐다. 리뷰어는 seamooll·numkite이며 조회 시 하네스·비밀정보 검사·Jira 동기화가 성공했다. 기존 'PR 미생성' 기록은 생성 전 확인 이력이다.
-- AUTH-006은 `1d95169`에서 만든 로컬 브랜치 `codex/auth006-email-verification-code`에서 진행한다. AUTH-005/008이 아직 미병합인 상태에서 이 구현을 기반으로 한다.
-- 관련 작업은 [GitHub Issue #19](https://github.com/sw-capstone/bareum-server/issues/19)다. 구현·테스트 완료 후 사용자의 승인으로 생성했으며, 미정 정책과 최종 소비 연결은 체크리스트에 별도로 남겼다.
-- 사용자는 이메일·목적의 최신 요청 조회와 응답 토큰 방식을 개발 초안으로 승인했다. 팀 공식 계약 확정과는 구분한다.
+- AUTH-006은 AUTH-005의 발송·해시·이메일 잠금 구현을 재사용한다.
+- 관련 작업: [GitHub Issue #19](https://github.com/sw-capstone/bareum-server/issues/19).
 - 기존 엔티티의 verified_at·verification_token_hash·verification_expires_at을 사용하며 DB migration은 추가하지 않는다.
 - 회원 생성·비밀번호 변경·증명 최종 소비·재발송 API는 이번 범위에 포함하지 않는다.
 
@@ -290,7 +269,4 @@
 - 동시 오입력 5건에서 테스트 제한인 3건만 실패 횟수로 커밋되고 나머지 2건은 횟수 초과로 차단됨을 확인했다. 동시 정답 요청 2건은 한 번만 증명을 발급했다.
 - 실제 웹 서버의 OpenAPI 생성과 HTTP 응답 검증 1개 통과: DTO 스키마, 입력 필수 필드·번호 형식, 일반·검증 오류 스키마, 응답 필드와 캐시 금지 헤더.
 - `gradlew.bat check --no-daemon`: 전체 119개 테스트 통과, 실패·오류·건너뜀 0개. AUTH-005 기존 테스트도 포함한다.
-- 초기 통합 테스트에서 재설정 기간 null 값의 자동 언박싱 오류를 발견해 수정했다. 이후 설정 누락 시 AUTH-0006 반환을 재검증했다.
-- 테스트 후 일회용 PostgreSQL을 종료하고 postmaster.pid 부재를 확인했다. 기존 개발 DB는 사용하지 않았다.
-- 현재 브랜치의 Gradle check 통과와 PR #18의 원격 하네스 통과는 별개의 결과다. AUTH-006 변경은 원격 CI에서 아직 검증하지 않았다.
-- 검증 완료 당시에는 로컬 구현 초안으로 commit·push·새 Issue/PR 생성을 수행하지 않았다. 이후 사용자가 Issue 생성과 commit·push를 승인했으며 PR은 사용자가 직접 제출하기로 했다. 실제 메일 전달·최종 가입/재설정 소비 검증은 이번 테스트 범위가 아니다.
+- 실제 메일 전달·최종 가입/재설정의 증명 소비 검증은 이번 테스트 범위에 포함하지 않는다.
