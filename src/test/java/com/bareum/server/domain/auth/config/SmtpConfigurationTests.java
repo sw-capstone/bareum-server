@@ -50,6 +50,36 @@ class SmtpConfigurationTests {
     }
 
     @Test
+    void gmailVerificationProfileRequiresAuthenticatedTlsAndKeepsCredentialsExternal() {
+        context.withInitializer(ctx -> {
+            try {
+                var sources = new YamlPropertySourceLoader().load(
+                        "gmail-verification", new ClassPathResource("application-gmail-verification.yml"));
+                sources.forEach(source -> ctx.getEnvironment().getPropertySources().addFirst(source));
+            } catch (java.io.IOException exception) {
+                throw new IllegalStateException(exception);
+            }
+        }).withPropertyValues("GMAIL_TEST_ADDRESS=smtp-test@example.invalid",
+                "GMAIL_APP_PASSWORD=test-only-placeholder").run(ctx -> {
+            assertNull(ctx.getStartupFailure());
+            var sender = ctx.getBean(JavaMailSenderImpl.class);
+            assertEquals("smtp.gmail.com", sender.getHost());
+            assertEquals(587, sender.getPort());
+            assertEquals("smtp-test@example.invalid", sender.getUsername());
+            assertEquals("smtp-test@example.invalid", ctx.getEnvironment()
+                    .getProperty("auth.email-verification.mail-from"));
+            var properties = sender.getJavaMailProperties();
+            assertEquals("true", properties.getProperty("mail.smtp.auth"));
+            assertEquals("true", properties.getProperty("mail.smtp.starttls.enable"));
+            assertEquals("true", properties.getProperty("mail.smtp.starttls.required"));
+            assertEquals("true", properties.getProperty("mail.smtp.ssl.checkserveridentity"));
+            assertEquals("5000", properties.getProperty("mail.smtp.timeout"));
+            assertFalse(Boolean.parseBoolean(ctx.getEnvironment().getProperty("spring.jpa.show-sql")));
+            assertNull(ctx.getEnvironment().getProperty("auth.email-verification.max-sends-per-hour"));
+        });
+    }
+
+    @Test
     void noProviderIsSelectedWhenHostIsMissing() {
         context.run(ctx -> {
             assertNull(ctx.getStartupFailure());
