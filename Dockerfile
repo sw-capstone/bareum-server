@@ -17,6 +17,10 @@ FROM eclipse-temurin:25-jre-noble AS runtime
 
 WORKDIR /app
 
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
+
 RUN groupadd --gid 10001 app \
     && useradd --uid 10001 --gid app --no-create-home --shell /usr/sbin/nologin app
 
