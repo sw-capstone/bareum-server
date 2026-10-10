@@ -31,7 +31,7 @@ public class Member extends BaseTimeEntity {
 	@Column(name = "id", nullable = false)
 	private Long id;
 
-	@Column(name = "email", nullable = false, length = 255, unique = true)
+	@Column(name = "email", nullable = false, length = 255)
 	private String email;
 
 	@Column(name = "name", nullable = false, length = 255)
@@ -62,6 +62,11 @@ public class Member extends BaseTimeEntity {
 		this.passwordHash = passwordHash;
 		this.status = MemberStatus.ACTIVE;
 		this.signupMethod = signupMethod;
+	}
+
+	/** Both markers must be present before the address can be reused. */
+	public boolean isWithdrawalCompleted() {
+		return status == MemberStatus.DELETED && withdrawnAt != null;
 	}
 
 	public static Member createLocal(String email, String name, String passwordHash) {
