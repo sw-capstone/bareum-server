@@ -67,6 +67,8 @@ out/
 .env
 .env.*
 !.env.example
+!.env.*.example
+!/.env.server.template
 
 # Local harness
 .DS_Store
