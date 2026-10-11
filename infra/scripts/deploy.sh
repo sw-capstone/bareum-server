@@ -31,7 +31,7 @@ configure_paths() {
 }
 
 acquire_deployment_lock() {
-  for tool in docker flock awk jq grep; do
+  for tool in docker flock awk; do
     command -v "$tool" >/dev/null || fail "Required command not found: $tool"
   done
   [[ -f "$DEPLOY_ENV" && ! -L "$DEPLOY_ENV" ]] || fail '.env.deploy must be a regular file, not a symlink.'
@@ -69,31 +69,21 @@ replace_image() {
 }
 
 check_configuration() {
+  local required_file ca_file
   docker compose version >/dev/null || fail 'Docker Compose plugin is required.'
-  UP_HELP=$(docker compose up --help)
-  for option in --wait --wait-timeout --pull --no-deps --no-build --force-recreate; do
-    grep -Fq -- "$option" <<< "$UP_HELP" || fail "Docker Compose does not support $option. Update Compose."
-  done
-  CONFIG_HELP=$(docker compose config --help)
-  for option in --no-env-resolution --format; do
-    grep -Fq -- "$option" <<< "$CONFIG_HELP" || fail "Docker Compose does not support $option. Update Compose."
-  done
-  [[ -f "$INFRA_DIR/docker-compose.yml" && -r "$INFRA_DIR/docker-compose.yml" ]] \
-    || fail 'Readable infra/docker-compose.yml is required.'
-  REQUIRED_FILES=$(compose config --no-env-resolution --format json | jq -r --arg service "$SERVICE" '
-    [.services[$service], .services.nginx][] |
-    ((.volumes // [])[] | select(.type == "bind") | .source),
-    ((.env_file // [])[] | select(.required != false) | .path)
-  ') || fail 'Could not inspect required deployment files.'
-  while IFS= read -r required_file; do
-    [[ -n "$required_file" ]] || continue
+  for required_file in "$INFRA_DIR/docker-compose.yml" "$INFRA_DIR/nginx/default.conf"; do
     [[ -f "$required_file" && -r "$required_file" ]] \
       || fail "Required deployment file is missing or unreadable: $required_file"
-  done <<< "$REQUIRED_FILES"
+  done
   compose config --quiet
   [[ "$(awk -F= -v key="$IMAGE_KEY" '$1 == key { n++ } END { print n+0 }' "$DEPLOY_ENV")" == 1 ]] \
     || fail 'Target image key must appear exactly once in .env.deploy.'
   if [[ "$SERVICE" == server ]]; then
+    ca_file=$(compose config --environment |
+      awk -F= '$1 == "RDS_CA_FILE" { print substr($0, index($0, "=")+1) }')
+    [[ -n "$ca_file" ]] || fail 'RDS_CA_FILE is required.'
+    [[ "$ca_file" == /* ]] || ca_file="$INFRA_DIR/$ca_file"
+    [[ -f "$ca_file" && -r "$ca_file" ]] || fail 'RDS CA file is missing or unreadable.'
     for required_file in "$SCRIPT_DIR/prepare-server-env.sh" "$INFRA_DIR/env/.env.server.template"; do
       [[ -f "$required_file" && -r "$required_file" ]] || fail "Required file is missing or unreadable: $required_file"
     done

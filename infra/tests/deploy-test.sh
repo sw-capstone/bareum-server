@@ -35,20 +35,13 @@ case "$1" in
   compose)
     shift
     if [[ "$1" == version ]]; then exit 0; fi
-    if [[ "$*" == *'--help'* ]]; then
-      [[ "$MODE" != old-compose ]] || exit 0
-      printf '%s\n' '--wait --wait-timeout --pull --no-deps --no-build --force-recreate --no-env-resolution --format'
-      exit 0
-    fi
     while [[ "$1" == -* ]]; do shift 2; done
     operation="$1"
     shift
     case "$operation" in
       config)
-        if [[ "$*" == *'--format json'* ]]; then
-          printf '{"services":{"server":{"volumes":[{"type":"bind","source":"%s/infra/certs/rds-ca.pem"}],"env_file":[{"path":"%s/infra/env/.env.server","required":true}]},"ai":{},"nginx":{}}}\n' "$CASE_ROOT" "$CASE_ROOT"
-        fi
         if [[ "$MODE" == config-fail && -f "$CASE_ROOT/prepared" ]]; then exit 1; fi
+        if [[ "$*" == --environment ]]; then printf 'RDS_CA_FILE=%s\n' "$RESOLVED_CA_FILE"; fi
         ;;
       ps) echo fixture-container ;;
       exec)
@@ -88,10 +81,12 @@ ln -s "$WORK/bin/sleep" "$WORK/bin/aws"
 
 setup_case() {
   export MODE="$1" TARGET="${2:-server}"
+  export RESOLVED_CA_FILE=./certs/rds-ca.pem
   export IMAGE_KEY=SERVER_IMAGE
   [[ "$TARGET" != ai ]] || IMAGE_KEY=AI_IMAGE
   export CASE_ROOT="$WORK/$MODE-$TARGET"
-  mkdir -p "$CASE_ROOT/infra/scripts" "$CASE_ROOT/infra/env" "$CASE_ROOT/infra/certs"
+  mkdir -p "$CASE_ROOT/infra/scripts" "$CASE_ROOT/infra/env" "$CASE_ROOT/infra/certs" "$CASE_ROOT/infra/nginx"
+  touch "$CASE_ROOT/infra/nginx/default.conf"
   touch "$CASE_ROOT/infra/docker-compose.yml" "$CASE_ROOT/infra/certs/rds-ca.pem" "$CASE_ROOT/infra/env/.env.server.template"
   cp "$SOURCE_DIR/scripts/deploy.sh" "$CASE_ROOT/infra/scripts/"
   cat > "$CASE_ROOT/infra/scripts/prepare-server-env.sh" <<'MOCK'
@@ -104,7 +99,8 @@ MOCK
   printf '%s\n' \
     'SERVER_IMAGE=ghcr.io/sw-capstone/bareum-server:old' \
     'AI_IMAGE=ghcr.io/sw-capstone/bareum-ai:old' \
-    'SERVER_ENV_FILE=./env/.env.server' > "$CASE_ROOT/infra/env/.env.deploy"
+    'SERVER_ENV_FILE=./env/.env.server' \
+    'RDS_CA_FILE=./certs/rds-ca.pem' > "$CASE_ROOT/infra/env/.env.deploy"
   printf '%s\n' 'DB_PASSWORD=old-fixture-value' > "$CASE_ROOT/infra/env/.env.server"
   cp "$CASE_ROOT/infra/env/.env.deploy" "$CASE_ROOT/original-deploy"
   cp "$CASE_ROOT/infra/env/.env.server" "$CASE_ROOT/original-server"
@@ -139,9 +135,11 @@ for target in server ai; do
   pass "$target success; other service preserved"
 done
 
-for mode in pull-fail prepare-fail config-fail unhealthy-baseline old-compose missing-cert missing-template; do
+for mode in pull-fail prepare-fail config-fail unhealthy-baseline missing-nginx missing-compose missing-cert missing-template; do
   setup_case "$mode"
   if [[ "$mode" == missing-cert ]]; then rm "$CASE_ROOT/infra/certs/rds-ca.pem"; fi
+  if [[ "$mode" == missing-nginx ]]; then rm "$CASE_ROOT/infra/nginx/default.conf"; fi
+  if [[ "$mode" == missing-compose ]]; then rm "$CASE_ROOT/infra/docker-compose.yml"; fi
   if [[ "$mode" == missing-template ]]; then rm "$CASE_ROOT/infra/env/.env.server.template"; fi
   run_case
   [[ "$RESULT" != 0 ]]
@@ -149,6 +147,32 @@ for mode in pull-fail prepare-fail config-fail unhealthy-baseline old-compose mi
   cmp "$CASE_ROOT/original-server" "$CASE_ROOT/infra/env/.env.server"
   if grep -q ' up -d ' "$CASE_ROOT/calls"; then exit 1; fi
   pass "$mode preserves files and running container"
+done
+
+setup_case absolute-cert
+RESOLVED_CA_FILE="$CASE_ROOT/infra/certs/rds-ca.pem"
+printf 'RDS_CA_FILE=%s/infra/certs/rds-ca.pem\n' "$CASE_ROOT" >> "$CASE_ROOT/infra/env/.env.deploy"
+awk '!/^RDS_CA_FILE=\.\//' "$CASE_ROOT/infra/env/.env.deploy" > "$CASE_ROOT/deploy.next"
+mv "$CASE_ROOT/deploy.next" "$CASE_ROOT/infra/env/.env.deploy"
+run_case
+[[ "$RESULT" == 0 ]]
+pass 'absolute certificate path accepted'
+
+for mode in quoted-cert commented-cert; do
+  setup_case "$mode"
+  ca_value='"./certs/rds-ca.pem"'
+  if [[ "$mode" == commented-cert ]]; then ca_value='./certs/rds-ca.pem # certificate'; fi
+  awk -v value="$ca_value" '/^RDS_CA_FILE=/ { print "RDS_CA_FILE=" value; next } { print }' \
+    "$CASE_ROOT/infra/env/.env.deploy" > "$CASE_ROOT/deploy.next"
+  mv "$CASE_ROOT/deploy.next" "$CASE_ROOT/infra/env/.env.deploy"
+  run_case
+  if [[ "$RESULT" != 0 ]]; then
+    printf 'FAIL: %s must accept the certificate path resolved by Compose\n' "$mode" >&2
+    cat "$CASE_ROOT/output" >&2
+    exit 1
+  fi
+  [[ "$(cat "$CASE_ROOT/current-image")" == "$NEW_IMAGE" ]]
+  pass "$mode accepts the certificate path resolved by Compose"
 done
 
 for mode in up-fail route-fail interrupted wrong-image hangup hangup-during-rollback; do
