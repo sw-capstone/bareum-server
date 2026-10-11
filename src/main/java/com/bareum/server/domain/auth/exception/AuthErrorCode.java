@@ -57,7 +57,10 @@ public enum AuthErrorCode implements BaseErrorCode {
     INVALID_ACCESS_TOKEN(HttpStatus.UNAUTHORIZED, "AUTH-0017", "유효한 로그인 인증이 필요합니다."),
     ACCESS_DENIED(HttpStatus.FORBIDDEN, "AUTH-0018", "접근 권한이 없습니다."),
     LOGIN_SERVICE_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "AUTH-0019", "로그인 인증 서비스를 일시적으로 사용할 수 없습니다."),
-    LOGIN_REQUEST_LIMIT_EXCEEDED(HttpStatus.TOO_MANY_REQUESTS, "AUTH-0020", "로그인 요청이 많습니다. 잠시 후 다시 시도해 주세요.");
+    LOGIN_REQUEST_LIMIT_EXCEEDED(HttpStatus.TOO_MANY_REQUESTS, "AUTH-0020", "로그인 요청이 많습니다. 잠시 후 다시 시도해 주세요."),
+    INVALID_REFRESH_TOKEN(HttpStatus.UNAUTHORIZED,"AUTH-0021","로그인이 만료되었거나 유효하지 않습니다. 다시 로그인해 주세요."),
+    REFRESH_TOKEN_REUSED(HttpStatus.UNAUTHORIZED,"AUTH-0022","이미 사용된 갱신 정보입니다. 다시 로그인해 주세요."),
+    TOKEN_RENEW_LIMIT_EXCEEDED(HttpStatus.TOO_MANY_REQUESTS,"AUTH-0023","토큰 갱신 요청이 많습니다. 잠시 후 다시 시도해 주세요.");
 
     private final HttpStatus httpStatus;
     private final String code;

@@ -28,6 +28,12 @@ public class BearerTokenFilter extends OncePerRequestFilter {
     }
 
     @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+        String path = request.getServletPath();
+        return path.equals("/api/v1/auth/token/renew") || path.equals("/api/v1/auth/csrf");
+    }
+
+    @Override
     protected void doFilterInternal(
             HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {

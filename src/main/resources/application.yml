@@ -47,5 +47,8 @@ auth:
     allowed-origins: ${LOGIN_ALLOWED_ORIGINS:}
     max-requests-per-window: ${LOGIN_MAX_REQUESTS_PER_WINDOW:10}
     request-window-seconds: ${LOGIN_REQUEST_WINDOW_SECONDS:60}
+  token-renew:
+    max-requests-per-window: ${TOKEN_RENEW_MAX_REQUESTS_PER_WINDOW:30}
+    request-window-seconds: ${TOKEN_RENEW_REQUEST_WINDOW_SECONDS:60}
   email-verification:
     hash-secret: ${EMAIL_VERIFICATION_HASH_SECRET}

@@ -22,7 +22,10 @@ import java.time.Clock;
 import java.util.List;
 
 @Configuration
-@EnableConfigurationProperties(LoginProperties.class)
+@EnableConfigurationProperties({
+    LoginProperties.class,
+    com.bareum.server.domain.auth.config.TokenRenewProperties.class
+})
 @org.springframework.scheduling.annotation.EnableScheduling
 public class SecurityConfig {
     @Bean
@@ -55,6 +58,7 @@ public class SecurityConfig {
             LoginProperties properties)
             throws Exception {
         var csrfRepository = new org.springframework.security.web.csrf.CookieCsrfTokenRepository();
+        csrfRepository.setHeaderName("X-CSRF-TOKEN");
         csrfRepository.setCookieCustomizer(
                 cookie ->
                         cookie.secure(properties.cookieSecure())
@@ -69,6 +73,9 @@ public class SecurityConfig {
                 .csrf(
                         c ->
                                 c.csrfTokenRepository(csrfRepository)
+                                        .csrfTokenRequestHandler(
+                                                new com.bareum.server.global.security
+                                                        .HeaderOnlyCsrfTokenRequestHandler())
                                         .ignoringRequestMatchers(
                                                 "/api/v1/auth/login/email",
                                                 "/api/v1/auth/signup",
@@ -96,6 +103,7 @@ public class SecurityConfig {
                                         .requestMatchers(
                                                 HttpMethod.POST,
                                                 "/api/v1/auth/login/email",
+                                                "/api/v1/auth/token/renew",
                                                 "/api/v1/auth/signup",
                                                 "/api/v1/auth/email-verification",
                                                 "/api/v1/auth/email-verification/code",
@@ -103,6 +111,7 @@ public class SecurityConfig {
                                         .permitAll()
                                         .requestMatchers(
                                                 HttpMethod.GET,
+                                                "/api/v1/auth/csrf",
                                                 "/api/v1/auth/email/availability",
                                                 "/api/v1/terms",
                                                 "/api/v1/auth/email-verification/deliveries/*",
