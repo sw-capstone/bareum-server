@@ -22,18 +22,24 @@ public final class EmailVerificationProperties {
             Long passwordResetCodeTtlSeconds,
             Long minimumSendIntervalSeconds,
             Integer maxSendsPerHour,
-            Integer maxSendsPerDay
+            Integer maxSendsPerDay,
+            Integer maxVerificationAttempts,
+            @DefaultValue("600") long signupVerificationTtlSeconds,
+            Long passwordResetVerificationTtlSeconds
     ) {
         this.signupCodeTtlSeconds = signupCodeTtlSeconds;
         this.passwordResetCodeTtlSeconds = passwordResetCodeTtlSeconds;
         this.minimumSendIntervalSeconds = minimumSendIntervalSeconds;
         this.maxSendsPerHour = maxSendsPerHour;
         this.maxSendsPerDay = maxSendsPerDay;
+        this.maxVerificationAttempts = maxVerificationAttempts;
+        this.signupVerificationTtlSeconds = signupVerificationTtlSeconds;
+        this.passwordResetVerificationTtlSeconds = passwordResetVerificationTtlSeconds;
     }
 
-    private Integer maxVerificationAttempts;
-    private long signupVerificationTtlSeconds = 600;
-    private Long passwordResetVerificationTtlSeconds;
+    private final Integer maxVerificationAttempts;
+    private final long signupVerificationTtlSeconds;
+    private final Long passwordResetVerificationTtlSeconds;
 
     public long verificationTtlSeconds(VerificationPurpose purpose) {
         Long ttl = purpose == VerificationPurpose.SIGNUP

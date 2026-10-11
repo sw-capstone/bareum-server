@@ -48,6 +48,8 @@ import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
         "auth.email-verification.max-sends-per-day=30",
         "auth.email-verification.max-verification-attempts=3",
         "auth.email-verification.hash-secret=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+        "auth.email-verification.outbox.poll-delay-ms=3600000",
+        "auth.email-verification.outbox.encryption-key=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
         "auth.signup-terms.versions.AGE_OVER_14=test-fixed-v1",
         "auth.signup-terms.versions.TERMS_OF_SERVICE=test-fixed-v1",
         "auth.signup-terms.versions.PRIVACY_POLICY=test-fixed-v1",
@@ -64,6 +66,7 @@ class EmailSignupServiceIntegrationTests {
     @Autowired private EmailSignupService service;
     @Autowired private EmailVerificationConfirmService confirm;
     @Autowired private EmailVerificationSendService send;
+    @Autowired private EmailOutboxWorker worker;
     @Autowired private EmailVerificationResendService resend;
     @Autowired private EmailVerificationRepository verifications;
     @Autowired private MemberRepository members;
@@ -93,6 +96,7 @@ class EmailSignupServiceIntegrationTests {
         jdbc.update("DELETE FROM member_term WHERE member_id IN (SELECT id FROM member WHERE lower(email) = lower(?))", email);
         jdbc.update("DELETE FROM member WHERE lower(email) = lower(?)", email);
         jdbc.update("DELETE FROM email_verification_send_log WHERE lower(email) = lower(?)", email);
+        jdbc.update("DELETE FROM email_verification_outbox WHERE upper(email)=upper(?)",email);
         jdbc.update("DELETE FROM email_verification WHERE lower(email) = lower(?)", email);
         for (Long id : termIds) jdbc.update("DELETE FROM term WHERE id = ?", id);
     }
@@ -363,6 +367,7 @@ class EmailSignupServiceIntegrationTests {
         when(generator.generate()).thenReturn("012345", "654321");
         var sendRequest = new EmailVerificationRequest(email, VerificationPurpose.SIGNUP);
         send.send(sendRequest);
+        assertTrue(worker.runOnce());
         Long rowId = latest().getId();
         when(clock.instant()).thenReturn(NOW.plusSeconds(2));
         resend.resend(sendRequest);

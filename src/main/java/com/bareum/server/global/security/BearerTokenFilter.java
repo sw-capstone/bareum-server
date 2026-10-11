@@ -33,7 +33,8 @@ public class BearerTokenFilter extends OncePerRequestFilter {
         return path.equals("/api/v1/auth/token/renew")
                 || path.equals("/api/v1/auth/csrf")
                 || path.equals("/api/v1/auth/logout")
-                || path.equals("/api/v1/auth/login/google");
+                || path.equals("/api/v1/auth/login/google")
+                || path.equals("/api/v1/auth/signup/google");
     }
 
     @Override

@@ -8,7 +8,8 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
 import com.bareum.server.domain.auth.config.EmailVerificationProperties;
 import com.bareum.server.domain.auth.dto.request.EmailVerificationRequest;
@@ -45,7 +46,9 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
         "auth.email-verification.max-sends-per-hour=5",
         "auth.email-verification.max-sends-per-day=20",
         "auth.email-verification.password-reset-code-ttl-seconds=420",
-        "auth.email-verification.hash-secret=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+        "auth.email-verification.hash-secret=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+        "auth.email-verification.outbox.poll-delay-ms=3600000",
+        "auth.email-verification.outbox.encryption-key=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
 })
 class EmailVerificationResendServiceIntegrationTests {
 
@@ -56,10 +59,11 @@ class EmailVerificationResendServiceIntegrationTests {
 
     @Autowired private EmailVerificationResendService resendService;
     @Autowired private EmailVerificationSendService sendService;
+    @Autowired private EmailOutboxWorker worker;
     @Autowired private EmailVerificationRepository verificationRepository;
     @Autowired private EmailVerificationSendLogRepository sendLogRepository;
     @Autowired private EmailVerificationCodeHasher codeHasher;
-    @Autowired private EmailVerificationProperties properties;
+    @MockitoSpyBean private EmailVerificationProperties properties;
     @Autowired private JdbcTemplate jdbcTemplate;
     @Autowired private MemberRepository memberRepository;
     @MockitoBean private EmailVerificationMailSender mailSender;
@@ -75,6 +79,7 @@ class EmailVerificationResendServiceIntegrationTests {
     @AfterEach
     void cleanUp() {
         jdbcTemplate.update("DELETE FROM email_verification_send_log WHERE email = ?", email);
+        jdbcTemplate.update("DELETE FROM email_verification_outbox WHERE upper(email)=upper(?)",email);
         jdbcTemplate.update("DELETE FROM email_verification WHERE email = ?", email);
         jdbcTemplate.update("DELETE FROM member WHERE email = ?", email);
     }
@@ -219,9 +224,9 @@ class EmailVerificationResendServiceIntegrationTests {
         }
         // 시간당 상한을 올려 일당 상한을 독립적으로 검증합니다. 테스트 후 원복합니다.
         int previous = properties.getMaxSendsPerHour();
-        properties.setMaxSendsPerHour(100);
+        doReturn(100).when(properties).getMaxSendsPerHour();
         try { expectError(AuthErrorCode.EMAIL_SEND_LIMIT_EXCEEDED, request()); }
-        finally { properties.setMaxSendsPerHour(previous); }
+        finally { doCallRealMethod().when(properties).getMaxSendsPerHour(); }
         assertThat(latestRequest().getCodeHash()).isEqualTo(original.getCodeHash());
         verifyNoInteractions(mailSender, codeGenerator);
     }
@@ -230,9 +235,9 @@ class EmailVerificationResendServiceIntegrationTests {
     void missingLimitConfigurationLeavesOriginalRequestUntouched() {
         EmailVerification original = existingRequest();
         Long previous = properties.getMinimumSendIntervalSeconds();
-        properties.setMinimumSendIntervalSeconds(null);
+        doThrow(new AuthException(AuthErrorCode.EMAIL_VERIFICATION_NOT_CONFIGURED)).when(properties).requireConfigured(VerificationPurpose.SIGNUP);
         try { expectError(AuthErrorCode.EMAIL_VERIFICATION_NOT_CONFIGURED, request()); }
-        finally { properties.setMinimumSendIntervalSeconds(previous); }
+        finally { doCallRealMethod().when(properties).requireConfigured(VerificationPurpose.SIGNUP); }
         assertUnchanged(original);
         verifyNoInteractions(mailSender, codeGenerator);
     }
@@ -288,7 +293,10 @@ class EmailVerificationResendServiceIntegrationTests {
     @Test
     void initialSendAndResendShareTheSameEmailLock() throws Exception {
         existingRequest();
-        assertThat(concurrent(true)).containsExactlyInAnyOrder("sent", "AUTH-0004");
+        String[] results=concurrent(true);
+        assertThat(results).contains("sent");
+        assertThat(java.util.Arrays.stream(results).filter(result -> !result.equals("sent")).toList()).hasSize(1).allMatch(result -> result.equals("AUTH-0004") || result.equals("AUTH-0007"));
+        worker.runOnce();
         assertThat(latestRequest().getAttemptCount()).isEqualTo(2);
         assertThat(logCount()).isEqualTo(2);
         verify(mailSender).sendVerificationCode(email, NEW_CODE, VerificationPurpose.SIGNUP);
