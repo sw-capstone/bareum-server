@@ -47,6 +47,11 @@ public class LoginSessionService {
         if (members.isEmpty()) throw new AuthException(AuthErrorCode.LOGIN_ACCOUNT_RESTRICTED);
         if (!members.getFirst().equals(validated.passwordHash()))
             throw new AuthException(AuthErrorCode.INVALID_LOGIN_CREDENTIALS);
+        return issueForLockedMember(validated.memberId());
+    }
+
+    // 호출자는 같은 트랜잭션에서 회원 상태·인증 수단을 확인하고 회원 행을 잠가야 합니다.
+    IssuedLogin issueForLockedMember(long memberId) {
         Instant now = clock.instant();
         Instant accessExpiry = now.plusSeconds(properties.accessTtlSeconds());
         Instant sessionExpiry = now.plusSeconds(properties.sessionTtlSeconds());
@@ -62,7 +67,7 @@ public class LoginSessionService {
                     access_token_hash=EXCLUDED.access_token_hash,refresh_token_hash=EXCLUDED.refresh_token_hash,
                     access_expires_at=EXCLUDED.access_expires_at,revoked_at=NULL
                 """,
-                validated.memberId(),
+                memberId,
                 UUID.randomUUID(),
                 Timestamp.from(sessionExpiry),
                 Timestamp.from(now),

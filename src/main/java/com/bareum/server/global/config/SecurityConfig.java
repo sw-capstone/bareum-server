@@ -24,6 +24,7 @@ import java.util.List;
 @Configuration
 @EnableConfigurationProperties({
     LoginProperties.class,
+    com.bareum.server.domain.auth.config.GoogleLoginProperties.class,
     com.bareum.server.domain.auth.config.TokenRenewProperties.class
 })
 @org.springframework.scheduling.annotation.EnableScheduling
@@ -92,7 +93,9 @@ public class SecurityConfig {
                                                                     true, 0, "Bearer ", 0, 7)
                                                             && !path.equals(
                                                                     "/api/v1/auth/token/renew")
-                                                            && !path.equals("/api/v1/auth/logout");
+                                                            && !path.equals("/api/v1/auth/logout")
+                                                            && !path.equals(
+                                                                    "/api/v1/auth/login/google");
                                                 }))
                 .exceptionHandling(
                         c -> c.authenticationEntryPoint(entry).accessDeniedHandler(denied))
@@ -103,6 +106,7 @@ public class SecurityConfig {
                                         .requestMatchers(
                                                 HttpMethod.POST,
                                                 "/api/v1/auth/login/email",
+                                                "/api/v1/auth/login/google",
                                                 "/api/v1/auth/token/renew",
                                                 "/api/v1/auth/logout",
                                                 "/api/v1/auth/signup",
