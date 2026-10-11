@@ -47,3 +47,7 @@ auth:
   email-verification:
     hash-secret: ${EMAIL_VERIFICATION_HASH_SECRET}
     mail-from: ${EMAIL_VERIFICATION_MAIL_FROM:}
+    outbox:
+      encryption-key: ${EMAIL_VERIFICATION_OUTBOX_ENCRYPTION_KEY:}
+      key-id: ${EMAIL_VERIFICATION_OUTBOX_KEY_ID:v1}
+      enabled: ${EMAIL_VERIFICATION_OUTBOX_ENABLED:true}

@@ -1,15 +1,15 @@
 package com.bareum.server.domain.auth.service;
 
+import com.bareum.server.domain.auth.config.EmailOutboxProperties;
 import com.bareum.server.domain.auth.config.EmailVerificationProperties;
 import com.bareum.server.domain.auth.dto.request.EmailVerificationRequest;
-import com.bareum.server.domain.auth.dto.response.EmailVerificationSendResponse;
+import com.bareum.server.domain.auth.dto.response.EmailVerificationDeliveryResponse;
 import com.bareum.server.domain.auth.entity.EmailVerification;
-import com.bareum.server.domain.auth.entity.EmailVerificationSendLog;
+import com.bareum.server.domain.auth.repository.EmailOutboxRepository;
 import com.bareum.server.domain.auth.repository.EmailVerificationRepository;
-import com.bareum.server.domain.auth.repository.EmailVerificationSendLogRepository;
 import java.time.Clock;
-import java.time.Duration;
 import java.time.Instant;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
@@ -18,7 +18,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class EmailVerificationSendService {
-
     private final EmailVerificationProperties properties;
     private final EmailVerificationRequestLock requestLock;
     private final EmailVerificationAccountValidator accountValidator;
@@ -26,81 +25,35 @@ public class EmailVerificationSendService {
     private final EmailVerificationCodeGenerator codeGenerator;
     private final EmailVerificationCodeHasher codeHasher;
     private final EmailVerificationRepository verificationRepository;
-    private final EmailVerificationSendLogRepository sendLogRepository;
+    private final EmailOutboxRepository outbox;
+    private final EmailOutboxCipher cipher;
+    private final EmailOutboxProperties outboxProperties;
     private final EmailVerificationMailSender mailSender;
     private final Clock emailVerificationClock;
 
     @Transactional(isolation = Isolation.READ_COMMITTED)
-    public EmailVerificationSendResponse send(
-            EmailVerificationRequest request
-    ) {
+    public EmailVerificationDeliveryResponse send(EmailVerificationRequest request) {
         long ttlSeconds = properties.codeTtlSeconds(request.purpose());
-
+        cipher.requireConfigured();
+        mailSender.requireConfigured();
         requestLock.lockForEmail(request.email());
-
-        String recipient = accountValidator.resolveRecipient(
-                request.email(), request.purpose()
-        );
-
-        int previousAttemptCount = verificationRepository
-                .findFirstByEmailIgnoreCaseAndPurposeOrderByIdDesc(
-                        recipient,
-                        request.purpose()
-                )
-                .map(EmailVerification::getAttemptCount)
-                .orElse(0);
-
+        String recipient = accountValidator.resolveRecipient(request.email(), request.purpose());
         Instant now = emailVerificationClock.instant();
-
-        limitChecker.checkCanSend(
-                recipient,
-                request.purpose(),
-                now
-        );
-
+        limitChecker.checkCanSend(recipient, request.purpose(), now);
+        outbox.checkCanQueue(recipient, now, properties);
+        int previousAttemptCount = verificationRepository
+                .findFirstByEmailIgnoreCaseAndPurposeOrderByIdDesc(recipient, request.purpose())
+                .map(EmailVerification::getAttemptCount).orElse(0);
         String code = codeGenerator.generate();
-        String codeHash = codeHasher.hash(
-                recipient,
-                request.purpose(),
-                code
-        );
-
+        String codeHash = codeHasher.hash(recipient, request.purpose(), code);
+        // Pending requests are ineligible for code confirmation: lastSentAt stays null.
         EmailVerification verification = EmailVerification.request(
-                recipient,
-                request.purpose(),
-                codeHash,
-                now.plusSeconds(ttlSeconds),
-                previousAttemptCount
-        );
-
+                recipient, request.purpose(), codeHash, now, previousAttemptCount);
         verificationRepository.saveAndFlush(verification);
-
-        EmailVerificationSendLog sendLog = EmailVerificationSendLog.sent(
-                recipient, request.purpose(), emailVerificationClock.instant()
-        );
-        sendLogRepository.saveAndFlush(sendLog);
-
-        mailSender.sendVerificationCode(recipient, code, request.purpose());
-
-        Instant acceptedAt = emailVerificationClock.instant();
-        verification.markSent(acceptedAt, ttlSeconds);
-        sendLog.markAccepted(acceptedAt);
-
-        Duration remaining = Duration.between(
-                emailVerificationClock.instant(),
-                verification.getExpiresAt()
-        );
-
-        if (remaining.isNegative() || remaining.isZero()) {
-            return EmailVerificationSendResponse.of(0);
-        }
-
-        long expiresIn = remaining.getSeconds();
-
-        if (remaining.getNano() > 0) {
-            expiresIn++;
-        }
-
-        return EmailVerificationSendResponse.of(expiresIn);
+        UUID id = UUID.randomUUID();
+        byte[] encrypted = cipher.encrypt(id, verification.getId(),
+                EmailOutboxCipher.context(recipient, request.purpose(), ttlSeconds, codeHash), code);
+        outbox.enqueue(id, verification, encrypted, outboxProperties.keyId(), ttlSeconds, now);
+        return EmailVerificationDeliveryResponse.pending(id);
     }
 }
