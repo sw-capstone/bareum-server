@@ -26,12 +26,12 @@ class HarnessChecksTest(unittest.TestCase):
             root = Path(directory)
             (root / "harness").mkdir()
             (root / "harness/policy.json").write_text(
-                '{"version":"1.4.0","checks":{"secret_pattern":false}}', encoding="utf-8"
+                '{"version":"1.4.0","required_paths":[],"checks":{"secret_pattern":false}}', encoding="utf-8"
             )
-            policy, finding = load_policy(root)
+            policy, findings = load_policy(root)
             self.assertIsNone(policy)
-            self.assertEqual(finding.check_id, "HAR-POLICY-001")
-            self.assertIn("secret_pattern", finding.message)
+            self.assertEqual([item.check_id for item in findings], ["HAR-POLICY-001"])
+            self.assertIn("secret_pattern", findings[0].message)
             findings, executions = evaluate_checks(root, {"checks": {"secret_pattern": False}})
             self.assertEqual([item.check_id for item in findings], ["HAR-POLICY-001"])
             self.assertEqual([item.status for item in executions], ["failed"])
@@ -53,9 +53,9 @@ class HarnessChecksTest(unittest.TestCase):
             harness = root / "harness"
             harness.mkdir()
             (harness / "policy.json").write_text("{", encoding="utf-8")
-            policy, finding = load_policy(root)
+            policy, findings = load_policy(root)
             self.assertIsNone(policy)
-            self.assertEqual(finding.check_id if finding else None, "HAR-POLICY-001")
+            self.assertEqual([item.check_id for item in findings], ["HAR-POLICY-001"])
 
     def test_non_boolean_check_setting_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -63,11 +63,11 @@ class HarnessChecksTest(unittest.TestCase):
             harness = root / "harness"
             harness.mkdir()
             (harness / "policy.json").write_text(
-                '{"version":"1", "checks":{"required_paths":null}}', encoding="utf-8"
+                '{"version":"1", "required_paths":[], "checks":{"required_paths":null}}', encoding="utf-8"
             )
-            policy, finding = load_policy(root)
+            policy, findings = load_policy(root)
             self.assertIsNone(policy)
-            self.assertEqual(finding.check_id if finding else None, "HAR-POLICY-001")
+            self.assertEqual([item.check_id for item in findings], ["HAR-POLICY-001"])
 
             findings, executions = evaluate_checks(root, {"checks": {"required_paths": None}})
             self.assertEqual([item.check_id for item in findings], ["HAR-POLICY-001"])
