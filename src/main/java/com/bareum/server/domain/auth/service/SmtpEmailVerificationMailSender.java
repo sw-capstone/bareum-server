@@ -29,6 +29,13 @@ public class SmtpEmailVerificationMailSender
     }
 
     @Override
+    public void requireConfigured() {
+        if (mailSenderProvider.getIfAvailable() == null || !StringUtils.hasText(from)) {
+            throw new AuthException(AuthErrorCode.EMAIL_VERIFICATION_NOT_CONFIGURED);
+        }
+    }
+
+    @Override
     public void sendVerificationCode(
             String email,
             String code,

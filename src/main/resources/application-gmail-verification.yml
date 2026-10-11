@@ -1,0 +1,19 @@
+# Development mail verification only; not an operational mail-provider default.
+spring:
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: ${GMAIL_TEST_ADDRESS}
+    password: ${GMAIL_APP_PASSWORD}
+    default-encoding: UTF-8
+    properties:
+      "[mail.smtp.auth]": true
+      "[mail.smtp.starttls.enable]": true
+      "[mail.smtp.starttls.required]": true
+      "[mail.smtp.ssl.checkserveridentity]": true
+  jpa:
+    show-sql: false
+
+auth:
+  email-verification:
+    mail-from: ${GMAIL_TEST_ADDRESS}

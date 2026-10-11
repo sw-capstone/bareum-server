@@ -137,4 +137,12 @@ public class EmailVerification extends BaseTimeEntity {
 		}
 		this.consumedAt = consumedAt;
 	}
+
+	public void markSent(Instant sentAt, long ttlSeconds) {
+		if (ttlSeconds <= 0) {
+			throw new IllegalArgumentException("ttlSeconds must be positive");
+		}
+		markSent(sentAt);
+		this.expiresAt = sentAt.plusSeconds(ttlSeconds);
+	}
 }
