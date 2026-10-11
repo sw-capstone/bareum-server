@@ -90,7 +90,7 @@ class EmailVerificationResendOpenApiTests {
 
     @Configuration(proxyBeanMethods = false)
     @EnableAutoConfiguration(exclude = DataSourceAutoConfiguration.class)
-    @Import({OpenApiConfig.class, EmailVerificationResendController.class, GlobalExceptionHandler.class})
+    @Import({com.bareum.server.global.config.DocumentationSecurityConfig.class, OpenApiConfig.class, EmailVerificationResendController.class, GlobalExceptionHandler.class})
     static class DocumentationApplication {
         @Bean
         EmailVerificationResendService emailVerificationResendService() {

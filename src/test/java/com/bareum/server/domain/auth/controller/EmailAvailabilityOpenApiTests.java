@@ -70,7 +70,7 @@ class EmailAvailabilityOpenApiTests {
 
     @Configuration(proxyBeanMethods = false)
     @EnableAutoConfiguration(exclude = DataSourceAutoConfiguration.class)
-    @Import({OpenApiConfig.class, EmailAvailabilityController.class, GlobalExceptionHandler.class})
+    @Import({com.bareum.server.global.config.DocumentationSecurityConfig.class, OpenApiConfig.class, EmailAvailabilityController.class, GlobalExceptionHandler.class})
     static class DocumentationApplication {
         @Bean
         EmailAvailabilityService emailAvailabilityService() {

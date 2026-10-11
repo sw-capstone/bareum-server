@@ -2,6 +2,7 @@ package com.bareum.server.global.config;
 
 import com.bareum.server.global.exception.code.CommonErrorCode;
 import io.swagger.v3.oas.models.Components;
+import io.swagger.v3.oas.models.security.SecurityScheme;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.examples.Example;
 import io.swagger.v3.oas.models.info.Info;
@@ -34,6 +35,8 @@ public class OpenApiConfig {
 						.description("바름 API 문서"))
 				.servers(List.of(new Server().url("/").description("현재 접속 서버")))
 				.components(new Components()
+						.addSecuritySchemes("bearerAuth", new SecurityScheme()
+								.type(SecurityScheme.Type.HTTP).scheme("bearer"))
 						.addSchemas("ProblemDetail", problemSchema())
 						.addSchemas("ValidationProblemDetail", validationProblemSchema())
 						.addSchemas("BadRequestProblemDetail", new ComposedSchema()

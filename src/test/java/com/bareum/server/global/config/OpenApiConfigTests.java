@@ -61,7 +61,7 @@ class OpenApiConfigTests {
 
 	@Configuration(proxyBeanMethods = false)
 	@EnableAutoConfiguration(exclude = DataSourceAutoConfiguration.class)
-	@Import(OpenApiConfig.class)
+	@Import({OpenApiConfig.class, DocumentationSecurityConfig.class})
 	public static class DocumentationApplication {
 	}
 }
