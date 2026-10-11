@@ -15,7 +15,7 @@ import com.bareum.server.domain.auth.repository.EmailVerificationRepository;
 import com.bareum.server.domain.member.entity.Member;
 import com.bareum.server.domain.member.enums.SignupMethod;
 import com.bareum.server.domain.member.repository.MemberRepository;
-import com.bareum.server.domain.term.dto.request.TermConsentRequest;
+import com.bareum.server.domain.term.dto.request.SignupAgreementsRequest;
 import com.bareum.server.domain.term.entity.Term;
 import com.bareum.server.domain.term.enums.TermCode;
 import com.bareum.server.domain.term.exception.TermErrorCode;
@@ -47,7 +47,11 @@ import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
         "auth.email-verification.max-sends-per-hour=20",
         "auth.email-verification.max-sends-per-day=30",
         "auth.email-verification.max-verification-attempts=3",
-        "auth.email-verification.hash-secret=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+        "auth.email-verification.hash-secret=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+        "auth.signup-terms.versions.AGE_OVER_14=test-fixed-v1",
+        "auth.signup-terms.versions.TERMS_OF_SERVICE=test-fixed-v1",
+        "auth.signup-terms.versions.PRIVACY_POLICY=test-fixed-v1",
+        "auth.signup-terms.versions.MARKETING_CONSENT=test-fixed-v1"
 })
 class EmailSignupServiceIntegrationTests {
 
@@ -55,7 +59,7 @@ class EmailSignupServiceIntegrationTests {
     private static final String PASSWORD = String.join("", "Password", "123", "!");
     private final String email = "signup-" + UUID.randomUUID() + "@example.invalid";
     private final List<Long> termIds = new ArrayList<>();
-    private List<TermConsentRequest> consents;
+    private SignupAgreementsRequest consents;
 
     @Autowired private EmailSignupService service;
     @Autowired private EmailVerificationConfirmService confirm;
@@ -76,12 +80,11 @@ class EmailSignupServiceIntegrationTests {
     @BeforeEach
     void setUp() {
         when(clock.instant()).thenReturn(NOW);
-        consents = new ArrayList<>();
+        consents = new SignupAgreementsRequest(true, true, true, false);
         for (TermCode code : TermCode.values()) {
-            Term term = terms.saveAndFlush(Term.create(code, "test-" + UUID.randomUUID().toString().substring(0, 8),
+            Term term = terms.saveAndFlush(Term.create(code, "test-fixed-v1",
                     code != TermCode.MARKETING_CONSENT));
             termIds.add(term.getId());
-            consents.add(new TermConsentRequest(term.getId(), term.getVersion(), code != TermCode.MARKETING_CONSENT));
         }
     }
 
@@ -104,7 +107,7 @@ class EmailSignupServiceIntegrationTests {
     }
 
     private EmailSignupRequest request(String token) {
-        return new EmailSignupRequest(email, "사용자", PASSWORD, token, List.copyOf(consents));
+        return new EmailSignupRequest(email, "사용자", PASSWORD, token, consents);
     }
 
     private EmailVerification latest() {
@@ -145,33 +148,71 @@ class EmailSignupServiceIntegrationTests {
     }
 
     @Test
-    void optionalConsentCanBeOmitted() {
+    void marketingAcceptanceIsStoredWithoutChangingOtherConsents() {
         String token = proof(VerificationPurpose.SIGNUP);
-        consents.removeIf(c -> !c.agreed());
+        consents = new SignupAgreementsRequest(true, true, true, true);
         var response = service.signup(request(token));
-        assertEquals(3, jdbc.queryForObject("SELECT count(*) FROM member_term WHERE member_id = ?", Integer.class, response.memberId()));
+        assertEquals(4, jdbc.queryForObject("SELECT count(*) FROM member_term WHERE member_id = ? AND is_agreed = true",
+                Integer.class, response.memberId()));
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {false, true})
-    void missingOrRefusedRequiredConsentDoesNotConsumeProof(boolean missing) {
+    @ValueSource(strings = {"age", "service", "privacy"})
+    void refusedRequiredConsentDoesNotConsumeProof(String field) {
         String token = proof(VerificationPurpose.SIGNUP);
-        var first = consents.removeFirst();
-        if (!missing) consents.add(new TermConsentRequest(first.termId(), first.version(), false));
+        consents = new SignupAgreementsRequest(!field.equals("age"), !field.equals("service"), !field.equals("privacy"), false);
         expectTerm(TermErrorCode.REQUIRED_TERM_NOT_AGREED, request(token));
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"duplicate", "unknown", "version"})
-    void invalidConsentIdentityOrVersionIsRejected(String type) {
+    @ValueSource(strings = {"age", "service", "privacy", "marketing"})
+    void missingAgreementDoesNotConsumeProof(String field) {
         String token = proof(VerificationPurpose.SIGNUP);
-        var first = consents.getFirst();
-        switch (type) {
-            case "duplicate" -> consents.add(first);
-            case "unknown" -> consents.set(0, new TermConsentRequest(Long.MAX_VALUE, first.version(), true));
-            case "version" -> consents.set(0, new TermConsentRequest(first.termId(), "stale", true));
-        }
+        consents = new SignupAgreementsRequest(field.equals("age") ? null : true,
+                field.equals("service") ? null : true, field.equals("privacy") ? null : true,
+                field.equals("marketing") ? null : false);
         expectTerm(TermErrorCode.INVALID_CONSENT_REQUEST, request(token));
+    }
+
+    @Test
+    void absentAgreementObjectIsRejectedWithoutConsumingProof() {
+        String token = proof(VerificationPurpose.SIGNUP);
+        consents = null;
+        expectTerm(TermErrorCode.INVALID_CONSENT_REQUEST, request(token));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"AGE_OVER_14", "TERMS_OF_SERVICE", "PRIVACY_POLICY", "MARKETING_CONSENT"})
+    void changedDatabaseVersionDoesNotSilentlyRecordAgreementToNewText(String code) {
+        String token = proof(VerificationPurpose.SIGNUP);
+        jdbc.update("UPDATE term SET version = 'different-version' WHERE code = ?", code);
+        expectTerm(TermErrorCode.SIGNUP_TERMS_NOT_CONFIGURED, request(token));
+    }
+
+    @Test
+    void selectedTermsAreMappedByCodeAndPinnedVersionRatherThanDatabaseOrder() {
+        for (Long id : termIds) terms.deleteById(id);
+        termIds.clear();
+        for (TermCode code : List.of(TermCode.MARKETING_CONSENT, TermCode.PRIVACY_POLICY,
+                TermCode.TERMS_OF_SERVICE, TermCode.AGE_OVER_14)) {
+            termIds.add(terms.saveAndFlush(Term.create(code, "test-fixed-v1", code != TermCode.MARKETING_CONSENT)).getId());
+        }
+        var result = service.signup(request(proof(VerificationPurpose.SIGNUP)));
+        var rows = jdbc.queryForList("SELECT t.code,t.version,mt.is_agreed FROM member_term mt JOIN term t ON t.id=mt.term_id WHERE mt.member_id = ?",
+                result.memberId());
+        assertEquals(4, rows.size());
+        for (var row : rows) {
+            assertEquals("test-fixed-v1", row.get("version"));
+            assertEquals(!row.get("code").equals("MARKETING_CONSENT"), row.get("is_agreed"));
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"AGE_OVER_14", "MARKETING_CONSENT"})
+    void missingFixedCatalogItemBlocksSignupEvenIfMarketingWasDeclined(String code) {
+        String token = proof(VerificationPurpose.SIGNUP);
+        jdbc.update("DELETE FROM term WHERE code = ?", code);
+        expectTerm(TermErrorCode.SIGNUP_TERMS_NOT_CONFIGURED, request(token));
     }
 
     @Test
@@ -190,7 +231,7 @@ class EmailSignupServiceIntegrationTests {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"TERMS_OF_SERVICE", "PRIVACY_POLICY"})
+    @ValueSource(strings = {"AGE_OVER_14", "TERMS_OF_SERVICE", "PRIVACY_POLICY"})
     void coreTermsCannotBeConfiguredAsOptional(String code) {
         String token = proof(VerificationPurpose.SIGNUP);
         jdbc.update("UPDATE term SET is_required = false WHERE code = ?", code);
@@ -278,7 +319,7 @@ class EmailSignupServiceIntegrationTests {
         }).when(memberTerms).saveAllAndFlush(any());
         assertThrows(IllegalStateException.class, () -> service.signup(request(token)));
         assertNotSignedUp();
-        assertEquals(0, jdbc.queryForObject("SELECT count(*) FROM member_term WHERE term_id = ?", Integer.class, consents.getFirst().termId()));
+        assertEquals(0, jdbc.queryForObject("SELECT count(*) FROM member_term WHERE term_id = ?", Integer.class, termIds.getFirst()));
         reset(memberTerms);
         assertNotNull(service.signup(request(token)).memberId());
     }

@@ -35,7 +35,7 @@ class EmailSignupControllerTests {
     private static final String TOKEN = "A".repeat(43);
     private static final String BODY = """
             {"email":"user@example.invalid","name":"사용자","password":"${EXAMPLE_PASSWORD}",
-             "verificationToken":"%s","terms":[{"termId":1,"version":"1.0","agreed":true}]}
+             "verificationToken":"%s","agreements":{"age":true,"service":true,"privacy":true,"marketing":false}}
             """.formatted(TOKEN).replace("${EXAMPLE_PASSWORD}", String.join("", "Password", "123", "!"));
     private final EmailSignupService service = mock(EmailSignupService.class);
     private MockMvc mvc;
@@ -53,7 +53,11 @@ class EmailSignupControllerTests {
                 .andExpect(status().isCreated())
                 .andExpect(content().json("{\"memberId\":7}", JsonCompareMode.STRICT))
                 .andExpect(header().doesNotExist("Set-Cookie"));
-        verify(service).signup(any());
+        var captor = org.mockito.ArgumentCaptor.forClass(EmailSignupRequest.class);
+        verify(service).signup(captor.capture());
+        org.junit.jupiter.api.Assertions.assertEquals(
+                new com.bareum.server.domain.term.dto.request.SignupAgreementsRequest(true, true, true, false),
+                captor.getValue().agreements());
     }
 
     @ParameterizedTest
@@ -81,12 +85,25 @@ class EmailSignupControllerTests {
                 Arguments.of("password", null, "password"),
                 Arguments.of("verificationToken", "invalid", "verificationToken"),
                 Arguments.of("verificationToken", null, "verificationToken"),
-                Arguments.of("terms", List.of(), "terms"),
-                Arguments.of("terms", null, "terms"),
-                Arguments.of("terms", List.of(java.util.Map.of("termId", -1, "version", "1.0", "agreed", true)), "terms[0].termId"),
-                Arguments.of("terms", List.of(java.util.Map.of("termId", 1, "version", "", "agreed", true)), "terms[0].version"),
-                Arguments.of("terms", List.of(java.util.Map.of("termId", 1, "version", "1.0")), "terms[0].agreed")
+                Arguments.of("agreements", null, "agreements"),
+                Arguments.of("agreements", java.util.Map.of(), "agreements.age"),
+                Arguments.of("agreements", java.util.Map.of("service", true, "privacy", true, "marketing", false), "agreements.age"),
+                Arguments.of("agreements", java.util.Map.of("age", true, "privacy", true, "marketing", false), "agreements.service"),
+                Arguments.of("agreements", java.util.Map.of("age", true, "service", true, "marketing", false), "agreements.privacy"),
+                Arguments.of("agreements", java.util.Map.of("age", true, "service", true, "privacy", true), "agreements.marketing")
         );
+    }
+
+    @Test
+    void legacyTermArrayDoesNotBypassRequiredAgreements() throws Exception {
+        var mapper = JsonMapper.builder().build();
+        var body = (tools.jackson.databind.node.ObjectNode) mapper.readTree(BODY);
+        body.remove("agreements");
+        body.set("terms", mapper.valueToTree(List.of(java.util.Map.of("termId", 1, "version", "1.0", "agreed", true))));
+        mvc.perform(post(PATH).contentType(MediaType.APPLICATION_JSON).content(body.toString()))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("COMMON-0002"))
+                .andExpect(jsonPath("$.errors[*].field", hasItem("agreements")));
+        verifyNoInteractions(service);
     }
 
     @ParameterizedTest
@@ -119,7 +136,7 @@ class EmailSignupControllerTests {
 
     @Test
     void requestStringDoesNotExposePasswordOrProof() {
-        String text = new EmailSignupRequest("user@example.invalid", "사용자", "Password123!", TOKEN, List.of()).toString();
+        String text = new EmailSignupRequest("user@example.invalid", "사용자", "Password123!", TOKEN, new com.bareum.server.domain.term.dto.request.SignupAgreementsRequest(true, true, true, false)).toString();
         assertFalse(text.contains("Password123!"));
         assertFalse(text.contains(TOKEN));
     }

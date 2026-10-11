@@ -15,9 +15,10 @@ public interface EmailSignupControllerDocs {
 
     @Operation(summary = "이메일 회원가입", description = "AUTH-001 구현 초안. SIGNUP 인증 완료 증명과 필수 약관 동의를 확인하고 "
             + "회원·동의 이력 저장과 증명 사용을 함께 처리합니다. 비밀번호는 최소 12자로 영문·숫자·!@#$%& 각각 포함, "
-            + "공백 금지입니다. 선택 약관 미동의 또는 미제출도 가입 가능합니다. 가입 후 자동 로그인하지 않습니다. "
-            + "약관 ID·버전은 GET /api/v1/terms 조회값을 사용합니다. 약관 데이터가 없거나 같은 코드에 여러 버전이 있으면 "
-            + "가입을 차단합니다. 요청·응답·오류와 적용 약관 선택 기준은 팀 검토가 필요합니다.")
+            + "공백 금지입니다. agreements에 age·service·privacy·marketing을 모두 true/false로 전달합니다. "
+            + "age·service·privacy는 필수, marketing은 false도 가입 가능합니다. 가입 후 자동 로그인하지 않습니다. "
+            + "약관 원문은 프론트에서 고정해 표시하며 서버가 항목별 약관 ID·고정 버전을 연결합니다. "
+            + "약관 데이터·고정 버전 설정이 없거나 일치하지 않거나 같은 코드에 여러 버전이 있으면 가입을 차단합니다.")
     @ApiResponses({
             @ApiResponse(responseCode = "201", description = "가입 완료. 회원 ID만 반환",
                     content = @Content(mediaType = "application/json", schema = @Schema(implementation = EmailSignupResponse.class))),

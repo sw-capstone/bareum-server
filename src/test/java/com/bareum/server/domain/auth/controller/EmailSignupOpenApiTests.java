@@ -44,13 +44,19 @@ class EmailSignupOpenApiTests {
             assertThat(operation.at("/requestBody/content/application~1json/schema/$ref").asText())
                     .isEqualTo("#/components/schemas/EmailSignupRequest");
             var request = document.at("/components/schemas/EmailSignupRequest");
-            assertThat(request.path("required").toString()).contains("email", "name", "password", "verificationToken", "terms");
+            assertThat(request.path("required").toString()).contains("email", "name", "password", "verificationToken", "agreements");
             assertThat(request.at("/properties/password/minLength").asInt()).isEqualTo(12);
             assertThat(request.at("/properties/password/writeOnly").asBoolean()).isTrue();
             assertThat(request.at("/properties/verificationToken/writeOnly").asBoolean()).isTrue();
             assertThat(request.at("/properties/verificationToken/pattern").asText()).isEqualTo("[A-Za-z0-9_-]{43}");
-            assertThat(request.at("/properties/terms/items/$ref").asText()).isEqualTo("#/components/schemas/TermConsentRequest");
-            assertThat(document.at("/components/schemas/TermConsentRequest/required").toString()).contains("termId", "version", "agreed");
+            assertThat(request.path("properties").has("terms")).isFalse();
+            assertThat(request.at("/properties/agreements/$ref").asText()).isEqualTo("#/components/schemas/SignupAgreementsRequest");
+            var agreements = document.at("/components/schemas/SignupAgreementsRequest");
+            assertThat(agreements.path("required").toString()).contains("age", "service", "privacy", "marketing");
+            assertThat(agreements.path("properties").size()).isEqualTo(4);
+            for (String field : new String[]{"age", "service", "privacy", "marketing"}) {
+                assertThat(agreements.at("/properties/" + field + "/type").asText()).isEqualTo("boolean");
+            }
             assertThat(operation.at("/responses/201/content/application~1json/schema/$ref").asText())
                     .isEqualTo("#/components/schemas/EmailSignupResponse");
             assertThat(document.at("/components/schemas/EmailSignupResponse/properties").size()).isEqualTo(1);
@@ -63,7 +69,7 @@ class EmailSignupOpenApiTests {
             }
             String body = """
                     {"email":"user@example.invalid","name":"사용자","password":"${EXAMPLE_PASSWORD}",
-                     "verificationToken":"%s","terms":[{"termId":1,"version":"1.0","agreed":true}]}
+                     "verificationToken":"%s","agreements":{"age":true,"service":true,"privacy":true,"marketing":false}}
                     """.formatted("A".repeat(43)).replace("${EXAMPLE_PASSWORD}", String.join("", "Password", "123", "!"));
             var success = post(client, base, body);
             assertThat(success.statusCode()).isEqualTo(201);

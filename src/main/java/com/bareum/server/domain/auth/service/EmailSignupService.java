@@ -9,9 +9,8 @@ import com.bareum.server.domain.auth.exception.AuthException;
 import com.bareum.server.domain.auth.repository.EmailVerificationRepository;
 import com.bareum.server.domain.member.entity.Member;
 import com.bareum.server.domain.member.repository.MemberRepository;
-import com.bareum.server.domain.term.dto.request.TermConsentRequest;
 import com.bareum.server.domain.term.entity.MemberTerm;
-import com.bareum.server.domain.term.entity.Term;
+import com.bareum.server.domain.term.service.SignupTermConsentValidator.ValidatedConsent;
 import com.bareum.server.domain.term.repository.MemberTermRepository;
 import com.bareum.server.domain.term.service.SignupTermConsentValidator;
 import java.nio.charset.StandardCharsets;
@@ -59,7 +58,7 @@ public class EmailSignupService {
         if (memberRepository.existsByEmailIgnoreCase(request.email())) {
             throw new AuthException(AuthErrorCode.EMAIL_ALREADY_REGISTERED);
         }
-        List<Term> terms = termValidator.validate(request.terms());
+        List<ValidatedConsent> terms = termValidator.validate(request.agreements());
         String passwordHash = passwordHashes.hash(request.password());
         Instant completedAt = emailVerificationClock.instant();
         verification.consume(completedAt);
@@ -76,9 +75,8 @@ public class EmailSignupService {
             throw exception;
         }
         List<MemberTerm> consents = new ArrayList<>();
-        for (int index = 0; index < terms.size(); index++) {
-            TermConsentRequest consent = request.terms().get(index);
-            consents.add(MemberTerm.create(member, terms.get(index),
+        for (ValidatedConsent consent : terms) {
+            consents.add(MemberTerm.create(member, consent.term(),
                     consent.agreed() ? completedAt : null, null, consent.agreed(), completedAt));
         }
         memberTermRepository.saveAllAndFlush(consents);
