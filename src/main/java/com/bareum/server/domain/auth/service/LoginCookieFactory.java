@@ -42,6 +42,25 @@ public class LoginCookieFactory {
                 .toString();
     }
 
+    public String expireRefreshCookie() {
+        return expiredCookie(REFRESH_COOKIE);
+    }
+
+    public String expireCsrfCookie() {
+        return expiredCookie("XSRF-TOKEN");
+    }
+
+    private String expiredCookie(String name) {
+        return ResponseCookie.from(name, "")
+                .httpOnly(true)
+                .secure(properties.cookieSecure())
+                .sameSite(properties.cookieSameSite())
+                .path("/api/v1/auth")
+                .maxAge(0)
+                .build()
+                .toString();
+    }
+
     private long remaining(Instant now, Instant expiry) {
         Duration duration = Duration.between(now, expiry);
         return duration.isPositive() ? duration.getSeconds() + (duration.getNano() > 0 ? 1 : 0) : 0;
