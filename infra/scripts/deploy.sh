@@ -11,7 +11,7 @@ parse_arguments() {
   SERVICE="$1"
   IMAGE="$2"
   case "$SERVICE" in
-    server) IMAGE_KEY=SERVER_IMAGE; PORT=80 ;;
+    server) IMAGE_KEY=SERVER_IMAGE; PORT=8082 ;;
     ai) IMAGE_KEY=AI_IMAGE; PORT=8081 ;;
     *) fail 'Deployment target must be server or ai.' ;;
   esac
