@@ -46,6 +46,18 @@ case "$MODE:$file" in
   bad-template:env/.env.server.template) printf '\nSERVER_PORT=9999\n' >> "$3" ;;
   bad-compose:docker-compose.yml) printf '\nservices: [\n' >> "$3" ;;
   bad-nginx:nginx/default.conf) printf '\ninvalid_directive;\n' >> "$3" ;;
+  apply-*:scripts/deploy.sh)
+    cat > "$3" <<'SCRIPT'
+#!/usr/bin/env bash
+set -Eeuo pipefail
+[[ $# == 3 && "$1" == server && "$2" == ghcr.io/sw-capstone/bareum-server@sha256:* ]]
+[[ "$0" == "$3/staged/infra/scripts/deploy.sh" && "$(cat "$3/status")" == validated ]]
+if flock -n "$BAREUM_ROOT/.actions-deploy.lock" true; then exit 90; fi
+flock -n "$BAREUM_ROOT/infra/.deploy-state/lock" true
+touch "$CASE_ROOT/applied"
+if [[ "$MODE" == apply-fail ]]; then exit 7; fi
+SCRIPT
+    ;;
 esac
 MOCK
 cat > "$WORK/bin/docker" <<'MOCK'
@@ -275,4 +287,16 @@ run_case "$EXPECTED_COMMIT" ghcr.io/sw-capstone/bareum-server:latest
 assert_failure
 [[ ! -e "$CASE_ROOT/curl-calls" && ! -e "$CASE_ROOT/docker-calls" ]]
 printf 'PASS: mutable commit and image references rejected\n'
+for mode in apply-success apply-fail; do
+  setup_case "$mode"
+  save_baseline
+  result=0
+  bash "$SOURCE_DIR/scripts/prepare-infra-release.sh" "$EXPECTED_COMMIT" "$IMAGE" --apply \
+    > "$CASE_ROOT/output" 2>&1 || result=$?
+  if [[ "$mode" == apply-success ]]; then [[ "$result" == 0 ]]; else [[ "$result" == 7 ]]; fi
+  [[ -f "$CASE_ROOT/applied" ]]
+  sha256sum --check --status "$CASE_ROOT/live.sha256"
+  flock -n "$BAREUM_ROOT/.actions-deploy.lock" true
+  printf 'PASS: %s holds the Actions lock through deployment and propagates its result\n' "$mode"
+done
 printf 'All release preparation tests passed. GitHub downloads and Docker reads were simulated.\n'

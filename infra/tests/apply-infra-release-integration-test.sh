@@ -131,9 +131,8 @@ compose up -d --wait --wait-timeout 60 >/dev/null
 server_before=$(compose ps -q server)
 nginx_before=$(compose ps -q nginx)
 ai_before=$(compose ps -q ai)
-bash "$SOURCE_DIR/scripts/prepare-infra-release.sh" 0123456789abcdef0123456789abcdef01234567 "$FAKE_DIGEST" > "$WORK/prepared"
+bash "$SOURCE_DIR/scripts/prepare-infra-release.sh" 0123456789abcdef0123456789abcdef01234567 "$FAKE_DIGEST" --apply > "$WORK/prepared"
 release=$(sed -n 's/^Release prepared: //p' "$WORK/prepared")
-bash "$release/staged/infra/scripts/deploy.sh" server "$FAKE_DIGEST" "$release"
 [[ "$(cat "$release/status")" == applied ]]
 [[ "$(compose ps -q server)" != "$server_before" && "$(compose ps -q nginx)" != "$nginx_before" ]]
 [[ "$(compose ps -q ai)" == "$ai_before" ]]
@@ -168,11 +167,10 @@ awk '{sub("proxy_pass http://spring_backend;", "default_type application/json; r
 mv "$WORK/failing-nginx.conf" "$CANDIDATE/nginx/default.conf"
 printf '\nTEST_RELEASE=rollback-candidate\n' >> "$CANDIDATE/env/.env.server.template"
 printf '\n# rollback candidate hook\n' >> "$CANDIDATE/scripts/reload-nginx-after-cert-renewal.sh"
-bash "$SOURCE_DIR/scripts/prepare-infra-release.sh" 0123456789abcdef0123456789abcdef01234567 "$FAKE_DIGEST" > "$WORK/prepared-rollback"
-release=$(sed -n 's/^Release prepared: //p' "$WORK/prepared-rollback")
 : > "$DOCKER_EVENTS"
 result=0
-bash "$release/staged/infra/scripts/deploy.sh" server "$FAKE_DIGEST" "$release" > "$WORK/rollback.log" 2>&1 || result=$?
+bash "$SOURCE_DIR/scripts/prepare-infra-release.sh" 0123456789abcdef0123456789abcdef01234567 "$FAKE_DIGEST" --apply > "$WORK/rollback.log" 2>&1 || result=$?
+release=$(sed -n 's/^Release prepared: //p' "$WORK/rollback.log")
 if [[ "$result" != 1 ]]; then cat "$WORK/rollback.log" >&2; exit 1; fi
 grep -q 'Post-deployment Nginx route health check failed.' "$WORK/rollback.log"
 grep -q 'Rollback completed.' "$WORK/rollback.log"

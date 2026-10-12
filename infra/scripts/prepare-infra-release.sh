@@ -5,7 +5,9 @@ umask 077
 
 fail() { printf '%s\n' "$1" >&2; exit 1; }
 
-[[ $# == 2 ]] || fail 'Usage: prepare-infra-release.sh COMMIT_SHA SERVER_IMAGE_DIGEST'
+[[ $# == 2 || ( $# == 3 && "$3" == --apply ) ]] \
+  || fail 'Usage: prepare-infra-release.sh COMMIT_SHA SERVER_IMAGE_DIGEST [--apply]'
+APPLY="${3:-}"
 COMMIT_SHA="$1"
 SERVER_IMAGE="$2"
 [[ "$COMMIT_SHA" =~ ^[a-f0-9]{40}$ ]] || fail 'A full Git commit SHA is required.'
@@ -39,7 +41,11 @@ done
 [[ -d "$INFRA_DIR" && ! -L "$INFRA_DIR" ]] || fail 'The existing infra directory is required.'
 [[ ! -L "$BAREUM_ROOT/.actions-deploy.lock" ]] || fail 'Deployment lock must not be a symlink.'
 exec 8>"$BAREUM_ROOT/.actions-deploy.lock"
-flock -n 8 || fail 'Another Actions deployment is running. Retry after it finishes.'
+if [[ "$APPLY" == --apply ]]; then
+  flock --wait 600 8 || fail 'Timed out waiting for another Actions deployment.'
+else
+  flock -n 8 || fail 'Another Actions deployment is running. Retry after it finishes.'
+fi
 [[ ! -L "$STATE_DIR" ]] || fail 'Deployment state directory must not be a symlink.'
 mkdir -p -- "$STATE_DIR"
 chmod 700 "$STATE_DIR"
@@ -180,3 +186,8 @@ release="$RELEASES_DIR/$COMMIT_SHA-${WORK##*.}"
 mv -T -- "$WORK" "$release"
 WORK=''
 printf 'Release prepared: %s\n' "$release"
+if [[ "$APPLY" == --apply ]]; then
+  # Actions 잠금(8)은 유지하고, 적용 스크립트가 내부 잠금(9)을 다시 획득합니다.
+  exec 9>&-
+  bash "$release/staged/infra/scripts/deploy.sh" server "$SERVER_IMAGE" "$release"
+fi
