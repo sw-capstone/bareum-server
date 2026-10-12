@@ -116,6 +116,7 @@ public class SecurityConfig {
                                         .permitAll()
                                         .requestMatchers(
                                                 HttpMethod.GET,
+                                                "/health",
                                                 "/api/v1/auth/csrf",
                                                 "/api/v1/auth/email/availability",
                                                 "/api/v1/terms",
