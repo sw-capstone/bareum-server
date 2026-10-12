@@ -21,6 +21,12 @@ services:
         read_only: true
         bind:
           create_host_path: false
+      - type: bind
+        source: /var/www/certbot
+        target: /var/www/certbot
+        read_only: true
+        bind:
+          create_host_path: false
     depends_on:
       server:
         condition: service_healthy
