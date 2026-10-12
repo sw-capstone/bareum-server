@@ -44,7 +44,8 @@ import java.util.concurrent.Executors;
         properties = {
             "auth.login.allowed-origins=https://web.example.invalid",
             "auth.token-renew.max-requests-per-window=2",
-            "auth.token-renew.request-window-seconds=60"
+            "auth.token-renew.request-window-seconds=60",
+            "auth.email-verification.hash-secret=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
         })
 class TokenRenewIntegrationTests {
     private static final Instant NOW = Instant.parse("2026-10-11T03:00:00Z");

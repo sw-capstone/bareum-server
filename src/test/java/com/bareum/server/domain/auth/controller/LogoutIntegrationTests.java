@@ -34,7 +34,10 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.Executors;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-        properties = "auth.login.allowed-origins=https://web.example.invalid")
+        properties = {
+            "auth.login.allowed-origins=https://web.example.invalid",
+            "auth.email-verification.hash-secret=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+        })
 class LogoutIntegrationTests {
     private static final Instant NOW = Instant.parse("2026-10-11T03:00:00Z");
     private static final String PASSWORD = String.join("", "Fixture", "Input", "!");

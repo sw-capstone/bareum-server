@@ -33,6 +33,7 @@ import java.util.concurrent.*;
 @SpringBootTest(
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = {
+            "auth.email-verification.hash-secret=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
             "auth.login.allowed-origins=https://web.example.invalid",
             "auth.google.client-ids=test-client"
         })

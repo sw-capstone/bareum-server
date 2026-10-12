@@ -49,7 +49,8 @@ import java.util.concurrent.Executors;
             "auth.login.allowed-origins=https://web.example.invalid",
             "auth.login.max-requests-per-window=5",
             "auth.login.cookie-secure=true",
-            "auth.login.cookie-same-site=None"
+            "auth.login.cookie-same-site=None",
+            "auth.email-verification.hash-secret=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
         })
 class EmailLoginIntegrationTests {
     private static final Instant NOW = Instant.parse("2026-10-11T00:00:00Z");
@@ -141,6 +142,16 @@ class EmailLoginIntegrationTests {
 
     private LoginSessionService.IssuedLogin issue() {
         return loginService.login(new EmailLoginRequest(email, PASSWORD, null));
+    }
+
+    @Test
+    void healthRemainsPublicWithAuthenticationEnabled() throws Exception {
+        var response = client.send(
+                HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/health"))
+                        .GET().build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertEquals(200, response.statusCode());
+        assertEquals("ok", mapper.readTree(response.body()).get("status").asText());
     }
 
     @Test

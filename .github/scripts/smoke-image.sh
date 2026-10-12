@@ -25,8 +25,8 @@ trap cleanup EXIT
 printf '%s\n' 'DB_URL=jdbc:postgresql://postgres:5432/bareum_ci' \
   'DB_USERNAME=bareum_ci' 'DB_PASSWORD=ci-only-password' \
   'EMAIL_VERIFICATION_HASH_SECRET=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=' \
-+  'EMAIL_VERIFICATION_OUTBOX_ENABLED=false' \
-+  'SERVER_PORT=8080' 'SPRING_JPA_SHOW_SQL=false' > "$SERVER_ENV_FILE"
+  'EMAIL_VERIFICATION_OUTBOX_ENABLED=false' \
+  'SERVER_PORT=8080' 'SPRING_JPA_SHOW_SQL=false' > "$SERVER_ENV_FILE"
 touch "$RDS_CA_FILE"
 "${compose[@]}" config --quiet
 "${compose[@]}" up -d --wait --wait-timeout 180 --no-build
