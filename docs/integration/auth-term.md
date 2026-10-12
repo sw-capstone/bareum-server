@@ -6,6 +6,7 @@
 - 관련 작업: [GitHub #22](https://github.com/sw-capstone/bareum-server/issues/22), BRM-25
 - 서버 구현 기준: [16934ac](https://github.com/sw-capstone/bareum-server/commit/16934ac0b0cf8eda52ce460d413d766b85fd597b) / [PR #45](https://github.com/sw-capstone/bareum-server/pull/45) 및 선행 인증 PR
 - 프론트 대조 기준: [develop dc61644](https://github.com/sw-capstone/bareum-web/commit/dc616444db4b766d83fe93e906573265bcf1a806)의 `authApi.ts`·`contracts.ts`·`httpClient.ts`·`docs/backend-integration.md`
+- 프론트 화면 확인: [develop 미리보기](https://bareum-web-git-develop-numkites-projects.vercel.app/)
 
 이 문서는 구현된 서버의 요청·응답을 모아 프론트 변경점을 설명한다. 미병합 API가 배포되었다거나 실제 브라우저 연동을 완료했다는 의미는 아니다. [Notion API 명세](https://app.notion.com/p/3e311880adea8014af6bcc19f68c8a59)의 Base URL `/api/v1`과 [최신 기술·정책](https://app.notion.com/p/3e311880adea8077a667c9a8eae3d107)을 기준으로 하며, 세부 계약 확정 전에는 `packages/contracts/`에 공식 계약을 추가하지 않는다.
 
@@ -197,6 +198,23 @@ PASSWORD_RESET 목적의 발송 → 상태 조회 → 번호 확인 → PATCH `/
 | 오류 message·문자 코드 | detail·AUTH/TERM/COMMON 코드·선택적 errors·빈 오류 본문 |
 
 프론트 저장소의 `authApi.ts`·`contracts.ts`·`httpClient.ts`와 연동 문서는 소비자 담당자가 함께 반영한다. 계약 확정 후 서버·프론트의 영향받는 검증을 연결한다.
+
+## develop 배포 화면 확인 결과
+
+- develop 미리보기에서 로그인·회원가입·비밀번호 찾기 화면 연결과 12자 이상 비밀번호 조건 표시를 확인했다.
+- 배포 코드의 `VITE_USE_MOCK_API=true`와 화면의 Mock 안내를 확인했다. 현재 인증은 샘플 응답으로 처리되며, 화면 전환 성공은 실제 서버 연동 결과가 아니다.
+- 비밀번호 찾기에서 Mock 인증 요청 후 타이머 표시, 잘못된 번호 안내, 올바른 번호 확인 후 새 비밀번호 입력 활성화를 확인했다. 비밀번호 변경 제출·실제 수신·서버 인증 증명 소비는 이 화면 검사에 포함하지 않았다.
+- Google 버튼은 현재 소비자 코드에 인증 처리 연결이 없으며, 로그인 상태 유지도 기본 선택 상태다. Google ID Token 연결과 keepSignedIn 비활성화가 필요하다.
+
+실제 연동 전 반영할 항목:
+
+1. 준비된 HTTPS 서버의 `/api/v1` 주소를 설정하고, 이 문서의 계약 변경을 함께 반영한 뒤 Mock을 끈다. Mock 설정만 바꾸면 기존 경로·응답·인증 처리 차이로 실패할 수 있다.
+2. 이메일 발송·재발송의 202 접수, 요청 ID별 상태 조회, PENDING의 0초와 SENT의 남은 시간, 완료 증명의 유효기간을 화면·Schema에 연결한다.
+3. 로그인 응답의 Access Token을 메모리에 보관하고 `/auth/me`를 조회한다. credentials·CSRF·갱신 직렬화·로그아웃 및 새로고침 복구를 공통 인증 처리에 연결한다. 브라우저 저장소의 사용자 표시 정보만으로 인증 여부를 확정하지 않는다.
+4. Google 인증 SDK의 ID Token을 전달하고 LOGIN·SIGNUP_REQUIRED 분기와 약관 동의를 연결한다. 실제 Client ID·승인 Origin·지원 계정 정책은 관련 담당자와 확인한다.
+5. 서버 CORS에는 실제로 사용할 프론트 Origin을 정확히 등록하고 HTTPS·쿠키·CSRF를 브라우저에서 검증한다. 미리보기 접근 성공만으로 서버의 허용 Origin·배포 주소가 확정된 것으로 취급하지 않는다.
+
+약관 원문·승인 버전과 운영 발송 정책은 미확정 상태를 유지한다. 비밀번호 찾기의 배포 포함 여부는 기존 정책에 따라 별도 확인한다.
 
 ## 검증 범위와 연동 전 확인
 
