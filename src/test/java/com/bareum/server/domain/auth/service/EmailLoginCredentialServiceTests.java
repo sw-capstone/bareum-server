@@ -47,17 +47,20 @@ class EmailLoginCredentialServiceTests {
 
     private void expect(AuthErrorCode error, String email, String password) {
         AuthException exception =
-                assertThrows(AuthException.class, () -> service.validate(email, password));
+                assertThrows(AuthException.class, () -> service.validateMember(email, password));
         assertSame(error, exception.getBaseErrorCode());
         assertFalse(exception.getMessage().contains(EMAIL));
     }
 
     @Test
-    void validLocalCredentialsReturnOnlyMemberIdAndPreservePasswordInput() {
+    void validLocalCredentialsPreservePasswordInputAndBindTheVerifiedHash() {
         local();
         String password = String.join(" ", "", "legacy", "input", "with", "spaces", "");
         when(hashes.matches(password, STORED_HASH)).thenReturn(true);
-        assertEquals(42L, service.validate("USER@EXAMPLE.INVALID", password));
+        var validated = service.validateMember("USER@EXAMPLE.INVALID", password);
+        assertEquals(42L, validated.memberId());
+        assertEquals(STORED_HASH, validated.passwordHash());
+        assertFalse(validated.toString().contains(STORED_HASH));
         verify(hashes).matches(password, STORED_HASH);
         verify(hashes, never()).hash(anyString());
         verify(members, never()).save(any());

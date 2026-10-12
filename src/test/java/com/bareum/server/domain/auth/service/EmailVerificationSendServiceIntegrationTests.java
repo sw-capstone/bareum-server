@@ -14,6 +14,7 @@ import com.bareum.server.domain.auth.repository.EmailVerificationRepository;
 import com.bareum.server.domain.auth.repository.EmailVerificationSendLogRepository;
 import com.bareum.server.domain.auth.support.TestSmtpServer;
 import com.bareum.server.domain.member.entity.Member;
+import com.bareum.server.domain.member.enums.MemberStatus;
 import com.bareum.server.domain.member.repository.MemberRepository;
 import java.time.Clock;
 import java.time.Instant;
@@ -26,6 +27,8 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -50,6 +53,7 @@ class EmailVerificationSendServiceIntegrationTests {
     private final AtomicReference<Instant> time = new AtomicReference<>(NOW);
     private final String email = "outbox-" + UUID.randomUUID() + "@example.invalid";
     @Autowired private EmailVerificationSendService service;
+    @Autowired private EmailVerificationResendService resendService;
     @Autowired private EmailVerificationDeliveryService delivery;
     @Autowired private EmailOutboxWorker worker;
     @Autowired private EmailOutboxRepository outbox;
@@ -250,6 +254,67 @@ class EmailVerificationSendServiceIntegrationTests {
             assertThrows(IllegalStateException.class,() -> worker.runOnce());
         });
         verify(sender,never()).sendVerificationCode(anyString(),anyString(),any());
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = MemberStatus.class, names = {"SUSPENDED", "DELETED"})
+    void restrictedResetAccountDoesNotCreateVerificationOrJob(MemberStatus status) {
+        members.saveAndFlush(Member.createLocal(email, "test", "password-hash"));
+        jdbc.update("UPDATE member SET status=? WHERE email=?", status.name(), email);
+        var failure = assertThrows(AuthException.class, () -> service.send(
+                new EmailVerificationRequest(email, VerificationPurpose.PASSWORD_RESET)));
+        assertSame(AuthErrorCode.PASSWORD_RESET_NOT_ALLOWED, failure.getBaseErrorCode());
+        assertEquals(0L, jdbc.queryForObject(
+                "SELECT count(*) FROM email_verification WHERE email=?", Long.class, email));
+        assertEquals(0L, jdbc.queryForObject(
+                "SELECT count(*) FROM email_verification_outbox WHERE email=?", Long.class, email));
+        verify(sender, never()).sendVerificationCode(anyString(), anyString(), any());
+    }
+
+    @Test
+    void withdrawalTimestampBlocksResetBeforeQueueing() {
+        members.saveAndFlush(Member.createLocal(email, "test", "password-hash"));
+        jdbc.update("UPDATE member SET withdrawn_at=? WHERE email=?",
+                java.sql.Timestamp.from(NOW), email);
+        var failure = assertThrows(AuthException.class, () -> service.send(
+                new EmailVerificationRequest(email, VerificationPurpose.PASSWORD_RESET)));
+        assertSame(AuthErrorCode.PASSWORD_RESET_NOT_ALLOWED, failure.getBaseErrorCode());
+        assertEquals(0L, jdbc.queryForObject(
+                "SELECT count(*) FROM email_verification_outbox WHERE email=?", Long.class, email));
+        verify(sender, never()).sendVerificationCode(anyString(), anyString(), any());
+    }
+
+    @Test
+    void accountSuspendedAfterQueueCancelsResetWithoutSmtp() {
+        members.saveAndFlush(Member.createLocal(email, "test", "password-hash"));
+        var accepted = service.send(new EmailVerificationRequest(email, VerificationPurpose.PASSWORD_RESET));
+        jdbc.update("UPDATE member SET status='SUSPENDED' WHERE email=?", email);
+        assertTrue(worker.runOnce());
+        assertEquals("CANCELLED", delivery.status(accepted.requestId()).orElseThrow().status());
+        assertNull(jdbc.queryForObject(
+                "SELECT encrypted_code FROM email_verification_outbox WHERE id=?", byte[].class, accepted.requestId()));
+        assertEquals(0, logs.countByEmailIgnoreCaseAndSentAtGreaterThanEqual(email, Instant.EPOCH));
+        verify(sender, never()).sendVerificationCode(anyString(), anyString(), any());
+    }
+
+    @Test
+    void suspendedAccountCannotReplacePreviouslySentResetCode() {
+        members.saveAndFlush(Member.createLocal(email, "test", "password-hash"));
+        var accepted = service.send(new EmailVerificationRequest(email, VerificationPurpose.PASSWORD_RESET));
+        assertTrue(worker.runOnce());
+        var originalHash = verifications.findFirstByEmailIgnoreCaseAndPurposeOrderByIdDesc(
+                email, VerificationPurpose.PASSWORD_RESET).orElseThrow().getCodeHash();
+        time.set(NOW.plusSeconds(60));
+        jdbc.update("UPDATE member SET status='SUSPENDED' WHERE email=?", email);
+        var failure = assertThrows(AuthException.class, () -> resendService.resend(
+                new EmailVerificationRequest(email, VerificationPurpose.PASSWORD_RESET)));
+        assertSame(AuthErrorCode.PASSWORD_RESET_NOT_ALLOWED, failure.getBaseErrorCode());
+        assertEquals(originalHash, verifications.findFirstByEmailIgnoreCaseAndPurposeOrderByIdDesc(
+                email, VerificationPurpose.PASSWORD_RESET).orElseThrow().getCodeHash());
+        assertEquals("SENT", state(accepted.requestId()));
+        assertEquals(1L, jdbc.queryForObject(
+                "SELECT count(*) FROM email_verification_outbox WHERE email=?", Long.class, email));
+        verify(sender, times(1)).sendVerificationCode(eq(email), anyString(), eq(VerificationPurpose.PASSWORD_RESET));
     }
 
     @Test

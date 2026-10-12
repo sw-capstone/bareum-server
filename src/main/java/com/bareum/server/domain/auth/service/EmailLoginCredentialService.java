@@ -26,12 +26,6 @@ public class EmailLoginCredentialService {
         this.dummyHash = passwordHashes.hash(UUID.randomUUID().toString());
     }
 
-    // 자격증명 검증만 수행하며, 반환된 회원 ID 자체는 로그인 증명이 아닙니다.
-    @Transactional(readOnly = true)
-    public Long validate(String email, String password) {
-        return validateMember(email, password).memberId();
-    }
-
     @Transactional(readOnly = true)
     public ValidatedMember validateMember(String email, String password) {
         if (email == null || email.isBlank() || password == null || password.isEmpty()) {

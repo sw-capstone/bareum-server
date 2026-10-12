@@ -14,7 +14,7 @@
 | AI 처리·AI 테스트 | `bareum-ai` | 해당 레포의 `./scripts/run-harness.sh check`와 `./scripts/test-harness.sh` |
 | 프론트엔드 | `bareum-web` | `npm run check` |
 
-웹·서버 하네스·AI 검사는 각 저장소의 CI에서 실행하며 로컬 실행은 선택 사항이다. 서버 Gradle 테스트의 CI 연결은 테스트 DB와 접속 기준이 정해진 뒤 진행한다. 한 저장소의 검사 결과가 다른 저장소의 검사를 대신하지 않는다.
+웹·서버 하네스·AI 검사는 각 저장소의 CI에서 실행하며 로컬 실행은 선택 사항이다. 서버 CI는 PostgreSQL 테스트 DB에서 `./gradlew check bootJar`를 실행하고 ARM64 이미지 기동·Compose 라우팅을 확인한다. 한 저장소의 검사 결과가 다른 저장소의 검사를 대신하지 않는다.
 
 ## 2. 브랜치 만들기
 

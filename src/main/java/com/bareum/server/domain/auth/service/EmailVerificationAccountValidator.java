@@ -4,6 +4,7 @@ import com.bareum.server.domain.auth.enums.VerificationPurpose;
 import com.bareum.server.domain.auth.exception.AuthErrorCode;
 import com.bareum.server.domain.auth.exception.AuthException;
 import com.bareum.server.domain.member.entity.Member;
+import com.bareum.server.domain.member.enums.MemberStatus;
 import com.bareum.server.domain.member.enums.SignupMethod;
 import com.bareum.server.domain.member.repository.MemberRepository;
 import lombok.RequiredArgsConstructor;
@@ -17,13 +18,6 @@ import org.springframework.util.StringUtils;
 public class EmailVerificationAccountValidator {
 
     private final MemberRepository memberRepository;
-
-    public void checkCanSend(
-            String email,
-            VerificationPurpose purpose
-    ) {
-        resolveRecipient(email, purpose);
-    }
 
     /** Account lookup ignores case; delivery preserves the registered address for resets. */
     public String resolveRecipient(String email, VerificationPurpose purpose) {
@@ -51,6 +45,8 @@ public class EmailVerificationAccountValidator {
                 ));
 
         if (member.getSignupMethod() != SignupMethod.LOCAL
+                || member.getStatus() != MemberStatus.ACTIVE
+                || member.getWithdrawnAt() != null
                 || !StringUtils.hasText(member.getPasswordHash())) {
             throw new AuthException(
                     AuthErrorCode.PASSWORD_RESET_NOT_ALLOWED

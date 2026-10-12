@@ -7,11 +7,17 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.bareum.server.domain.auth.enums.VerificationPurpose;
+import com.bareum.server.domain.auth.exception.AuthErrorCode;
 import com.bareum.server.domain.auth.exception.AuthException;
 import com.bareum.server.domain.member.entity.Member;
+import com.bareum.server.domain.member.enums.MemberStatus;
 import com.bareum.server.domain.member.repository.MemberRepository;
+import java.time.Instant;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
+import org.springframework.test.util.ReflectionTestUtils;
 
 class EmailVerificationAccountValidatorTests {
 
@@ -28,7 +34,7 @@ class EmailVerificationAccountValidatorTests {
         when(memberRepository.existsByEmailIgnoreCase(EMAIL))
                 .thenReturn(false);
 
-        assertDoesNotThrow(() -> validator.checkCanSend(
+        assertDoesNotThrow(() -> validator.resolveRecipient(
                 EMAIL,
                 VerificationPurpose.SIGNUP
         ));
@@ -39,7 +45,7 @@ class EmailVerificationAccountValidatorTests {
         when(memberRepository.existsByEmailIgnoreCase(EMAIL))
                 .thenReturn(true);
 
-        assertThrows(AuthException.class, () -> validator.checkCanSend(
+        assertThrows(AuthException.class, () -> validator.resolveRecipient(
                 EMAIL,
                 VerificationPurpose.SIGNUP
         ));
@@ -50,7 +56,7 @@ class EmailVerificationAccountValidatorTests {
         when(memberRepository.findByEmailIgnoreCase(EMAIL))
                 .thenReturn(Optional.empty());
 
-        assertThrows(AuthException.class, () -> validator.checkCanSend(
+        assertThrows(AuthException.class, () -> validator.resolveRecipient(
                 EMAIL,
                 VerificationPurpose.PASSWORD_RESET
         ));
@@ -63,7 +69,7 @@ class EmailVerificationAccountValidatorTests {
         when(memberRepository.findByEmailIgnoreCase(EMAIL))
                 .thenReturn(Optional.of(member));
 
-        assertThrows(AuthException.class, () -> validator.checkCanSend(
+        assertThrows(AuthException.class, () -> validator.resolveRecipient(
                 EMAIL,
                 VerificationPurpose.PASSWORD_RESET
         ));
@@ -80,11 +86,32 @@ class EmailVerificationAccountValidatorTests {
         when(memberRepository.findByEmailIgnoreCase(EMAIL))
                 .thenReturn(Optional.of(member));
 
-        assertDoesNotThrow(() -> validator.checkCanSend(
+        assertDoesNotThrow(() -> validator.resolveRecipient(
                 EMAIL,
                 VerificationPurpose.PASSWORD_RESET
         ));
     }
+    @ParameterizedTest
+    @EnumSource(value = MemberStatus.class, names = {"SUSPENDED", "DELETED"})
+    void passwordResetRejectsRestrictedAccounts(MemberStatus status) {
+        Member member = Member.createLocal(EMAIL, "사용자", "test-password-hash");
+        ReflectionTestUtils.setField(member, "status", status);
+        when(memberRepository.findByEmailIgnoreCase(EMAIL)).thenReturn(Optional.of(member));
+        AuthException failure = assertThrows(AuthException.class,
+                () -> validator.resolveRecipient(EMAIL, VerificationPurpose.PASSWORD_RESET));
+        assertEquals(AuthErrorCode.PASSWORD_RESET_NOT_ALLOWED, failure.getBaseErrorCode());
+    }
+
+    @Test
+    void passwordResetRejectsActiveAccountWithWithdrawalTimestamp() {
+        Member member = Member.createLocal(EMAIL, "사용자", "test-password-hash");
+        ReflectionTestUtils.setField(member, "withdrawnAt", Instant.parse("2026-10-12T00:00:00Z"));
+        when(memberRepository.findByEmailIgnoreCase(EMAIL)).thenReturn(Optional.of(member));
+        AuthException failure = assertThrows(AuthException.class,
+                () -> validator.resolveRecipient(EMAIL, VerificationPurpose.PASSWORD_RESET));
+        assertEquals(AuthErrorCode.PASSWORD_RESET_NOT_ALLOWED, failure.getBaseErrorCode());
+    }
+
     @Test
     void caseVariantResetResolvesStoredRecipient() {
         Member member = Member.createLocal("User@Example.com", "테스트 사용자", "test-password-hash");

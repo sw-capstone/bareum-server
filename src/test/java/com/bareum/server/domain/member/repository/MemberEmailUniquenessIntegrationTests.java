@@ -119,10 +119,10 @@ class MemberEmailUniquenessIntegrationTests {
                         .allMatch(m -> m.isWithdrawalCompleted()));
         assertFalse(members.existsByEmailIgnoreCase(email));
         assertTrue(availability.checkAvailability(email).available());
-        assertDoesNotThrow(() -> accounts.checkCanSend(email, VerificationPurpose.SIGNUP));
+        assertDoesNotThrow(() -> accounts.resolveRecipient(email, VerificationPurpose.SIGNUP));
         assertThrows(
                 AuthException.class,
-                () -> accounts.checkCanSend(email, VerificationPurpose.PASSWORD_RESET));
+                () -> accounts.resolveRecipient(email, VerificationPurpose.PASSWORD_RESET));
 
         // Even the exact historical spelling can be stored again, with no waiting period.
         insert("member", email, "LOCAL", "ACTIVE", false);
@@ -137,7 +137,7 @@ class MemberEmailUniquenessIntegrationTests {
                         email.toUpperCase(Locale.ROOT), VerificationPurpose.PASSWORD_RESET));
         assertThrows(
                 AuthException.class,
-                () -> accounts.checkCanSend(email, VerificationPurpose.SIGNUP));
+                () -> accounts.resolveRecipient(email, VerificationPurpose.SIGNUP));
         assertDuplicate(
                 () -> insert("member", email.toUpperCase(Locale.ROOT), "GOOGLE", "ACTIVE", false));
     }
@@ -153,7 +153,7 @@ class MemberEmailUniquenessIntegrationTests {
             assertFalse(availability.checkAvailability(email).available());
             assertThrows(
                     AuthException.class,
-                    () -> accounts.checkCanSend(email, VerificationPurpose.SIGNUP));
+                    () -> accounts.resolveRecipient(email, VerificationPurpose.SIGNUP));
             assertDuplicate(
                     () ->
                             insert(
