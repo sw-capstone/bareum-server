@@ -78,6 +78,7 @@ esac
 MOCK
 chmod +x "$WORK/bin/"*
 ln -s "$WORK/bin/sleep" "$WORK/bin/aws"
+ln -s "$WORK/bin/sleep" "$WORK/bin/jq"
 
 setup_case() {
   export MODE="$1" TARGET="${2:-server}"
@@ -122,6 +123,11 @@ for target in server ai; do
   setup_case success "$target"
   run_case
   [[ "$RESULT" == 0 && "$(cat "$CASE_ROOT/current-image")" == "$NEW_IMAGE" ]]
+  if [[ "$target" == server ]]; then
+    grep -q 'http://127.0.0.1:8082/health' "$CASE_ROOT/calls"
+  else
+    grep -q 'http://127.0.0.1:8081/health' "$CASE_ROOT/calls"
+  fi
   grep -q "^$IMAGE_KEY=ghcr.io/sw-capstone/bareum-$target:new$" "$CASE_ROOT/infra/env/.env.deploy"
   [[ ! -e "$CASE_ROOT/infra/.deploy-state/pending" ]]
   if [[ "$target" == ai ]]; then
