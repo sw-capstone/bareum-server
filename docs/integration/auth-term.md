@@ -4,7 +4,7 @@
 - 확인일: 2026-10-12
 - 소유 역할: 백엔드·프론트엔드
 - 관련 작업: [GitHub #22](https://github.com/sw-capstone/bareum-server/issues/22), BRM-25
-- 서버 구현 기준: [16934ac](https://github.com/sw-capstone/bareum-server/commit/16934ac0b0cf8eda52ce460d413d766b85fd597b) / [PR #45](https://github.com/sw-capstone/bareum-server/pull/45) 및 선행 인증 PR
+- 서버 구현 기준: [a4abf39](https://github.com/sw-capstone/bareum-server/commit/a4abf39) / [PR #45](https://github.com/sw-capstone/bareum-server/pull/45) 및 선행 인증 PR
 - 프론트 대조 기준: [develop dc61644](https://github.com/sw-capstone/bareum-web/commit/dc616444db4b766d83fe93e906573265bcf1a806)의 `authApi.ts`·`contracts.ts`·`httpClient.ts`·`docs/backend-integration.md`
 - 프론트 화면 확인: [develop 미리보기](https://bareum-web-git-develop-numkites-projects.vercel.app/)
 
@@ -216,9 +216,27 @@ PASSWORD_RESET 목적의 발송 → 상태 조회 → 번호 확인 → PATCH `/
 
 약관 원문·승인 버전과 운영 발송 정책은 미확정 상태를 유지한다. 비밀번호 찾기의 배포 포함 여부는 기존 정책에 따라 별도 확인한다.
 
+## 서버 연동 준비 상태
+
+API 구현과 실제 연동 환경의 준비 여부는 구분한다. 아래 설정은 API 주소나 요청 형식을 바꾸지 않으며, 관련 정책이 승인되면 실제 환경에 적용한다.
+
+| 항목 | 필요한 준비 | 누락 시 동작·확인 기준 |
+|---|---|---|
+| 서버 기동·DB | DB 접속 정보, Flyway 적용, `EMAIL_VERIFICATION_HASH_SECRET` | HMAC 키는 Base64 형식으로 최소 32바이트가 필요하다. 잘못된 키는 서버 기동을 막는다. `/health` 성공만으로 모든 인증 기능이 준비됐다고 판단하지 않는다. |
+| 브라우저 인증 | HTTPS 서버 주소, `LOGIN_ALLOWED_ORIGINS`, 쿠키·CSRF | CORS에 실제 프론트 Origin을 정확히 등록한다. 현재 미리보기 주소의 Origin은 `https://bareum-web-git-develop-numkites-projects.vercel.app`이며, 등록 대상 확정 전에는 임의 허용하지 않는다. |
+| 메일 발송 | `spring.mail`의 제공자·인증·TLS 설정, 발신 주소, Outbox 암호화 키와 활성화 | `EMAIL_VERIFICATION_MAIL_FROM`과 Base64 형식의 32바이트 `EMAIL_VERIFICATION_OUTBOX_ENCRYPTION_KEY`가 필요하다. 키·발송 설정·제한 정책이 누락되면 발송을 차단한다. 운영 제공자·발신 계정은 별도 결정한다. |
+| 인증 제한 | 최소 발송 간격·시간당/일당 횟수·인증 실패 횟수 | `auth.email-verification.minimum-send-interval-seconds`, `max-sends-per-hour`, `max-sends-per-day`와 `max-verification-attempts`를 정한다. 운영 수치 미확정 상태를 유지하며 설정 누락 시 AUTH-0006으로 차단한다. |
+| 가입 약관 | 네 약관의 DB 데이터와 `auth.signup-terms.versions` | 프론트 고정 원문에 대응하는 승인 버전을 연결한다. 데이터·필수 여부·설정 버전이 맞지 않으면 TERM-0004로 가입을 차단한다. 프론트 요청은 합의한 네 boolean 항목을 유지한다. |
+| Google 인증 | `GOOGLE_CLIENT_IDS`, Google Console의 승인 Origin | ID Token 방식의 실제 웹 Client ID를 프론트 SDK와 서버 검증에 맞춘다. 미설정 시 AUTH-0025로 차단하며 실제 Google 계정 검증은 아직 남아 있다. |
+| 비밀번호 찾기 | 배포 범위, 재설정용 인증번호·완료 증명 유효기간 | 구현·실제 메일 검증은 완료했으나 최신 정책의 MVP 제외 기준은 유지한다. `EMAIL_VERIFICATION_PASSWORD_RESET_CODE_TTL_SECONDS`와 `EMAIL_VERIFICATION_PASSWORD_RESET_VERIFICATION_TTL_SECONDS`는 별도 결정한다. |
+
+발송 제한·실패 복구·약관 원문·Google 지원 계정처럼 미확정인 정책은 테스트 값으로 확정하지 않는다. 인증 완료 후 재발송 정책도 미정이므로 현재는 기존 증명을 보존하며 503으로 차단한다. Outbox 접수·조회 흐름은 프론트가 수용했으며, 조회 간격·총 대기 한도와 실패 화면의 세부 처리는 별도 확인한다.
+
+현재 배포 템플릿과 Parameter Store 준비 스크립트는 DB 접속 정보 중심이다. Auth 설정·비밀값의 배포 주입 방법은 인프라 담당자와 연결해야 하며, 이 문서 작성으로 원격 설정이 적용되었다고 취급하지 않는다. 상세 메일·약관 설정은 [이메일 인증·가입 기준](../decisions/email-verification-draft.md), 인증 쿠키는 [로그인 기준](../decisions/login-authentication-draft.md), Google 설정은 [Google 로그인 기준](../decisions/google-login-draft.md)을 따른다.
+
 ## 검증 범위와 연동 전 확인
 
-- 기준 서버의 `./gradlew check bootJar --no-daemon`: 전체 660개 통과, 실패·오류·건너뜀 0개 및 JAR 빌드 성공. HTTP·DB·OpenAPI·동시성·롤백 검사이며 실제 웹 소비자 검증과 구분한다.
+- 기준 서버의 `./gradlew check bootJar --no-daemon`: 전체 661개 통과, 실패·오류·건너뜀 0개 및 JAR 빌드 성공. HTTP·DB·OpenAPI·동시성·롤백 검사이며 실제 웹 소비자 검증과 구분한다.
 - 이번 문서는 Controller·DTO·보안 설정·오류 생성 코드와 지정한 프론트 develop 코드·문서를 대조했다. 실제 브라우저·Google 계정 연동은 미검증이다. 재설정 메일의 실제 수신과 HTTP 연결 검증은 아래 결과와 [재설정 문서](../decisions/password-reset-draft.md)를 따른다.
 - 계약 확인 필요: Outbox 조회 주기·대기 한도, Google 인증 분기와 지원 계정, 공식 약관 원문·버전·필수 항목, 배포 Origin·쿠키 조건, 비밀번호 찾기 배포 범위.
 - 운영 준비 필요: 메일 발송 정책·완료 증명 기간·실패 제한, 약관 DB와 승인 버전, Google Client ID와 승인 Origin. 필수 설정 누락 시 서버가 차단하며 테스트 값을 운영 기본값으로 사용하지 않는다.
