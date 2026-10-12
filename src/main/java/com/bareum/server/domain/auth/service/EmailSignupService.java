@@ -19,7 +19,6 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
@@ -62,7 +61,7 @@ public class EmailSignupService {
         String passwordHash = passwordHashes.hash(request.password());
         Instant completedAt = emailVerificationClock.instant();
         verification.consume(completedAt);
-        Member member = Member.createLocal(request.email().toLowerCase(Locale.ROOT), request.name(), passwordHash);
+        Member member = Member.createLocal(verification.getEmail(), request.name(), passwordHash);
         try {
             memberRepository.saveAndFlush(member);
         } catch (DataIntegrityViolationException exception) {

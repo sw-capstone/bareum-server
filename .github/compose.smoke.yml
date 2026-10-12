@@ -1,0 +1,31 @@
+services:
+  server:
+    pull_policy: never
+    depends_on:
+      postgres:
+        condition: service_healthy
+  ai:
+    image: nginx:1.30-alpine
+    volumes:
+      - type: bind
+        source: ${CI_AI_CONFIG:?}
+        target: /etc/nginx/conf.d/default.conf
+        read_only: true
+        bind:
+          create_host_path: false
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8000/health"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+  postgres:
+    image: postgres:18.2
+    environment:
+      POSTGRES_DB: bareum_ci
+      POSTGRES_USER: bareum_ci
+      POSTGRES_PASSWORD: ci-only-password
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "bareum_ci", "-d", "bareum_ci"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
