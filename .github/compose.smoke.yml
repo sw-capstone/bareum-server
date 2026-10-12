@@ -1,4 +1,18 @@
 services:
+  nginx:
+    volumes:
+      - type: bind
+        source: ${CI_CERTBOT_WEBROOT:?}
+        target: /var/www/certbot
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${CI_LETSENCRYPT_DIR:?}
+        target: /etc/letsencrypt
+        read_only: true
+        bind:
+          create_host_path: false
   server:
     pull_policy: never
     depends_on:
