@@ -80,6 +80,7 @@ public class SecurityConfig {
                                         .ignoringRequestMatchers(
                                                 "/api/v1/auth/login/email",
                                                 "/api/v1/auth/signup",
+                                                "/api/v1/auth/password/reset",
                                                 "/api/v1/auth/email-verification",
                                                 "/api/v1/auth/email-verification/code",
                                                 "/api/v1/auth/email-verification/resend")
@@ -127,6 +128,8 @@ public class SecurityConfig {
                                                 "/v3/api-docs/**",
                                                 "/scalar",
                                                 "/scalar/**")
+                                        .permitAll()
+                                        .requestMatchers(HttpMethod.PATCH, "/api/v1/auth/password/reset")
                                         .permitAll()
                                         .anyRequest()
                                         .authenticated())

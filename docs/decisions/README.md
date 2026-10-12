@@ -24,3 +24,5 @@
 - [Google 가입 완료](google-signup-draft.md): AUTH-011·약관 동의·증명 소비·가입 후 자동 로그인.
 
 - [이메일 인증 재발송 Outbox 전환](email-resend-outbox-draft.md): AUTH-007·202 접수·상태 조회·가입 연동.
+
+- [비밀번호 재설정](password-reset-draft.md): AUTH-010·증명 소비·비밀번호 변경·기존 세션 폐기 초안.

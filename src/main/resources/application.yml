@@ -60,6 +60,9 @@ auth:
     request-window-seconds: ${TOKEN_RENEW_REQUEST_WINDOW_SECONDS:60}
   email-verification:
     hash-secret: ${EMAIL_VERIFICATION_HASH_SECRET}
+    password-reset-code-ttl-seconds: ${EMAIL_VERIFICATION_PASSWORD_RESET_CODE_TTL_SECONDS:}
+    password-reset-verification-ttl-seconds: ${EMAIL_VERIFICATION_PASSWORD_RESET_VERIFICATION_TTL_SECONDS:}
+    max-verification-attempts: ${EMAIL_VERIFICATION_MAX_VERIFICATION_ATTEMPTS:}
     mail-from: ${EMAIL_VERIFICATION_MAIL_FROM:}
     outbox:
       encryption-key: ${EMAIL_VERIFICATION_OUTBOX_ENCRYPTION_KEY:}
