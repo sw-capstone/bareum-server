@@ -1,0 +1,73 @@
+name: bareum
+
+x-logging: &logging
+  driver: local
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  nginx:
+    image: nginx:1.30-alpine
+    restart: unless-stopped
+    logging: *logging
+    stop_grace_period: 45s
+    ports:
+      - "${HTTP_BIND_IP:-0.0.0.0}:${HTTP_PORT:-80}:80"
+    volumes:
+      - type: bind
+        source: ./nginx/default.conf
+        target: /etc/nginx/conf.d/default.conf
+        read_only: true
+        bind:
+          create_host_path: false
+    depends_on:
+      server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 30s
+
+  server:
+    image: ${SERVER_IMAGE:?}
+    restart: unless-stopped
+    logging: *logging
+    stop_grace_period: 45s
+    env_file:
+      - path: ${SERVER_ENV_FILE:-./env/.env.server}
+        format: raw
+    volumes:
+      - type: bind
+        source: ${RDS_CA_FILE:?}
+        target: /etc/ssl/certs/rds-ca.pem
+        read_only: true
+        bind:
+          create_host_path: false
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "--show-error", "--max-time", "2", "--output", "/dev/null", "http://127.0.0.1:8080/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 30s
+
+  ai:
+    image: ${AI_IMAGE:?}
+    restart: unless-stopped
+    init: true
+    logging: *logging
+    stop_grace_period: 45s
+    # 현재 AI 앱은 환경변수 없이 실행된다.
+    # API 키 등이 필요해지면 EC2에서 infra/env/.env.ai를 준비한다.
+    env_file:
+      - path: ${AI_ENV_FILE:-./env/.env.ai}
+        required: false
+        format: raw
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "--show-error", "--max-time", "3", "--output", "/dev/null", "http://127.0.0.1:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
