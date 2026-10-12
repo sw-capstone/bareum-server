@@ -137,12 +137,19 @@ public class EmailVerification extends BaseTimeEntity {
 		}
 		this.consumedAt = consumedAt;
 	}
+    public void markSent(Instant sentAt, long ttlSeconds) {
+        if (ttlSeconds <= 0) {
+            throw new IllegalArgumentException("ttlSeconds must be positive");
+        }
+        markSent(sentAt);
+        this.expiresAt = sentAt.plusSeconds(ttlSeconds);
+    }
 
-	public void markSent(Instant sentAt, long ttlSeconds) {
-		if (ttlSeconds <= 0) {
-			throw new IllegalArgumentException("ttlSeconds must be positive");
-		}
-		markSent(sentAt);
-		this.expiresAt = sentAt.plusSeconds(ttlSeconds);
-	}
+    /** Preserve request ID and failed attempts; pending codes cannot be confirmed. */
+    public void queueReplacement(String recipient, String newCodeHash, Instant queuedAt) {
+        this.email = Objects.requireNonNull(recipient, "recipient");
+        this.codeHash = Objects.requireNonNull(newCodeHash, "newCodeHash");
+        this.expiresAt = Objects.requireNonNull(queuedAt, "queuedAt");
+        this.lastSentAt = null;
+    }
 }

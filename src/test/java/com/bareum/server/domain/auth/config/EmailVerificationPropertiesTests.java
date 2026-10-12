@@ -46,21 +46,25 @@ class EmailVerificationPropertiesTests {
         ).run(ctx -> assertEquals(420L, ctx.getBean(EmailVerificationProperties.class)
                 .codeTtlSeconds(VerificationPurpose.PASSWORD_RESET)));
     }
-
     @Test
-    void confirmationFieldsUseConstructorBindingAndMissingPolicyBlocksUse() {
+    void confirmationDefaultsDoNotInventAttemptLimitsOrResetProofLifetime() {
         context.run(ctx -> {
-            var policy=ctx.getBean(EmailVerificationProperties.class);
-            assertEquals(600L,policy.getSignupVerificationTtlSeconds());
-            assertNull(policy.getMaxVerificationAttempts());
-            assertThrows(AuthException.class,()->policy.verificationTtlSeconds(VerificationPurpose.SIGNUP));
+            var properties = ctx.getBean(EmailVerificationProperties.class);
+            assertEquals(600, properties.getSignupVerificationTtlSeconds());
+            assertNull(properties.getMaxVerificationAttempts());
+            assertNull(properties.getPasswordResetVerificationTtlSeconds());
+            assertThrows(AuthException.class, () -> properties.verificationTtlSeconds(VerificationPurpose.SIGNUP));
         });
+        context.withPropertyValues("auth.email-verification.max-verification-attempts=3")
+                .run(ctx -> {
+                    var properties = ctx.getBean(EmailVerificationProperties.class);
+                    assertEquals(600, properties.verificationTtlSeconds(VerificationPurpose.SIGNUP));
+                    assertThrows(AuthException.class, () -> properties.verificationTtlSeconds(VerificationPurpose.PASSWORD_RESET));
+                });
         context.withPropertyValues("auth.email-verification.max-verification-attempts=3",
-                "auth.email-verification.password-reset-verification-ttl-seconds=420").run(ctx -> {
-            var policy=ctx.getBean(EmailVerificationProperties.class);
-            assertEquals(3,policy.getMaxVerificationAttempts());
-            assertEquals(600L,policy.verificationTtlSeconds(VerificationPurpose.SIGNUP));
-            assertEquals(420L,policy.verificationTtlSeconds(VerificationPurpose.PASSWORD_RESET));
-        });
+                "auth.email-verification.password-reset-verification-ttl-seconds=420")
+                .run(ctx -> assertEquals(420, ctx.getBean(EmailVerificationProperties.class)
+                        .verificationTtlSeconds(VerificationPurpose.PASSWORD_RESET)));
     }
+
 }
