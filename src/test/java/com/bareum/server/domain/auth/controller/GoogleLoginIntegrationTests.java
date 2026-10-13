@@ -68,6 +68,18 @@ class GoogleLoginIntegrationTests {
         when(verifier.verify(ID_TOKEN)).thenReturn(identity);
     }
 
+    @Test
+    void deploymentHealthIsPublicWithAuthenticationEnabled() throws Exception {
+        var response =
+                client.send(
+                HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/health"))
+                        .GET()
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertEquals(200, response.statusCode());
+        assertEquals("ok", mapper.readTree(response.body()).path("status").asString());
+    }
+
     private GoogleIdentity identity(String suffix, String hd) {
         var result =
                 new GoogleIdentity(
