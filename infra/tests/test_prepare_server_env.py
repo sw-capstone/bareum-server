@@ -31,7 +31,7 @@ done
 printf '%s\n' "${names[@]}" >> "$AWS_REQUESTS"
 case "${AWS_MODE:-}" in
   fail) printf '%s\n' "$AWS_PRIVATE_MARKER" >&2; exit 1 ;;
-  late-fail) if [[ ${names[0]} == */SIGNUP_TERMS_TERMS_OF_SERVICE_VERSION ]]; then exit 1; fi ;;
+  late-fail) if [[ ${names[0]} == */SIGNUP_TERMS_AGE_OVER_14_VERSION ]]; then exit 1; fi ;;
   malformed) printf '%s\n' "$AWS_PRIVATE_MARKER"; exit 0 ;;
 esac
 jq -n --slurpfile fixture "$AWS_FIXTURE" --args '
@@ -75,6 +75,7 @@ class PrepareServerEnvTests(unittest.TestCase):
                 '  args+=("$arg")\ndone\nexec "' + jq_binary + '" --binary "${args[@]}"\n',
                 encoding="utf-8")
         self.values = {
+            "LOGIN_JWT_SIGNING_KEY": base64.b64encode(b"J" * 32).decode(),
             "DB_URL": "jdbc:postgresql://db.example.invalid/bareum",
             "DB_USERNAME": "fixture_user",
             "DB_PASSWORD": PRIVATE_MARKER + "-$'\"=end",
@@ -99,7 +100,7 @@ class PrepareServerEnvTests(unittest.TestCase):
             "SIGNUP_TERMS_PRIVACY_POLICY_VERSION": "approved-privacy",
             "SIGNUP_TERMS_MARKETING_CONSENT_VERSION": "approved-marketing",
         }
-        self.secure = {"DB_PASSWORD", "EMAIL_VERIFICATION_HASH_SECRET",
+        self.secure = {"DB_PASSWORD", "LOGIN_JWT_SIGNING_KEY", "EMAIL_VERIFICATION_HASH_SECRET",
                        "EMAIL_VERIFICATION_OUTBOX_ENCRYPTION_KEY", "SPRING_MAIL_PASSWORD"}
         self.environment = os.environ.copy()
         self.environment.update({
@@ -137,8 +138,8 @@ class PrepareServerEnvTests(unittest.TestCase):
         if os.name != "nt":
             self.assertEqual(0o600, stat.S_IMODE(self.output.stat().st_mode))
         names = self.requests.read_text().splitlines()
-        self.assertEqual(27, len(names))
-        self.assertEqual(27, len(set(names)))
+        self.assertEqual(28, len(names))
+        self.assertEqual(28, len(set(names)))
 
     def test_db_only_is_backward_compatible_and_ignores_inherited_activation(self):
         self.deploy.unlink()
@@ -164,7 +165,7 @@ class PrepareServerEnvTests(unittest.TestCase):
         self.assertFalse(self.requests.exists())
 
     def test_required_parameters_cannot_be_missing(self):
-        for key in ("DB_URL", "EMAIL_VERIFICATION_HASH_SECRET", "SPRING_MAIL_PASSWORD",
+        for key in ("DB_URL", "LOGIN_JWT_SIGNING_KEY", "EMAIL_VERIFICATION_HASH_SECRET", "SPRING_MAIL_PASSWORD",
                     "SIGNUP_TERMS_PRIVACY_POLICY_VERSION"):
             with self.subTest(key=key):
                 value = self.values.pop(key)
@@ -195,7 +196,9 @@ class PrepareServerEnvTests(unittest.TestCase):
                 self.assert_failure_preserves_environment()
 
     def test_key_encoding_and_lengths_are_checked(self):
-        for key, value in (("EMAIL_VERIFICATION_HASH_SECRET", "not-base64"),
+        for key, value in (("LOGIN_JWT_SIGNING_KEY", "not-base64"),
+                           ("LOGIN_JWT_SIGNING_KEY", base64.b64encode(b"J" * 31).decode()),
+                           ("EMAIL_VERIFICATION_HASH_SECRET", "not-base64"),
                            ("EMAIL_VERIFICATION_HASH_SECRET", base64.b64encode(b"H" * 31).decode()),
                            ("EMAIL_VERIFICATION_OUTBOX_ENCRYPTION_KEY", base64.b64encode(b"O" * 33).decode())):
             with self.subTest(key=key, value=value):

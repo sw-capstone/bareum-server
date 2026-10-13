@@ -35,6 +35,7 @@ done
 
 DB_KEYS=(DB_URL DB_USERNAME DB_PASSWORD)
 AUTH_REQUIRED=(
+  LOGIN_JWT_SIGNING_KEY
   EMAIL_VERIFICATION_HASH_SECRET EMAIL_VERIFICATION_OUTBOX_ENCRYPTION_KEY
   SPRING_MAIL_HOST SPRING_MAIL_PORT SPRING_MAIL_USERNAME SPRING_MAIL_PASSWORD
   SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH SPRING_MAIL_PROPERTIES_MAIL_SMTP_SSL_ENABLE
@@ -50,7 +51,7 @@ AUTH_OPTIONAL=(
   EMAIL_VERIFICATION_PASSWORD_RESET_CODE_TTL_SECONDS
   EMAIL_VERIFICATION_PASSWORD_RESET_VERIFICATION_TTL_SECONDS
 )
-SECRET_KEYS=(DB_PASSWORD EMAIL_VERIFICATION_HASH_SECRET EMAIL_VERIFICATION_OUTBOX_ENCRYPTION_KEY SPRING_MAIL_PASSWORD)
+SECRET_KEYS=(DB_PASSWORD LOGIN_JWT_SIGNING_KEY EMAIL_VERIFICATION_HASH_SECRET EMAIL_VERIFICATION_OUTBOX_ENCRYPTION_KEY SPRING_MAIL_PASSWORD)
 KEYS=("${DB_KEYS[@]}")
 if [[ "$AUTH_ENABLED" == true ]]; then KEYS+=("${AUTH_REQUIRED[@]}" "${AUTH_OPTIONAL[@]}"); fi
 
@@ -127,14 +128,14 @@ if [[ "$AUTH_ENABLED" == true ]]; then
   ' "$WORK_DIR/parameters.json" >/dev/null 2> "$WORK_DIR/json-error"; then
     fail 'Auth configuration is incomplete or invalid. Existing environment is unchanged.'
   fi
-  for key in EMAIL_VERIFICATION_HASH_SECRET EMAIL_VERIFICATION_OUTBOX_ENCRYPTION_KEY; do
+  for key in LOGIN_JWT_SIGNING_KEY EMAIL_VERIFICATION_HASH_SECRET EMAIL_VERIFICATION_OUTBOX_ENCRYPTION_KEY; do
     value=$(jq -r --arg name "$PREFIX/$key" '.[] | select(.Name == $name) | .Value' "$WORK_DIR/parameters.json")
     [[ "$value" =~ ^[A-Za-z0-9+/]+={0,2}$ ]] || fail 'Invalid Auth encryption key.'
     printf '%s' "$value" | base64 --decode > "$WORK_DIR/key.bin" 2>/dev/null \
       || fail 'Invalid Auth encryption key.'
     size=$(wc -c < "$WORK_DIR/key.bin")
-    if [[ "$key" == EMAIL_VERIFICATION_HASH_SECRET ]]; then
-      (( size >= 32 )) || fail 'HMAC key must contain at least 32 bytes.'
+    if [[ "$key" != EMAIL_VERIFICATION_OUTBOX_ENCRYPTION_KEY ]]; then
+      (( size >= 32 )) || fail 'Signing and HMAC keys must contain at least 32 bytes.'
     else
       (( size == 32 )) || fail 'Outbox key must contain exactly 32 bytes.'
     fi

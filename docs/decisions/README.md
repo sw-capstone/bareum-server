@@ -13,6 +13,7 @@
 
 ## 구현 협의 초안
 
+- [Auth·Term 긴급 팀 협의 안건](auth-term-meeting-review.md): 가입·인증 복구와 실제 연동·배포를 막는 네 안건.
 
 - [이메일 로그인·공통 인증](login-authentication-draft.md): AUTH-002 구현, 임시 설정과 프론트 연동 계약.
 
