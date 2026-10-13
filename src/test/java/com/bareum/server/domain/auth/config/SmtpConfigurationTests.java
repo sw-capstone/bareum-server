@@ -75,7 +75,8 @@ class SmtpConfigurationTests {
             assertEquals("true", properties.getProperty("mail.smtp.ssl.checkserveridentity"));
             assertEquals("5000", properties.getProperty("mail.smtp.timeout"));
             assertFalse(Boolean.parseBoolean(ctx.getEnvironment().getProperty("spring.jpa.show-sql")));
-            assertNull(ctx.getEnvironment().getProperty("auth.email-verification.max-sends-per-hour"));
+            assertFalse(org.springframework.util.StringUtils.hasText(
+                    ctx.getEnvironment().getProperty("auth.email-verification.max-sends-per-hour")));
         });
     }
 

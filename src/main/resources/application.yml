@@ -3,6 +3,11 @@ spring:
     name: bareum-server
   mail:
     properties:
+      "[mail.smtp.auth]": ${SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH:false}
+      "[mail.smtp.ssl.enable]": ${SPRING_MAIL_PROPERTIES_MAIL_SMTP_SSL_ENABLE:false}
+      "[mail.smtp.starttls.enable]": ${SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE:false}
+      "[mail.smtp.starttls.required]": ${SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_REQUIRED:false}
+      "[mail.smtp.ssl.checkserveridentity]": true
       "[mail.smtp.connectiontimeout]": ${SMTP_CONNECTION_TIMEOUT_MS:5000}
       "[mail.smtp.timeout]": ${SMTP_READ_TIMEOUT_MS:5000}
       "[mail.smtp.writetimeout]": ${SMTP_WRITE_TIMEOUT_MS:5000}
@@ -44,6 +49,12 @@ scalar:
   layout: classic
 
 auth:
+  signup-terms:
+    versions:
+      AGE_OVER_14: ${SIGNUP_TERMS_AGE_OVER_14_VERSION:}
+      TERMS_OF_SERVICE: ${SIGNUP_TERMS_TERMS_OF_SERVICE_VERSION:}
+      PRIVACY_POLICY: ${SIGNUP_TERMS_PRIVACY_POLICY_VERSION:}
+      MARKETING_CONSENT: ${SIGNUP_TERMS_MARKETING_CONSENT_VERSION:}
   google:
     client-ids: ${GOOGLE_CLIENT_IDS:}
     signup-ttl-seconds: ${GOOGLE_SIGNUP_TTL_SECONDS:600}
@@ -60,6 +71,9 @@ auth:
     request-window-seconds: ${TOKEN_RENEW_REQUEST_WINDOW_SECONDS:60}
   email-verification:
     hash-secret: ${EMAIL_VERIFICATION_HASH_SECRET}
+    minimum-send-interval-seconds: ${EMAIL_VERIFICATION_MINIMUM_SEND_INTERVAL_SECONDS:}
+    max-sends-per-hour: ${EMAIL_VERIFICATION_MAX_SENDS_PER_HOUR:}
+    max-sends-per-day: ${EMAIL_VERIFICATION_MAX_SENDS_PER_DAY:}
     password-reset-code-ttl-seconds: ${EMAIL_VERIFICATION_PASSWORD_RESET_CODE_TTL_SECONDS:}
     password-reset-verification-ttl-seconds: ${EMAIL_VERIFICATION_PASSWORD_RESET_VERIFICATION_TTL_SECONDS:}
     max-verification-attempts: ${EMAIL_VERIFICATION_MAX_VERIFICATION_ATTEMPTS:}

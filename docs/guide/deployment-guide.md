@@ -48,6 +48,8 @@ develop에 병합
 
 배포 스크립트는 Linux의 Bash·Docker Compose·AWS CLI와 `curl`, `jq`, `flock`, GNU coreutils를 사용하며, 기존 Server·Nginx가 정상 동작하는 상태에서 실행한다.
 
+Auth·Term 설정을 함께 적용하려면 [Auth·Term 배포 설정 준비](auth-term-deployment.md)의 파라미터·권한을 준비하고 `.env.deploy`에서 `AUTH_ENV_ENABLED=true`를 지정한다. 누락·false는 기존 DB 설정만 조회한다.
+
 앱 비밀값은 Git에 넣지 않는다. Server 배포 시 [환경변수 생성 스크립트](../../infra/scripts/prepare-server-env.sh)가 템플릿과 Parameter Store 값으로 `.env.server`를 다시 생성한다. 템플릿에 없는 수동 추가 값은 유지되지 않는다. `.env.ai`, 인증서·개인 키, RDS CA는 배포 파일로 덮어쓰지 않는다.
 
 ## 3. 자동 배포 결과 확인

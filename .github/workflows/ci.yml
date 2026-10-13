@@ -75,6 +75,8 @@ jobs:
           distribution: temurin
           java-version: "25"
           cache: gradle
+      - name: Test server environment preparation
+        run: python3 -m unittest discover -s infra/tests -p 'test_prepare_server_env.py' -v
       - name: Test deployment and rollback
         run: bash infra/tests/deploy-test.sh
       - name: Test infrastructure release preparation

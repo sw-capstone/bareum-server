@@ -7,6 +7,7 @@
 - `decisions/`: 확정 결정과 재검토 조건
 - `guide/development-guide.md`: 브랜치·코드 작성·검사·PR·병합 전체 개발 가이드
 - [`guide/deployment-guide.md`](guide/deployment-guide.md): 개발 EC2 배포 구성·상태 확인·실패 시 대응
+- [`guide/auth-term-deployment.md`](guide/auth-term-deployment.md): Auth·Term 설정 주입과 적용 전 확인
 
 제품 기획 원문은 Notion에서 관리하며, `product/service-spec.md`는 서버 구현에 필요한 요약만 제공한다.
 

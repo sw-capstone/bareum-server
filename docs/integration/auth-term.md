@@ -234,11 +234,11 @@ API 구현과 실제 연동 환경의 준비 여부는 구분한다. 아래 설�
 
 발송 제한·실패 복구·약관 원문·Google 지원 계정처럼 미확정인 정책은 테스트 값으로 확정하지 않는다. 인증 완료 후 재발송 정책도 미정이므로 현재는 기존 증명을 보존하며 503으로 차단한다. Outbox 접수·조회 흐름은 프론트가 수용했으며, 조회 간격·총 대기 한도와 실패 화면의 세부 처리는 별도 확인한다.
 
-현재 배포 템플릿과 Parameter Store 준비 스크립트는 DB 접속 정보 중심이다. Auth 설정·비밀값의 배포 주입 방법은 인프라 담당자와 연결해야 하며, 이 문서 작성으로 원격 설정이 적용되었다고 취급하지 않는다. 상세 메일·약관 설정은 [이메일 인증·가입 기준](../decisions/email-verification-draft.md), 인증 쿠키는 [로그인 기준](../decisions/login-authentication-draft.md), Google 설정은 [Google 로그인 기준](../decisions/google-login-draft.md)을 따른다.
+Parameter Store 준비 스크립트에 Auth·Term 설정 주입 경로를 추가했다. `.env.deploy`의 `AUTH_ENV_ENABLED=true`로 활성화하며 필수 값 누락·검증 실패 시 기존 환경 파일을 유지한다. 설정 목록과 적용 순서는 [Auth·Term 배포 설정 준비](../guide/auth-term-deployment.md)를 따른다. 실제 파라미터·권한·약관 DB·EC2 적용은 인프라 담당자와 연결해야 하며, 코드 추가를 원격 적용 완료로 취급하지 않는다. 상세 메일·약관 설정은 [이메일 인증·가입 기준](../decisions/email-verification-draft.md), 인증 쿠키는 [로그인 기준](../decisions/login-authentication-draft.md), Google 설정은 [Google 로그인 기준](../decisions/google-login-draft.md)을 따른다.
 
 ## 검증 범위와 연동 전 확인
 
-- 기준 서버의 `./gradlew check bootJar --no-daemon`: 전체 669개 통과, 실패·오류·건너뜀 0개 및 JAR 빌드 성공. HTTP·DB·OpenAPI·동시성·롤백 검사이며 실제 웹 소비자 검증과 구분한다.
+- 기준 서버의 `./gradlew check bootJar --no-daemon`: 전체 679개 통과, 실패·오류·건너뜀 0개 및 JAR 빌드 성공. HTTP·DB·OpenAPI·동시성·롤백 검사이며 실제 웹 소비자 검증과 구분한다.
 - 이번 문서는 Controller·DTO·보안 설정·오류 생성 코드와 지정한 프론트 develop 코드·문서를 대조했다. 실제 브라우저·Google 계정 연동은 미검증이다. 재설정 메일의 실제 수신과 HTTP 연결 검증은 아래 결과와 [재설정 문서](../decisions/password-reset-draft.md)를 따른다.
 - 계약 확인 필요: Outbox 조회 주기·대기 한도, Google 인증 분기와 지원 계정, 공식 약관 원문·버전·필수 항목, 배포 Origin·쿠키 조건, 비밀번호 찾기 배포 범위.
 - 운영 준비 필요: 메일 발송 정책·완료 증명 기간·실패 제한, 약관 DB와 승인 버전, Google Client ID와 승인 Origin. 필수 설정 누락 시 서버가 차단하며 테스트 값을 운영 기본값으로 사용하지 않는다.
