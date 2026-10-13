@@ -69,6 +69,7 @@ class EmailLoginIntegrationTests {
     @Autowired private LoginSessionService sessions;
     @Autowired private LoginAttemptLimiter limiter;
     @Autowired private LoginTokenGenerator tokens;
+    @Autowired private com.bareum.server.domain.auth.service.LoginJwtService jwt;
     @Autowired private JdbcTemplate jdbc;
     @Autowired private JsonMapper mapper;
 
@@ -160,7 +161,8 @@ class EmailLoginIntegrationTests {
         assertEquals(200, response.statusCode(), response.body());
         JsonNode body = json(response);
         String access = body.path("accessToken").asString();
-        assertTrue(tokens.validFormat(access));
+        assertTrue(jwt.verify(access, "access").isPresent());
+        assertTrue(jwt.verify(access, "refresh").isEmpty());
         assertEquals("Bearer", body.path("tokenType").asString());
         assertEquals(900, body.path("expiresIn").asInt());
         assertEquals(28800, body.path("sessionExpiresIn").asInt());
@@ -283,20 +285,14 @@ class EmailLoginIntegrationTests {
     }
 
     @Test
-    void reloginInvalidatesBothPreviousCredentials() throws Exception {
+    void reloginReplacesRefreshButPreservesPreviousAccessUntilItsOriginalExpiry() throws Exception {
         var first = issue();
+        when(clock.instant()).thenReturn(NOW.plusSeconds(100));
         var second = issue();
         assertNotEquals(first.accessToken(), second.accessToken());
         assertNotEquals(first.refreshToken(), second.refreshToken());
-        problem(
-                request(
-                        "GET",
-                        "/api/v1/auth/me",
-                        null,
-                        "Authorization",
-                        "Bearer " + first.accessToken()),
-                401,
-                "AUTH-0017");
+        assertEquals(200, request("GET", "/api/v1/auth/me", null,
+                "Authorization", "Bearer " + first.accessToken()).statusCode());
         assertTrue(sessions.authenticate(second.accessToken()).isPresent());
         assertEquals(
                 tokens.hash("refresh", second.refreshToken()),
@@ -304,6 +300,9 @@ class EmailLoginIntegrationTests {
                         "SELECT refresh_token_hash FROM refresh_token WHERE member_id=?",
                         String.class,
                         member.getId()));
+        when(clock.instant()).thenReturn(first.accessExpiresAt());
+        assertTrue(sessions.authenticate(first.accessToken()).isEmpty());
+        assertTrue(sessions.authenticate(second.accessToken()).isPresent());
         assertEquals(
                 1,
                 jdbc.queryForObject(
@@ -323,7 +322,7 @@ class EmailLoginIntegrationTests {
                 "UPDATE refresh_token SET access_expires_at=expires_at WHERE member_id=?",
                 member.getId());
         when(clock.instant()).thenReturn(NOW.plusSeconds(28799));
-        assertTrue(sessions.authenticate(issued.accessToken()).isPresent());
+        assertTrue(sessions.authenticate(issued.accessToken()).isEmpty());
         when(clock.instant()).thenReturn(NOW.plusSeconds(28800));
         assertTrue(sessions.authenticate(issued.accessToken()).isEmpty());
     }
@@ -459,17 +458,15 @@ class EmailLoginIntegrationTests {
         String otherEmail = "other-" + UUID.randomUUID() + "@example.invalid";
         var other = members.saveAndFlush(Member.createLocal(otherEmail, "다른 사용자", storedHash));
         memberIds.add(other.getId());
-        var collisionGenerator =
-                new LoginTokenGenerator() {
-                    @Override
-                    public String generate() {
-                        return previous.accessToken();
-                    }
-                };
+        var collisionJwt = mock(com.bareum.server.domain.auth.service.LoginJwtService.class);
+        when(collisionJwt.issue(eq("access"), anyLong(), any(), any(), any()))
+                .thenReturn(previous.accessToken());
+        when(collisionJwt.issue(eq("refresh"), anyLong(), any(), any(), any()))
+                .thenReturn(previous.refreshToken());
         var props =
                 new com.bareum.server.domain.auth.config.LoginProperties(
                         900, 28800, true, "None", List.of(), 5, 60);
-        var failing = new LoginSessionService(jdbc, collisionGenerator, props, clock);
+        var failing = new LoginSessionService(jdbc, tokens, collisionJwt, props, clock);
         var manager =
                 new org.springframework.jdbc.datasource.DataSourceTransactionManager(
                         jdbc.getDataSource());
@@ -501,7 +498,7 @@ class EmailLoginIntegrationTests {
             int valid = 0;
             for (var result : results)
                 if (sessions.authenticate(result.get().accessToken()).isPresent()) valid++;
-            assertEquals(1, valid);
+            assertEquals(4, valid);
         }
         assertEquals(
                 1,

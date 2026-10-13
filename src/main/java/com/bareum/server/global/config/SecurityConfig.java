@@ -24,6 +24,7 @@ import java.util.List;
 @Configuration
 @EnableConfigurationProperties({
     LoginProperties.class,
+    com.bareum.server.domain.auth.config.LoginJwtProperties.class,
     com.bareum.server.domain.auth.config.GoogleLoginProperties.class,
     com.bareum.server.domain.auth.config.TokenRenewProperties.class
 })

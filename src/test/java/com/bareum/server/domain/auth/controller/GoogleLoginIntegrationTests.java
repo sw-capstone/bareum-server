@@ -68,6 +68,18 @@ class GoogleLoginIntegrationTests {
         when(verifier.verify(ID_TOKEN)).thenReturn(identity);
     }
 
+    @Test
+    void deploymentHealthIsPublicWithAuthenticationEnabled() throws Exception {
+        var response =
+                client.send(
+                HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/health"))
+                        .GET()
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertEquals(200, response.statusCode());
+        assertEquals("ok", mapper.readTree(response.body()).path("status").asString());
+    }
+
     private GoogleIdentity identity(String suffix, String hd) {
         var result =
                 new GoogleIdentity(
@@ -198,7 +210,7 @@ class GoogleLoginIntegrationTests {
         assertEquals(200, me.statusCode());
         assertEquals("등록 이름", json(me).path("name").asString());
         var rotated = renew.renew(refresh);
-        assertTrue(sessions.authenticate(access).isEmpty());
+        assertTrue(sessions.authenticate(access).isPresent());
         var protection = csrf();
         protection.set(1, protection.get(1) + "; bareum_refresh=" + rotated.refreshToken());
         var logout =
@@ -540,7 +552,7 @@ class GoogleLoginIntegrationTests {
             long active = 0;
             for (var future : futures)
                 if (sessions.authenticate(future.get().login().accessToken()).isPresent()) active++;
-            assertEquals(1, active);
+            assertEquals(2, active);
         }
     }
 

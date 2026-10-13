@@ -13,18 +13,21 @@ import java.util.UUID;
 public class LogoutService {
     private final JdbcTemplate jdbc;
     private final LoginTokenGenerator tokens;
+    private final LoginJwtService jwt;
     private final Clock clock;
 
-    public LogoutService(JdbcTemplate jdbc, LoginTokenGenerator tokens,
+    public LogoutService(JdbcTemplate jdbc, LoginTokenGenerator tokens, LoginJwtService jwt,
             @Qualifier("loginClock") Clock clock) {
         this.jdbc = jdbc;
         this.tokens = tokens;
+        this.jwt = jwt;
         this.clock = clock;
     }
 
     @Transactional
     public void logout(String refresh) {
-        if (!tokens.validFormat(refresh)) return;
+        var verified = jwt.verifyForLogout(refresh);
+        if (verified.isEmpty()) return;
         String hash = tokens.hash("refresh", refresh);
         var identities = jdbc.query("""
                 SELECT id,member_id,jti FROM refresh_token WHERE refresh_token_hash=?
@@ -36,6 +39,8 @@ public class LogoutService {
                         rs.getObject(3, UUID.class)), hash, hash);
         if (identities.size() != 1) return;
         Identity identity = identities.getFirst();
+        if (verified.get().memberId() != identity.memberId()
+                || !verified.get().family().equals(identity.family())) return;
         // Match login and renewal's member -> session lock order.
         var members = jdbc.query("SELECT id FROM member WHERE id=? FOR UPDATE",
                 (rs, n) -> rs.getLong(1), identity.memberId());
@@ -58,6 +63,8 @@ public class LogoutService {
                 UPDATE refresh_token SET revoked_at=?,updated_at=?
                     WHERE id=? AND jti=? AND revoked_at IS NULL
                 """, now, now, identity.sessionId(), identity.family());
+        jdbc.update("UPDATE login_access_token SET revoked_at=? WHERE member_id=? AND family_id=?",
+                now, identity.memberId(), identity.family());
     }
 
     private record Identity(long sessionId, long memberId, UUID family) {}
