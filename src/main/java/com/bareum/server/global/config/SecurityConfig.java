@@ -22,7 +22,7 @@ import java.time.Clock;
 import java.util.List;
 
 @Configuration
-@EnableConfigurationProperties(LoginProperties.class)
+@EnableConfigurationProperties({LoginProperties.class, com.bareum.server.domain.auth.config.LoginJwtProperties.class})
 @org.springframework.scheduling.annotation.EnableScheduling
 public class SecurityConfig {
     @Bean

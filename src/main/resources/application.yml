@@ -44,6 +44,8 @@ scalar:
   layout: classic
 
 auth:
+  login-jwt:
+    signing-key: ${LOGIN_JWT_SIGNING_KEY:}
   login:
     access-ttl-seconds: ${LOGIN_ACCESS_TTL_SECONDS:900}
     session-ttl-seconds: ${LOGIN_SESSION_TTL_SECONDS:28800}

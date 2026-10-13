@@ -20,8 +20,8 @@ public interface EmailLoginControllerDocs {
                     이메일 대소문자를 구분하지 않고 자격증명을 확인합니다. 비밀번호는 변형하지 않습니다.
                     Access Token은 Authorization: Bearer로 사용하며 기본 900초입니다.
                     Refresh Token은 bareum_refresh HttpOnly 쿠키로만 전달하며 기본 28800초입니다.
-                    재로그인은 이전 로그인 토큰을 무효화합니다. keepSignedIn=true는 지원하지 않습니다.
-                    토큰 갱신·로그아웃 API는 별도 구현 범위이며 이번 API만으로 자동 갱신하지 않습니다.
+                    JWT Access·Refresh를 발급하며, 재로그인은 이전 Refresh를 교체하고 이전 Access는 원래 만료까지 유지합니다. keepSignedIn=true는 지원하지 않습니다.
+                    토큰 갱신은 POST /api/v1/auth/token/renew로 연결합니다. 로그아웃 API는 별도 구현 범위입니다.
                     """)
     @ApiResponse(
             responseCode = "200",

@@ -33,7 +33,7 @@ class BearerTokenFilterTests {
 
     @Test
     void storageFailureReturns503AndDoesNotAuthenticateOrLeakException() throws Exception {
-        String token = new LoginTokenGenerator().generate();
+        String token = "header.payload.signature";
         var request = new MockHttpServletRequest();
         var response = new MockHttpServletResponse();
         request.addHeader("Authorization", "Bearer " + token);
@@ -47,7 +47,7 @@ class BearerTokenFilterTests {
 
     @Test
     void validBearerCreatesMemberPrincipalWithoutRawCredentials() throws Exception {
-        String token = new LoginTokenGenerator().generate();
+        String token = "header.payload.signature";
         var request = new MockHttpServletRequest();
         var response = new MockHttpServletResponse();
         request.addHeader("Authorization", "bEaReR " + token);
