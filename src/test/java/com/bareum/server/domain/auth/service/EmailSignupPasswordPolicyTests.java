@@ -34,7 +34,7 @@ class EmailSignupPasswordPolicyTests {
 
     @ParameterizedTest(name = "invalid input {index}")
     @MethodSource("invalidPasswords")
-    void rejectsMissingRequirementsAndCharactersOutsideDraftAlphabet(String password) {
+    void rejectsMissingRequirementsAndWhitespace(String password) {
         assertFalse(policy.isValid(password));
     }
 
@@ -48,7 +48,6 @@ class EmailSignupPasswordPolicyTests {
                 "a".repeat(11) + "!",
                 "a".repeat(11) + "1",
                 "a".repeat(10) + "1*",
-                "a".repeat(10) + "1!" + "*",
                 "a".repeat(10) + "1!" + " ",
                 " " + "a".repeat(10) + "1!",
                 "a".repeat(5) + " " + "a".repeat(5) + "1!",
@@ -57,10 +56,15 @@ class EmailSignupPasswordPolicyTests {
                 "a".repeat(10) + "1!" + "\r",
                 "a".repeat(10) + "1!" + "\u00a0",
                 "a".repeat(10) + "1!" + "\u3000",
-                "a".repeat(10) + "1!" + "\u200b",
                 "가".repeat(10) + "1!",
                 "a".repeat(10) + "１!",
                 "a".repeat(10) + "1！"
         );
+    }
+
+    @Test
+    void allowsAdditionalNonWhitespaceCharactersWhenAllSpecifiedRequirementsAreMet() {
+        assertTrue(policy.isValid("a".repeat(10) + "1!*"));
+        assertTrue(policy.isValid("가나다라마바사아자차a1!"));
     }
 }

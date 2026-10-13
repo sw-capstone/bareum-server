@@ -55,6 +55,8 @@ Refresh Token은 본문에 포함하지 않고 bareum_refresh HttpOnly·Secure �
 
 ## 보안·데이터 경계
 
+- 서비스 로그인은 기존 팀 기준의 JWT Access·Refresh와 Rotation을 사용한다. 재로그인·갱신 시 이전 Access는 원래 만료까지 유지하며, 현재 Refresh만 갱신할 수 있다. Google ID Token과 서비스 JWT는 발급자·용도·검증 키를 구분한다.
+
 - Spring Security의 NimbusJwtDecoder로 RS256 서명을 검증한다. 공개키 URL은 Google HTTPS 주소로 고정하고, ID Token 헤더의 jku·jwk로 키를 선택하지 않는다. 공개키 캐시와 키 교체 조회는 라이브러리를 사용한다. 연결·읽기 대기는 각각 3초로 제한한다.
 - iss는 Google의 두 공식 발급자 값만 허용한다. aud는 설정된 Client ID와 일치해야 한다. azp가 있으면 허용한 Client ID여야 하며, 여러 aud가 있으면 azp도 요구한다. exp·iat·선택적 nbf, sub·email·email_verified와 이름·도메인의 타입·길이를 검증한다.
 - Google 식별자별 advisory lock을 사용한다. 기존 회원은 회원→인증 연결→세션 순서로 확인·저장하며, 신규 이메일 충돌은 기존 upper(email) 비교와 이메일 잠금 기준을 사용한다.
@@ -85,16 +87,18 @@ Refresh Token은 본문에 포함하지 않고 bareum_refresh HttpOnly·Secure �
 | GOOGLE_SIGNUP_TTL_SECONDS | 600 | 가입용 증명 유효기간. 1~600초 |
 | LOGIN_ALLOWED_ORIGINS | 비어 있음 | 기존 로그인 CORS 기준의 정확한 프론트 Origin |
 
-Google Console의 프로젝트·실제 Client ID·승인된 Origin은 별도로 준비해야 한다. 이 설정만으로 Google 동의 화면이나 프론트 SDK가 구성되지는 않는다.
+설정 예시는 [환경변수 예시](../../env/local/.env.example)에 포함한다. Google Console의 프로젝트·실제 Client ID·승인된 Origin은 별도로 준비해야 한다. 이 설정만으로 Google 동의 화면이나 프론트 SDK가 구성되지는 않는다.
 
 ## 검증과 남은 범위
 
 - Google ID Token의 서명·발급자·대상·만료·프로필 검증, 공개키 캐시·교체·조회 실패와 공격자 키 주소 차단을 검증했다.
 - 실제 HTTP 서버에서 두 성공 응답, HttpOnly 쿠키·본문 원문 제외, CSRF·CORS, 입력·업무 오류, 가입용 증명의 보호 API 차단과 OpenAPI의 예시·400 anyOf를 검증했다.
 - 설정 불변성·유효기간 범위, 검증 실패 및 요청 제한 후 계정 저장 차단, 저장소 장애의 안전한 오류 변환을 검증했다.
-- `./gradlew check --no-daemon`: 전체 502개 통과, 실패·오류·건너뜀 0개. Google 관련 82개를 포함한다.
+- `./gradlew check bootJar --no-daemon`: 전체 504개 통과, 실패·오류·건너뜀 0개 및 JAR 빌드 성공. Google 관련 83개를 포함한다.
 - PostgreSQL 통합 테스트로 Flyway 적용, 로그인·/me·갱신·로그아웃 연결, 계정 상태·대소문자 충돌, 증명 저장·교체·만료, 동시 요청과 롤백을 검증했다. 탈퇴 상태와 탈퇴 시각이 모두 있는 계정만 신규 이메일 충돌 검사에서 제외되는 경계도 확인했다.
 - 하네스 정적 검사 4개 통과, 해당 없음 3개. 원격 CI 결과는 별도로 확인한다.
+- 인증 설정을 적용한 HTTP 서버에서도 GET /health가 200·상태 응답을 반환하는지 검증했다.
+- 테스트 전용 인증 해시 키를 명시하여 전체 검사가 외부 인증 비밀 설정에 의존하지 않도록 구성했다. 운영 기동에는 별도 비밀키가 필요하다.
 - 실제 Google 프로젝트·계정과 프론트 SDK 연결 검증은 미실행이다. mock 서비스·생성한 서명 토큰 검증과 실제 Google 로그인 성공을 구분한다.
 - 선행 로그인·토큰 갱신·로그아웃 PR이 미병합이므로 develop 비교에는 해당 변경도 포함된다. 선행 PR 병합 후 변경 범위와 회귀 검증을 다시 확인한다.
 - 이메일 대소문자 DB 중복 제약·탈퇴 이메일 재사용은 #18의 변경과 연결된다. AUTH-011 병합 전 최신 기반에서 같은 비교·제약 기준과 migration 버전을 확인해야 한다.
