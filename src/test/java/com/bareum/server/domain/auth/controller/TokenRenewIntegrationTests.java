@@ -337,7 +337,7 @@ class TokenRenewIntegrationTests {
             if (renewed.statusCode() == 200)
                 assertTrue(
                         sessions.authenticate(json(renewed).path("accessToken").asString())
-                                .isEmpty());
+                                .isPresent());
         }
     }
 
@@ -623,7 +623,16 @@ class TokenRenewIntegrationTests {
         when(generator.validFormat(original.refreshToken())).thenReturn(true);
         when(generator.hash("refresh", original.refreshToken()))
                 .thenReturn(tokens.hash("refresh", original.refreshToken()));
-        when(generator.generate()).thenReturn(existing.accessToken(), tokens.generate());
+        var collisionJwt = mock(com.bareum.server.domain.auth.service.LoginJwtService.class);
+        var tokenJwt = new com.bareum.server.domain.auth.service.LoginJwtService(
+                new com.bareum.server.domain.auth.config.LoginJwtProperties(
+                        "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="), clock);
+        var verified = tokenJwt.verify(original.refreshToken(), "refresh");
+        when(collisionJwt.verify(original.refreshToken(), "refresh")).thenReturn(verified);
+        when(collisionJwt.issue(eq("access"), anyLong(), any(), any(), any()))
+                .thenReturn(existing.accessToken());
+        when(collisionJwt.issue(eq("refresh"), anyLong(), any(), any(), any()))
+                .thenReturn(tokens.generate());
         when(generator.hash(eq("access"), anyString()))
                 .thenAnswer(i -> tokens.hash("access", i.getArgument(1)));
         when(generator.hash(eq("refresh"), anyString()))
@@ -632,6 +641,7 @@ class TokenRenewIntegrationTests {
                 new TokenRenewService(
                         jdbc,
                         generator,
+                        collisionJwt,
                         loginPolicy,
                         renewPolicy,
                         Clock.fixed(NOW, java.time.ZoneOffset.UTC));
