@@ -17,8 +17,10 @@ public class EmailSignupPasswordPolicy {
         boolean hasDigit = false;
         boolean hasSpecialCharacter = false;
 
-        for (int index = 0; index < password.length(); index++) {
-            char character = password.charAt(index);
+        for (int character : password.codePoints().toArray()) {
+            if (Character.isWhitespace(character) || Character.isSpaceChar(character)) {
+                return false;
+            }
             if ((character >= 'a' && character <= 'z')
                     || (character >= 'A' && character <= 'Z')) {
                 hasLetter = true;
@@ -26,8 +28,6 @@ public class EmailSignupPasswordPolicy {
                 hasDigit = true;
             } else if (ALLOWED_SPECIAL_CHARACTERS.indexOf(character) >= 0) {
                 hasSpecialCharacter = true;
-            } else {
-                return false;
             }
         }
 

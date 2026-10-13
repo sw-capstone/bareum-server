@@ -382,7 +382,7 @@ class PasswordResetIntegrationTests {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"OnlyLettersLong", "123456789012", "Password12345", "Password123! ", "Password123^", "한글Password123!"})
+    @ValueSource(strings = {"OnlyLettersLong", "123456789012", "Password12345", "Password123! ", "Password123^"})
     void usesTheSamePasswordPolicyAsSignup(String invalid) throws Exception {
         String token = proof(VerificationPurpose.PASSWORD_RESET);
         var response = request(mapper.writeValueAsString(new PasswordResetRequest(email, token, invalid)));
@@ -390,6 +390,16 @@ class PasswordResetIntegrationTests {
         assertEquals("AUTH-0012", mapper.readTree(response.body()).get("code").asText());
         assertEquals(oldHash, passwordHash());
         assertNull(latest().getConsumedAt());
+    }
+
+    @Test
+    void acceptsSpecifiedPasswordRequirementsWithOtherNonWhitespaceCharacters() throws Exception {
+        String token = proof(VerificationPurpose.PASSWORD_RESET);
+        String password = "한글Password123!*";
+        assertEquals(204, request(mapper.writeValueAsString(
+                new PasswordResetRequest(email, token, password))).statusCode());
+        assertTrue(passwords.matches(password, passwordHash()));
+        assertTrue(passwordHash().startsWith("{argon2id-v1}$argon2id$"));
     }
 
     @Test

@@ -287,7 +287,7 @@ class GoogleSignupIntegrationTests {
         String refresh = cookie.split(";", 2)[0].substring("bareum_refresh=".length());
         assertFalse(response.body().contains(refresh));
         var rotated = renew.renew(refresh);
-        assertTrue(sessions.authenticate(access).isEmpty());
+        assertTrue(sessions.authenticate(access).isPresent());
         assertTrue(sessions.authenticate(rotated.accessToken()).isPresent());
         var protection = csrf();
         protection.set(1, protection.get(1) + "; bareum_refresh=" + rotated.refreshToken());

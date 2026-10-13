@@ -74,6 +74,8 @@ public class PasswordResetService {
         jdbc.update("""
                 UPDATE refresh_token SET revoked_at=COALESCE(revoked_at,?),updated_at=? WHERE member_id=?
                 """, Timestamp.from(completedAt), Timestamp.from(completedAt), member.id());
+        jdbc.update("UPDATE login_access_token SET revoked_at=COALESCE(revoked_at,?) WHERE member_id=?",
+                Timestamp.from(completedAt), member.id());
         verifications.flush();
     }
 
