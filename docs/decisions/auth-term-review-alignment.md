@@ -1,6 +1,6 @@
 # Auth·Term 명세·리뷰 기준 정비
 
-- 기준일: 2026-10-12
+- 기준일: 2026-10-13
 - 관련 작업: [GitHub #22](https://github.com/sw-capstone/bareum-server/issues/22), BRM-25
 - 상태: 구현 대조 결과·팀 미확정 정책은 별도 검토
 - 소유 역할: 백엔드 인증 담당·프론트 인증 화면 담당
@@ -10,6 +10,8 @@
 | 항목 | 기준·현재 동작 | 차이와 처리 |
 |---|---|---|
 | 비밀번호 | [최신 기술 정책](https://app.notion.com/p/3e311880adea8077a667c9a8eae3d107)과 [화면 기획](https://app.notion.com/p/8db11880adea821da91f01c46e4d3804)의 최소 12자·영문·숫자·허용 특수문자·공백 금지 | [AUTH-001](https://app.notion.com/p/6ce11880adea82f38f3401e7015c793d)의 이전 8~12자 문구와 구분한다. 가입·재설정은 같은 정책을 사용하며 로그인 입력은 변환하지 않는다. |
+| 비밀번호 해시 | 기존 서비스 명세·개발 원칙의 Argon2id | 새 가입·재설정은 Argon2id로 저장한다. 이전 PBKDF2 저장값은 검증 호환만 제공하고 새 PBKDF2 저장값을 생성하지 않는다. |
+| 토큰·재로그인 | 기존 JWT Access·Refresh와 Rotation, #7의 회원당 단일 Refresh·이전 Access 만료까지 허용 | JWT 서명·용도·만료를 검증하고 Access 해시 등록을 분리한다. 재로그인·갱신 후 이전 Access의 만료를 유지하며, 로그아웃·재사용 탐지·재설정은 정해진 범위의 Access를 폐기한다. |
 | 로그인·유지 | 프론트 합의에 따라 Access 15분·최초 로그인부터 최대 8시간, 메모리 Access와 HttpOnly 갱신 쿠키, /me 조회 | AUTH-002의 선택형 로그인 유지 문구와 MVP 제외 표를 구분한다. keepSignedIn=true는 거부하며 장기 로그인 구현을 추가하지 않는다. 쿠키·단일 세션 세부 기준은 [로그인 문서](login-authentication-draft.md)의 검토 항목을 유지한다. |
 | 이메일 비교·DB 제약 | [#18 리뷰와 답변](https://github.com/sw-capstone/bareum-server/pull/18#discussion_r4222546461)에 맞춰 IgnoreCase 조회·upper(email) 잠금·유일 인덱스 | LOCAL·GOOGLE 모두 주소 중복을 차단한다. 탈퇴 완료 계정의 즉시 이메일 재사용은 기존 팀 미확정 임시 기준을 유지하며 Google 식별자 재사용 정책으로 확대하지 않는다. |
 | 재설정 발송 대상 | [AUTH-010](https://app.notion.com/p/64b11880adea8353b42681be66aab506)의 이메일 로그인 가능한 계정과 최종 재설정의 ACTIVE·미탈퇴·LOCAL 조건 | 최초·재발송과 worker의 수신자 검사에도 같은 조건을 적용한다. 제한된 계정은 등록 주소로도 발송하지 않고, 접수 후 제한된 대기 작업은 CANCELLED·암호문 삭제로 종료한다. 신규 오류 코드를 만들지 않고 AUTH-0003을 사용한다. |
@@ -27,7 +29,7 @@
 
 ## 검증
 
-- `./gradlew check bootJar --no-daemon`: 전체 669개 통과, 실패·오류·건너뜀 0개, JAR 빌드 성공.
+- Auth·Term 통합 정비 기준 `./gradlew check bootJar --no-daemon`: 전체 683개 통과, 실패·오류·건너뜀 0개, JAR 빌드 성공.
 - 추가 회귀 사례 8개로 제한·탈퇴 표시 계정의 접수 거부, 접수 후 정지 계정의 SMTP 미호출·CANCELLED·암호문 삭제, 재발송 거부 시 기존 코드 보존을 확인했다.
 - 하네스 정적 검사 4개 통과, 실패 0개·해당 없음 3개. API 15개 경로와 JSON 예시 14개를 대조했다.
 - 실제 Google 계정·프론트 브라우저 연동은 이 검사에 포함하지 않는다.

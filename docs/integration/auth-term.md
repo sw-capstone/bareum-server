@@ -157,6 +157,8 @@ code는 여섯 자리 **문자열**로 전송해 앞자리 0을 보존한다. ex
 
 ## 로그인·갱신·사용자 조회·로그아웃
 
+서비스 로그인은 기존 팀 기준의 JWT Access·Refresh와 Rotation을 사용한다. 재로그인·갱신 시 이전 Access는 원래 만료까지 유지하고 현재 Refresh만 갱신할 수 있다. JWT를 프론트에서 해석하거나 영구 저장하지 않으며 API 응답의 남은 시간을 사용한다.
+
 이메일 로그인 요청:
 
 ```json
@@ -287,7 +289,7 @@ PASSWORD_RESET 목적의 발송 → 상태 조회 → 번호 확인 → PATCH `/
 | 인증 제한 | 최소 발송 간격·시간당/일당 횟수·인증 실패 횟수 | `auth.email-verification.minimum-send-interval-seconds`, `max-sends-per-hour`, `max-sends-per-day`와 `max-verification-attempts`를 정한다. 운영 수치 미확정 상태를 유지하며 설정 누락 시 AUTH-0006으로 차단한다. |
 | 가입 약관 | 네 약관의 DB 데이터와 `auth.signup-terms.versions` | 프론트 고정 원문에 대응하는 승인 버전을 연결한다. 데이터·필수 여부·설정 버전이 맞지 않으면 TERM-0004로 가입을 차단한다. 프론트 요청은 합의한 네 boolean 항목을 유지한다. |
 | Google 인증 | `GOOGLE_CLIENT_IDS`, Google Console의 승인 Origin | ID Token 방식의 실제 웹 Client ID를 프론트 SDK와 서버 검증에 맞춘다. 미설정 시 AUTH-0025로 차단하며 실제 Google 계정 검증은 아직 남아 있다. |
-| 비밀번호 찾기 | 배포 범위, 재설정용 인증번호·완료 증명 유효기간 | 구현·실제 메일 검증은 완료했으나 최신 정책의 MVP 제외 기준은 유지한다. `EMAIL_VERIFICATION_PASSWORD_RESET_CODE_TTL_SECONDS`와 `EMAIL_VERIFICATION_PASSWORD_RESET_VERIFICATION_TTL_SECONDS`는 별도 결정한다. |
+| 비밀번호 찾기 | 배포 범위, 재설정용 인증번호·완료 증명 유효기간 | 구현과 기존 메일 경로 검증은 있으나 JWT·Argon2id 변경 후 실제 메일·브라우저 연결은 미검증이다. 최신 정책의 MVP 제외 기준을 유지하고 `EMAIL_VERIFICATION_PASSWORD_RESET_CODE_TTL_SECONDS`와 `EMAIL_VERIFICATION_PASSWORD_RESET_VERIFICATION_TTL_SECONDS`는 별도 결정한다. |
 
 발송 제한·실패 복구·약관 원문·Google 지원 계정처럼 미확정인 정책은 테스트 값으로 확정하지 않는다. 인증 완료 후 재발송 정책도 미정이므로 현재는 기존 증명을 보존하며 503으로 차단한다. Outbox 접수·조회 흐름은 프론트가 수용했으며, 조회 간격·총 대기 한도와 실패 화면의 세부 처리는 별도 확인한다.
 
@@ -295,11 +297,11 @@ Parameter Store 준비 스크립트에 Auth·Term 설정 주입 경로를 추가
 
 ## 검증 범위와 연동 전 확인
 
-- 기준 서버의 `./gradlew check bootJar --no-daemon`: 전체 679개 통과, 실패·오류·건너뜀 0개 및 JAR 빌드 성공. HTTP·DB·OpenAPI·동시성·롤백 검사이며 실제 웹 소비자 검증과 구분한다.
+- Auth·Term 통합 정비 기준의 `./gradlew check bootJar --no-daemon`: 전체 683개 통과, 실패·오류·건너뜀 0개 및 JAR 빌드 성공. HTTP·DB·OpenAPI·동시성·롤백 검사이며 실제 웹 소비자 검증과 구분한다.
 - API 경로·요청/응답·상태·오류 안내는 Controller·DTO·보안 설정과 대조했다. 실제 브라우저·Google 계정 연동은 미검증이다. 재설정 메일·HTTP 연결은 [재설정 문서](../decisions/password-reset-draft.md)의 검증 범위를 따른다.
 - 계약 확인 필요: Outbox 조회 주기·대기 한도, Google 인증 분기와 지원 계정, 공식 약관 원문·버전·필수 항목, 배포 Origin·쿠키 조건, 비밀번호 찾기 배포 범위.
 - 운영 준비 필요: 메일 발송 제한·인증 실패 제한과 복구, 재설정용 번호·완료 증명 기간, 약관 DB·승인 버전, Google Client ID·승인 Origin. SIGNUP 번호 5분·완료 증명 10분은 정책 기준을 유지한다. 필수 설정 누락 시 서버가 차단하며 테스트 값을 운영 기본값으로 사용하지 않는다.
-- Gmail SMTP 실제 수신→인증 확인→비밀번호 재설정→새 비밀번호 로그인·/me 연결을 HTTP·DB로 검증했다. 이전 비밀번호·Access·Refresh와 소비된 증명의 거부, Outbox 완료·암호문 삭제·발송 이력도 확인했다. 브라우저 검증과 운영 배포 승인을 대신하지 않는다.
+- JWT·Argon2id 변경 전에는 Gmail SMTP 실제 수신→인증 확인→비밀번호 재설정→새 비밀번호 로그인·/me를 HTTP·DB로 검증했다. 변경 후 서버 회귀 검사는 모의 메일 경로를 포함하며 실제 메일·브라우저 연결은 미검증이다. 이전 검증을 현재 인증 방식의 운영 배포 승인으로 취급하지 않는다.
 - 남은 브라우저 연동 검증: 이메일 가입→로그인→/me→갱신→로그아웃, Google 기존·신규 가입, Outbox 대기·실패·재발송, 만료·CSRF·타사 쿠키·다중 탭 오류 흐름. 비밀번호 재설정의 브라우저 검증은 배포 범위 확정 후 진행한다.
 
 ## 임시 구현 기준과 팀 협의 사항
@@ -314,9 +316,7 @@ Parameter Store 준비 스크립트에 Auth·Term 설정 주입 경로를 추가
 | --- | --- | --- |
 | 공개 응답·오류 계약 | 위 API별 필드·상태 코드, ProblemDetail과 AUTH/TERM 코드, 상태 조회 404·빈 본문 | 기본 비동기 흐름 외의 필드·오류·응답 유실 복구는 소비자 계약 검토가 필요하다. 계정 존재를 구분하는 오류·안내의 공개 범위도 함께 검토한다. |
 | 이메일·탈퇴 주소 재사용 | 대소문자 비교는 리뷰 방향에 맞춰 upper(email)로 일치. 탈퇴 완료(`DELETED`와 탈퇴 시각 모두 있음) 주소는 대기 없이 새 계정으로 재가입 허용 | 즉시 재가입과 탈퇴 완료 판정은 미확정 임시 정책이다. 불완전 탈퇴·정지 계정은 주소를 점유한다. 기존 계정 데이터·권한을 승계하지 않으며 Google sub 재사용까지 허용한 것은 아니다. [이메일·가입 기준](../decisions/email-verification-draft.md) 참고. |
-| 비밀번호 문자 범위 | 가입·재설정은 최소 12자·영문·숫자·`!@#$%&` 각각 포함·공백 금지. 다른 비공백 문자는 추가로 금지하지 않으며 최대 길이는 추가하지 않음 | 최소 12자·각 문자 종류 포함·공백 금지는 최신 정책이다. 필수 조건을 만족하는 다른 비공백 문자는 수용한다. 최대 길이·요청 크기 상한은 운영 검토 대상이다. |
 | 인증번호·완료 증명 | 6자리 숫자 문자열, 완료 증명은 해시 저장·일회 사용. 이메일·목적의 최신 인증 요청만 최종 사용 | 번호 형식·증명 선택·응답 유실 시 재확인/복구를 검토한다. 이미 완료된 번호 재확인은 409로 거부한다. [이메일 인증 기준](../decisions/email-verification-draft.md) 참고. |
-| 토큰·동시 로그인 | 기존 팀 기준의 JWT Access·Refresh와 Rotation 적용. 회원당 현재 Refresh 하나, 재로그인·갱신 시 이전 Access는 원래 만료까지 유지 | 여러 기기 동시 로그인은 허용되지 않는다. 다중 세션 확장·DB 비용 검토 시 [로그인 기준](../decisions/login-authentication-draft.md)을 재검토한다. |
 | 쿠키·CSRF·CORS | Refresh·CSRF 쿠키는 HttpOnly·Secure·SameSite=None·호스트 전용·Path=/api/v1/auth. CSRF는 조회 응답의 마스킹 token을 헤더로 전달. 정확한 Origin만 허용 | HttpOnly 방향은 합의됐지만 SameSite·경로·CSRF 전달 세부는 구현 선택이다. 실제 도메인·타사 쿠키·브라우저 연동 전 재검토한다. [로그인](../decisions/login-authentication-draft.md)·[갱신](../decisions/token-renew-draft.md) 기준 참고. |
 | 토큰 갱신·로그아웃 | 갱신 성공마다 새 JWT 두 개를 발급하고 이전 Access는 만료까지 유지한다. 같은 family의 소비된 Refresh 재사용 시 해당 family의 Access·Refresh를 폐기. 로그아웃은 쿠키 세션 폐기·204·두 쿠키 삭제 | 갱신 재시도 유예·멱등 응답은 제공하지 않는다. 갱신/로그아웃 직렬화·다중 탭·응답 유실 처리를 맞춘다. [갱신](../decisions/token-renew-draft.md)·[로그아웃](../decisions/logout-draft.md) 기준 참고. |
 | 로그인·갱신 제한 | 이메일별 로그인 성공·실패 합산 60초에 10회, 세션별 성공 갱신 60초에 30회 | 운영 수치·전역/IP 제한·기록 보존 기준은 팀 미확정이다. 배포 처리량·남용 방지 정책을 정할 때 재검토한다. |
