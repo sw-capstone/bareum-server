@@ -67,6 +67,14 @@ out/
 .env
 .env.*
 !.env.example
+!.env.*.example
+!/infra/env/.env.server.template
+
+# 배포 서버에서 관리하는 인증서 및 개인 키
+/infra/certs/
+
+# 배포 잠금과 복구용 환경변수 사본
+/infra/.deploy-state/
 
 # Local harness
 .DS_Store
