@@ -55,6 +55,8 @@ Refresh Token은 본문에 포함하지 않고 bareum_refresh HttpOnly·Secure �
 
 ## 보안·데이터 경계
 
+- 서비스 로그인은 기존 팀 기준의 JWT Access·Refresh와 Rotation을 사용한다. 재로그인·갱신 시 이전 Access는 원래 만료까지 유지하며, 현재 Refresh만 갱신할 수 있다. Google ID Token과 서비스 JWT는 발급자·용도·검증 키를 구분한다.
+
 - Spring Security의 NimbusJwtDecoder로 RS256 서명을 검증한다. 공개키 URL은 Google HTTPS 주소로 고정하고, ID Token 헤더의 jku·jwk로 키를 선택하지 않는다. 공개키 캐시와 키 교체 조회는 라이브러리를 사용한다. 연결·읽기 대기는 각각 3초로 제한한다.
 - iss는 Google의 두 공식 발급자 값만 허용한다. aud는 설정된 Client ID와 일치해야 한다. azp가 있으면 허용한 Client ID여야 하며, 여러 aud가 있으면 azp도 요구한다. exp·iat·선택적 nbf, sub·email·email_verified와 이름·도메인의 타입·길이를 검증한다.
 - Google 식별자별 advisory lock을 사용한다. 기존 회원은 회원→인증 연결→세션 순서로 확인·저장하며, 신규 이메일 충돌은 기존 upper(email) 비교와 이메일 잠금 기준을 사용한다.

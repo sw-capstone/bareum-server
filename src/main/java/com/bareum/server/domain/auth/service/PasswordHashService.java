@@ -5,16 +5,18 @@ import java.util.Objects;
 import org.springframework.security.crypto.password.DelegatingPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.crypto.password.Pbkdf2PasswordEncoder;
+import org.springframework.security.crypto.argon2.Argon2PasswordEncoder;
 import org.springframework.stereotype.Component;
 
 @Component
 public class PasswordHashService {
 
-    private static final String ENCODING_ID = "pbkdf2-sha256-v1";
+    private static final String ENCODING_ID = "argon2id-v1";
     private final PasswordEncoder encoder = new DelegatingPasswordEncoder(
             ENCODING_ID,
-            Map.of(ENCODING_ID, new Pbkdf2PasswordEncoder("", 16, 600_000,
-                    Pbkdf2PasswordEncoder.SecretKeyFactoryAlgorithm.PBKDF2WithHmacSHA256))
+            Map.of(ENCODING_ID, Argon2PasswordEncoder.defaultsForSpringSecurity_v5_8(),
+                    "pbkdf2-sha256-v1", new Pbkdf2PasswordEncoder("", 16, 600_000,
+                            Pbkdf2PasswordEncoder.SecretKeyFactoryAlgorithm.PBKDF2WithHmacSHA256))
     );
 
     public String hash(String password) {
@@ -26,6 +28,9 @@ public class PasswordHashService {
             return false;
         }
         try {
+            if (storedHash.startsWith("$argon2id$")) {
+                return Argon2PasswordEncoder.defaultsForSpringSecurity_v5_8().matches(password, storedHash);
+            }
             return encoder.matches(password, storedHash);
         } catch (IllegalArgumentException exception) {
             return false;

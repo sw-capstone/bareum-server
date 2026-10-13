@@ -34,6 +34,7 @@ dependencies {
 	implementation("org.springframework.boot:spring-boot-starter-mail")
 	implementation("org.springframework.boot:spring-boot-starter-security")
 	implementation("org.springframework.security:spring-security-oauth2-jose")
+	implementation("org.bouncycastle:bcprov-jdk18on:1.86")
 	implementation("org.springdoc:springdoc-openapi-starter-webmvc-scalar:3.1.1")
 	testImplementation("org.springframework.boot:spring-boot-starter-validation-test")
 	testImplementation("org.springframework.boot:spring-boot-starter-webmvc-test")
