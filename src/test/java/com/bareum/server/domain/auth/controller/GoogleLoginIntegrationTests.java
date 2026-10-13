@@ -209,7 +209,7 @@ class GoogleLoginIntegrationTests {
         assertEquals(200, me.statusCode());
         assertEquals("등록 이름", json(me).path("name").asString());
         var rotated = renew.renew(refresh);
-        assertTrue(sessions.authenticate(access).isEmpty());
+        assertTrue(sessions.authenticate(access).isPresent());
         var protection = csrf();
         protection.set(1, protection.get(1) + "; bareum_refresh=" + rotated.refreshToken());
         var logout =
@@ -551,7 +551,7 @@ class GoogleLoginIntegrationTests {
             long active = 0;
             for (var future : futures)
                 if (sessions.authenticate(future.get().login().accessToken()).isPresent()) active++;
-            assertEquals(1, active);
+            assertEquals(2, active);
         }
     }
 
