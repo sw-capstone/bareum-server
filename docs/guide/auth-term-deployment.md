@@ -51,10 +51,17 @@ Access 15분·세션 최대 8시간, Secure·SameSite=None 쿠키, Outbox 재시
 
 실제 Parameter Store·EC2 적용, 운영 SMTP 수신, 승인 약관 DB와 실제 Google 계정·브라우저 연동은 별도 환경 검증 대상이다. 배포 실패 시 기존 이미지·환경 복구는 기존 배포 스크립트를 따르며 DB migration은 자동으로 되돌아가지 않는다.
 
-## 관련 근거
+## 임시 구현 기준과 팀 협의 사항
 
-- [기술·정책 명세서](https://app.notion.com/p/3e311880adea8077a667c9a8eae3d107)
-- [백엔드 개발 가이드](https://app.notion.com/p/3e311880adea8071b58be8d1701bd474)
-- [Auth·Term 배포 구현 선택과 미확정 사항](../decisions/auth-term-deployment-draft.md)
-- [AWS GetParameters](https://docs.aws.amazon.com/systems-manager/latest/APIReference/API_GetParameters.html): 한 요청의 이름 개수는 최대 10개다.
-- [Spring Boot 외부 설정](https://docs.spring.io/spring-boot/reference/features/external-config.html): 환경변수를 설정에 연결하며 약관 enum·SMTP Map 항목은 명시한 YAML 매핑을 사용한다.
+아래는 기존 명세에 구체적인 기준이 없어 구현을 위해 임의로 선택한 내용이다. 팀 확정 정책이 아니며, 승인 시 설정·문서·검증을 함께 갱신한다. 상세 쟁점·선택지·영향·재검토 조건은 [배포 협의 문서](../decisions/auth-term-deployment-draft.md)에 기록한다.
+
+| 항목 | 임시 구현 기준 | 영향·팀 확인 및 재검토 조건 |
+| --- | --- | --- |
+| 적용 시점 | `AUTH_ENV_ENABLED` 누락·false는 DB만 조회하고 true는 Auth·Term 설정도 조회 | 인증 이미지 배포 전에 필수 값을 준비하고 활성화해야 한다. 단계별 배포 범위를 확정할 때 재검토한다. |
+| 설정 관리·필수 범위 | 기존 Parameter Store 경로에서 허용한 이름만 조회. 이메일 가입·로그인의 핵심 설정은 함께 필수로 검증하고 Google·재설정 기간은 선택 | 수동으로 추가한 관리 대상 값은 다음 생성 때 보존하지 않는다. 기능별 활성화·설정 소유 기준을 정할 때 재검토한다. |
+| 비밀값·파일 보호 | DB 비밀번호·HMAC 키·Outbox 키·SMTP 비밀번호는 SecureString. 검증 후 환경 파일을 권한 600으로 교체 | EC2 조회·KMS 복호화 권한, 키 교체와 환경 백업 보관 기준은 인프라 담당자와 확인한다. |
+| SMTP 연결 | 인증 SMTP와 implicit TLS 또는 필수 STARTTLS만 허용. 서버 이름 검증, 연결·읽기·쓰기 기본 5초 | 제공자와 인증 방식·허용 지연을 확정할 때 재검토한다. 실제 운영 발신 계정은 선택하지 않았다. |
+| 설정 조회 일관성 | 이름을 최대 10개씩 조회하고 전체 검증 후 파일 교체. 조회 배치 전체의 스냅샷은 보장하지 않음 | 설정 변경을 마친 뒤 배포한다. 키 교체·동시 설정 변경을 운영할 때 버전 묶음 방식을 검토한다. |
+| 약관 초기 데이터 | 환경변수로 승인 버전만 연결하고 미승인 원문·버전·DB 데이터를 생성하지 않음 | 네 약관의 공식 원문·버전·필수 여부 승인 후 DB와 프론트 원문을 맞춘다. |
+
+아직 값을 정하지 않은 항목은 운영 메일 제공자·발신 계정, 메일 발송 간격·시간당/일당 제한·인증 실패 제한과 복구, 약관 원문·승인 버전, 실제 배포 Origin, Google Client ID·지원 계정, 비밀번호 찾기 배포 범위·재설정 유효기간이다. 테스트 값을 운영 값으로 사용하지 않는다. 회원가입 인증번호 5분·인증 완료 후 가입 10분은 최신 기술 정책의 기준이며 이 미정 항목에 포함하지 않는다.
