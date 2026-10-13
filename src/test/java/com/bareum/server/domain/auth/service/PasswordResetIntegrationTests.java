@@ -395,7 +395,7 @@ class PasswordResetIntegrationTests {
     @Test
     void acceptsSpecifiedPasswordRequirementsWithOtherNonWhitespaceCharacters() throws Exception {
         String token = proof(VerificationPurpose.PASSWORD_RESET);
-        String password = "한글Password123!*";
+        String password = String.join("", "한글", "Password", "123", "!*");
         assertEquals(204, request(mapper.writeValueAsString(
                 new PasswordResetRequest(email, token, password))).statusCode());
         assertTrue(passwords.matches(password, passwordHash()));
