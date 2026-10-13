@@ -16,3 +16,4 @@
 - [이메일 로그인·공통 인증](login-authentication-draft.md): AUTH-002 구현, 임시 설정과 프론트 연동 계약.
 
 - [로그인 토큰 갱신](token-renew-draft.md): AUTH-009·CSRF 연동, 토큰 교체·재사용·최대 만료 기준.
+- [이메일 인증 재발송 Outbox 전환](email-resend-outbox-draft.md)

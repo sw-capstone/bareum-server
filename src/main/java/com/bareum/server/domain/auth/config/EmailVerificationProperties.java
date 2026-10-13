@@ -4,26 +4,42 @@ import com.bareum.server.domain.auth.enums.VerificationPurpose;
 import com.bareum.server.domain.auth.exception.AuthErrorCode;
 import com.bareum.server.domain.auth.exception.AuthException;
 import lombok.Getter;
-import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
-import org.springframework.stereotype.Component;
+import org.springframework.boot.context.properties.bind.DefaultValue;
 
 @Getter
-@Setter
-@Component
 @ConfigurationProperties(prefix = "auth.email-verification")
-public class EmailVerificationProperties {
+public final class EmailVerificationProperties {
 
-    private long signupCodeTtlSeconds = 300;
+    private final long signupCodeTtlSeconds;
+    private final Long passwordResetCodeTtlSeconds;
+    private final Long minimumSendIntervalSeconds;
+    private final Integer maxSendsPerHour;
+    private final Integer maxSendsPerDay;
 
-    private Long passwordResetCodeTtlSeconds;
-    private Long minimumSendIntervalSeconds;
-    private Integer maxSendsPerHour;
-    private Integer maxSendsPerDay;
+    public EmailVerificationProperties(
+            @DefaultValue("300") long signupCodeTtlSeconds,
+            Long passwordResetCodeTtlSeconds,
+            Long minimumSendIntervalSeconds,
+            Integer maxSendsPerHour,
+            Integer maxSendsPerDay,
+            Integer maxVerificationAttempts,
+            @DefaultValue("600") long signupVerificationTtlSeconds,
+            Long passwordResetVerificationTtlSeconds
+    ) {
+        this.signupCodeTtlSeconds = signupCodeTtlSeconds;
+        this.passwordResetCodeTtlSeconds = passwordResetCodeTtlSeconds;
+        this.minimumSendIntervalSeconds = minimumSendIntervalSeconds;
+        this.maxSendsPerHour = maxSendsPerHour;
+        this.maxSendsPerDay = maxSendsPerDay;
+        this.maxVerificationAttempts = maxVerificationAttempts;
+        this.signupVerificationTtlSeconds = signupVerificationTtlSeconds;
+        this.passwordResetVerificationTtlSeconds = passwordResetVerificationTtlSeconds;
+    }
 
-    private Integer maxVerificationAttempts;
-    private long signupVerificationTtlSeconds = 600;
-    private Long passwordResetVerificationTtlSeconds;
+    private final Integer maxVerificationAttempts;
+    private final long signupVerificationTtlSeconds;
+    private final Long passwordResetVerificationTtlSeconds;
 
     public long verificationTtlSeconds(VerificationPurpose purpose) {
         Long ttl = purpose == VerificationPurpose.SIGNUP

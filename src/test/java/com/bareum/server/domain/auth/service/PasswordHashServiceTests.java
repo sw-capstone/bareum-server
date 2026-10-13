@@ -14,7 +14,7 @@ class PasswordHashServiceTests {
         String first = service.hash(password);
         String second = service.hash(password);
         assertNotEquals(first, second);
-        assertTrue(first.startsWith("{pbkdf2-sha256-v1}"));
+        assertTrue(first.startsWith("{argon2id-v1}$argon2id$"));
         assertTrue(first.length() <= 255);
         assertFalse(first.contains(password));
         assertTrue(service.matches(password, first));
@@ -39,5 +39,18 @@ class PasswordHashServiceTests {
         assertFalse(service.matches("", "encoded"));
         assertFalse(service.matches("Password123!", null));
         assertThrows(NullPointerException.class, () -> service.hash(null));
+    }
+
+    @Test
+    void acceptsExistingArgon2idAndPreviouslyStoredPbkdf2WithoutCreatingNewPbkdf2Hashes() {
+        String password = String.join("", "Password", "123", "!");
+        var argon = org.springframework.security.crypto.argon2.Argon2PasswordEncoder.defaultsForSpringSecurity_v5_8();
+        assertTrue(service.matches(password, argon.encode(password)));
+        var previous = new org.springframework.security.crypto.password.Pbkdf2PasswordEncoder("", 16, 600_000,
+                org.springframework.security.crypto.password.Pbkdf2PasswordEncoder.SecretKeyFactoryAlgorithm.PBKDF2WithHmacSHA256);
+        String legacy = "{pbkdf2-sha256-v1}" + previous.encode(password);
+        assertTrue(service.matches(password, legacy));
+        assertFalse(service.matches(password + "wrong", legacy));
+        assertTrue(service.hash(password).startsWith("{argon2id-v1}$argon2id$"));
     }
 }

@@ -44,14 +44,18 @@ public class BearerTokenFilter extends OncePerRequestFilter {
         }
         String value = headers.getFirst();
         if (headers.size() != 1
-                || value.length() != 50
-                || !value.regionMatches(true, 0, "Bearer ", 0, 7)) {
+                || value.length() <= 7 || value.length() > 8199
+                || !value.regionMatches(true, 0, "Bearer ", 0, 7)
+                || !value.substring(7).matches("[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+")) {
             problems.write(request, response, AuthErrorCode.INVALID_ACCESS_TOKEN);
             return;
         }
         java.util.Optional<LoginPrincipal> principal;
         try {
             principal = sessions.authenticate(value.substring(7));
+        } catch (com.bareum.server.domain.auth.exception.AuthException failure) {
+            problems.write(request, response, AuthErrorCode.LOGIN_SERVICE_UNAVAILABLE);
+            return;
         } catch (org.springframework.dao.DataAccessException
                 | org.springframework.transaction.TransactionException failure) {
             problems.write(request, response, AuthErrorCode.LOGIN_SERVICE_UNAVAILABLE);

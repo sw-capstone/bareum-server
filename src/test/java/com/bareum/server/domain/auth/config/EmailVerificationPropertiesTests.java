@@ -1,0 +1,70 @@
+package com.bareum.server.domain.auth.config;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+import com.bareum.server.domain.auth.enums.VerificationPurpose;
+import com.bareum.server.domain.auth.exception.AuthException;
+import org.junit.jupiter.api.Test;
+import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+
+class EmailVerificationPropertiesTests {
+    private final ApplicationContextRunner context = new ApplicationContextRunner()
+            .withUserConfiguration(EmailVerificationTimeConfig.class);
+
+    @Test
+    void defaultsKeepSignupValidityButDoNotInventSendLimits() {
+        context.run(ctx -> {
+            assertNull(ctx.getStartupFailure());
+            var properties = ctx.getBean(EmailVerificationProperties.class);
+            assertEquals(300L, properties.getSignupCodeTtlSeconds());
+            assertNull(properties.getMinimumSendIntervalSeconds());
+            assertNull(properties.getPasswordResetCodeTtlSeconds());
+            assertThrows(AuthException.class,
+                    () -> properties.requireConfigured(VerificationPurpose.SIGNUP));
+        });
+    }
+
+    @Test
+    void constructorBindingSupportsOverridesAndResetRequiresItsOwnValidity() {
+        context.withPropertyValues(
+                "auth.email-verification.signup-code-ttl-seconds=240",
+                "auth.email-verification.minimum-send-interval-seconds=60",
+                "auth.email-verification.max-sends-per-hour=5",
+                "auth.email-verification.max-sends-per-day=20"
+        ).run(ctx -> {
+            assertNull(ctx.getStartupFailure());
+            var properties = ctx.getBean(EmailVerificationProperties.class);
+            assertEquals(240L, properties.codeTtlSeconds(VerificationPurpose.SIGNUP));
+            assertThrows(AuthException.class,
+                    () -> properties.codeTtlSeconds(VerificationPurpose.PASSWORD_RESET));
+        });
+        context.withPropertyValues(
+                "auth.email-verification.minimum-send-interval-seconds=60",
+                "auth.email-verification.max-sends-per-hour=5",
+                "auth.email-verification.max-sends-per-day=20",
+                "auth.email-verification.password-reset-code-ttl-seconds=420"
+        ).run(ctx -> assertEquals(420L, ctx.getBean(EmailVerificationProperties.class)
+                .codeTtlSeconds(VerificationPurpose.PASSWORD_RESET)));
+    }
+    @Test
+    void confirmationDefaultsDoNotInventAttemptLimitsOrResetProofLifetime() {
+        context.run(ctx -> {
+            var properties = ctx.getBean(EmailVerificationProperties.class);
+            assertEquals(600, properties.getSignupVerificationTtlSeconds());
+            assertNull(properties.getMaxVerificationAttempts());
+            assertNull(properties.getPasswordResetVerificationTtlSeconds());
+            assertThrows(AuthException.class, () -> properties.verificationTtlSeconds(VerificationPurpose.SIGNUP));
+        });
+        context.withPropertyValues("auth.email-verification.max-verification-attempts=3")
+                .run(ctx -> {
+                    var properties = ctx.getBean(EmailVerificationProperties.class);
+                    assertEquals(600, properties.verificationTtlSeconds(VerificationPurpose.SIGNUP));
+                    assertThrows(AuthException.class, () -> properties.verificationTtlSeconds(VerificationPurpose.PASSWORD_RESET));
+                });
+        context.withPropertyValues("auth.email-verification.max-verification-attempts=3",
+                "auth.email-verification.password-reset-verification-ttl-seconds=420")
+                .run(ctx -> assertEquals(420, ctx.getBean(EmailVerificationProperties.class)
+                        .verificationTtlSeconds(VerificationPurpose.PASSWORD_RESET)));
+    }
+
+}
