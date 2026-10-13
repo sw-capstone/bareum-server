@@ -229,7 +229,7 @@ class EmailLoginIntegrationTests {
                 "UPDATE member SET status='DELETED',withdrawn_at=? WHERE id=?",
                 Timestamp.from(NOW),
                 google.getId());
-        problem(login(googleEmail, PASSWORD), 403, "AUTH-0016");
+        problem(login(googleEmail, PASSWORD), 401, "AUTH-0014");
     }
 
     @ParameterizedTest
