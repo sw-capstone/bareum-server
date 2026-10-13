@@ -24,7 +24,7 @@ public interface TokenRenewControllerDocs {
                     먼저 GET /api/v1/auth/csrf를 credentials: include로 호출하고 받은 token을 헤더에 넣습니다.
                     갱신 요청에도 credentials: include를 사용합니다. 새 Access Token은 본문, 새 Refresh Token은
                     HttpOnly 쿠키로 전달합니다. 15분 Access 기간은 최초 로그인부터 최대 8시간의 남은 시간으로
-                    제한하며 최대 로그인 만료를 연장하지 않습니다. 이전 Access·Refresh Token은 교체됩니다.
+                    제한하며 최대 로그인 만료를 연장하지 않습니다. 새 JWT Access·Refresh를 발급합니다. 이전 Refresh는 소비 처리하고 이전 Access는 원래 만료까지 유지합니다.
                     사용된 Refresh Token을 재사용하면 해당 로그인 토큰을 폐기합니다. 동시 갱신과 자동 재시도는
                     허용하지 않으므로 프론트에서 갱신 요청을 직렬화해야 합니다. 오류는 ProblemDetail로 반환합니다.
                     """,

@@ -22,10 +22,18 @@ public class EmailVerificationAccountValidator {
             String email,
             VerificationPurpose purpose
     ) {
-        switch (purpose) {
-            case SIGNUP -> checkSignup(email);
-            case PASSWORD_RESET -> checkPasswordReset(email);
-        }
+        resolveRecipient(email, purpose);
+    }
+
+    /** Account lookup ignores case; delivery preserves the registered address for resets. */
+    public String resolveRecipient(String email, VerificationPurpose purpose) {
+        return switch (purpose) {
+            case SIGNUP -> {
+                checkSignup(email);
+                yield email;
+            }
+            case PASSWORD_RESET -> registeredPasswordResetEmail(email);
+        };
     }
 
     private void checkSignup(String email) {
@@ -36,7 +44,7 @@ public class EmailVerificationAccountValidator {
         }
     }
 
-    private void checkPasswordReset(String email) {
+    private String registeredPasswordResetEmail(String email) {
         Member member = memberRepository.findByEmailIgnoreCase(email)
                 .orElseThrow(() -> new AuthException(
                         AuthErrorCode.EMAIL_NOT_REGISTERED
@@ -48,5 +56,6 @@ public class EmailVerificationAccountValidator {
                     AuthErrorCode.PASSWORD_RESET_NOT_ALLOWED
             );
         }
+        return member.getEmail();
     }
 }

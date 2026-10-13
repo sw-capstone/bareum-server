@@ -48,6 +48,8 @@ import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
         "auth.email-verification.max-sends-per-day=30",
         "auth.email-verification.max-verification-attempts=3",
         "auth.email-verification.hash-secret=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+        "auth.email-verification.outbox.poll-delay-ms=3600000",
+        "auth.email-verification.outbox.encryption-key=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
         "auth.signup-terms.versions.AGE_OVER_14=test-fixed-v1",
         "auth.signup-terms.versions.TERMS_OF_SERVICE=test-fixed-v1",
         "auth.signup-terms.versions.PRIVACY_POLICY=test-fixed-v1",
@@ -65,6 +67,8 @@ class EmailSignupServiceIntegrationTests {
     @Autowired private EmailVerificationConfirmService confirm;
     @Autowired private EmailVerificationSendService send;
     @Autowired private EmailVerificationResendService resend;
+    @Autowired private EmailOutboxWorker worker;
+    @Autowired private EmailVerificationDeliveryService deliveries;
     @Autowired private EmailVerificationRepository verifications;
     @Autowired private MemberRepository members;
     @Autowired private TermRepository terms;
@@ -93,6 +97,7 @@ class EmailSignupServiceIntegrationTests {
         jdbc.update("DELETE FROM member_term WHERE member_id IN (SELECT id FROM member WHERE lower(email) = lower(?))", email);
         jdbc.update("DELETE FROM member WHERE lower(email) = lower(?)", email);
         jdbc.update("DELETE FROM email_verification_send_log WHERE lower(email) = lower(?)", email);
+        jdbc.update("DELETE FROM email_verification_outbox WHERE upper(email) = upper(?)", email);
         jdbc.update("DELETE FROM email_verification WHERE lower(email) = lower(?)", email);
         for (Long id : termIds) jdbc.update("DELETE FROM term WHERE id = ?", id);
     }
@@ -362,10 +367,24 @@ class EmailSignupServiceIntegrationTests {
     void sendResendConfirmSignupFlowUsesOnlyNewCodeAndConsumesReturnedProof() {
         when(generator.generate()).thenReturn("012345", "654321");
         var sendRequest = new EmailVerificationRequest(email, VerificationPurpose.SIGNUP);
-        send.send(sendRequest);
+        var initial = send.send(sendRequest);
+        assertEquals("PENDING", initial.status());
+        assertEquals(0, initial.expiresIn());
+        assertTrue(worker.runOnce());
         Long rowId = latest().getId();
         when(clock.instant()).thenReturn(NOW.plusSeconds(2));
-        resend.resend(sendRequest);
+        var delivery = resend.resend(sendRequest);
+        assertEquals("PENDING", delivery.status());
+        assertEquals(0, delivery.expiresIn());
+        assertNotEquals(initial.requestId(), delivery.requestId());
+        assertEquals("PENDING", deliveries.status(delivery.requestId()).orElseThrow().status());
+        assertSame(AuthErrorCode.EMAIL_VERIFICATION_INVALID,
+                assertThrows(AuthException.class, () -> confirm.confirm(
+                        new EmailVerificationConfirmRequest(email, VerificationPurpose.SIGNUP, "654321"))).getBaseErrorCode());
+        assertEquals(0, latest().getAttemptCount());
+        assertTrue(worker.runOnce());
+        assertEquals("SENT", deliveries.status(delivery.requestId()).orElseThrow().status());
+        assertEquals("CANCELLED", deliveries.status(initial.requestId()).orElseThrow().status());
         assertEquals(rowId, latest().getId());
         assertSame(AuthErrorCode.EMAIL_VERIFICATION_CODE_MISMATCH,
                 assertThrows(AuthException.class, () -> confirm.confirm(
@@ -378,4 +397,15 @@ class EmailSignupServiceIntegrationTests {
         verify(mail).sendVerificationCode(email, "012345", VerificationPurpose.SIGNUP);
         verify(mail).sendVerificationCode(email, "654321", VerificationPurpose.SIGNUP);
     }
+    @Test
+    void signupPreservesVerifiedRecipientCaseInsteadOfRequestSpelling() {
+        String token = proof(VerificationPurpose.SIGNUP);
+        String verifiedAddress = email.replace("signup-", "SignUp-");
+        jdbc.update("UPDATE email_verification SET email = ? WHERE id = ?", verifiedAddress, latest().getId());
+        var response = service.signup(new EmailSignupRequest(email.toUpperCase(Locale.ROOT), "사용자", PASSWORD, token, consents));
+        assertEquals(verifiedAddress, members.findById(response.memberId()).orElseThrow().getEmail());
+        assertTrue(members.existsByEmailIgnoreCase(email));
+        assertNotNull(latest().getConsumedAt());
+    }
+
 }

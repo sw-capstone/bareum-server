@@ -5,7 +5,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.bareum.server.domain.auth.dto.request.EmailVerificationRequest;
-import com.bareum.server.domain.auth.dto.response.EmailVerificationSendResponse;
+import com.bareum.server.domain.auth.dto.response.EmailVerificationDeliveryResponse;
 import com.bareum.server.domain.auth.enums.VerificationPurpose;
 import com.bareum.server.domain.auth.service.EmailVerificationSendService;
 import com.bareum.server.global.config.OpenApiConfig;
@@ -50,11 +50,11 @@ class EmailVerificationSendOpenApiTests {
             assertThat(requestSchema.at("/properties/purpose/enum").toString())
                     .contains("SIGNUP", "PASSWORD_RESET");
 
-            assertThat(operation.at("/responses/200/content/application~1json/schema/$ref").asText())
-                    .isEqualTo("#/components/schemas/EmailVerificationSendResponse");
-            assertThat(document.at("/components/schemas/EmailVerificationSendResponse/properties").size())
-                    .isEqualTo(1);
-            assertThat(document.at("/components/schemas/EmailVerificationSendResponse/properties/expiresIn")
+            assertThat(operation.at("/responses/202/content/application~1json/schema/$ref").asText())
+                    .isEqualTo("#/components/schemas/EmailVerificationDeliveryResponse");
+            assertThat(document.at("/components/schemas/EmailVerificationDeliveryResponse/properties").size())
+                    .isEqualTo(3);
+            assertThat(document.at("/components/schemas/EmailVerificationDeliveryResponse/properties/expiresIn")
                     .isMissingNode()).isFalse();
             assertThat(operation.at("/responses/400/content/application~1problem+json/schema/$ref").asText())
                     .isEqualTo("#/components/schemas/BadRequestProblemDetail");
@@ -76,8 +76,19 @@ class EmailVerificationSendOpenApiTests {
                                     "{\"email\":\"user@example.com\",\"purpose\":\"SIGNUP\"}"))
                             .build(),
                     HttpResponse.BodyHandlers.ofString());
-            assertThat(response.statusCode()).isEqualTo(200);
-            assertThat(mapper.readTree(response.body())).isEqualTo(mapper.readTree("{\"expiresIn\":298}"));
+            assertThat(response.statusCode()).isEqualTo(202);
+            assertThat(response.headers().firstValue("Cache-Control").orElseThrow()).isEqualTo("no-store");
+            assertThat(mapper.readTree(response.body())).isEqualTo(mapper.readTree("{\"requestId\":\"00000000-0000-4000-8000-000000000001\",\"status\":\"PENDING\",\"expiresIn\":0}"));
+
+            JsonNode statusOperation = document.at("/paths/~1api~1v1~1auth~1email-verification~1deliveries~1{requestId}/get");
+            assertThat(statusOperation.at("/responses/200/content/application~1json/schema/$ref").asText())
+                    .isEqualTo("#/components/schemas/EmailVerificationDeliveryResponse");
+            assertThat(statusOperation.at("/responses/404/content").isMissingNode()).isTrue();
+            var sent = get(client,baseUrl + response.headers().firstValue("Location").orElseThrow());
+            assertThat(sent.statusCode()).isEqualTo(200);
+            assertThat(sent.headers().firstValue("Cache-Control").orElseThrow()).isEqualTo("no-store");
+            assertThat(mapper.readTree(sent.body()).path("status").asText()).isEqualTo("SENT");
+            assertThat(mapper.readTree(sent.body()).path("expiresIn").asLong()).isEqualTo(300);
 
             HttpResponse<String> scalar = get(client, baseUrl + "/scalar");
             assertThat(scalar.statusCode()).isEqualTo(200);
@@ -92,14 +103,22 @@ class EmailVerificationSendOpenApiTests {
 
     @Configuration(proxyBeanMethods = false)
     @EnableAutoConfiguration(exclude = DataSourceAutoConfiguration.class)
-    @Import({com.bareum.server.global.config.DocumentationSecurityConfig.class, OpenApiConfig.class, EmailVerificationSendController.class, GlobalExceptionHandler.class})
+    @Import({com.bareum.server.global.config.DocumentationSecurityConfig.class, OpenApiConfig.class, EmailVerificationSendController.class, EmailVerificationDeliveryController.class, GlobalExceptionHandler.class})
     static class DocumentationApplication {
+
+        @Bean
+        com.bareum.server.domain.auth.service.EmailVerificationDeliveryService deliveryService() {
+            var service = mock(com.bareum.server.domain.auth.service.EmailVerificationDeliveryService.class);
+            var id = java.util.UUID.fromString("00000000-0000-4000-8000-000000000001");
+            when(service.status(id)).thenReturn(java.util.Optional.of(new EmailVerificationDeliveryResponse(id,"SENT",300)));
+            return service;
+        }
 
         @Bean
         EmailVerificationSendService emailVerificationSendService() {
             EmailVerificationSendService service = mock(EmailVerificationSendService.class);
             when(service.send(new EmailVerificationRequest("user@example.com", VerificationPurpose.SIGNUP)))
-                    .thenReturn(EmailVerificationSendResponse.of(298));
+                    .thenReturn(EmailVerificationDeliveryResponse.pending(java.util.UUID.fromString("00000000-0000-4000-8000-000000000001")));
             return service;
         }
     }
