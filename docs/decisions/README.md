@@ -14,3 +14,4 @@
 ## 구현 협의 초안
 
 - [이메일 로그인·공통 인증](login-authentication-draft.md): AUTH-002 구현, 임시 설정과 프론트 연동 계약.
+- [이메일 인증 재발송 Outbox 전환](email-resend-outbox-draft.md)

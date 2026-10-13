@@ -12,7 +12,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.bareum.server.domain.auth.dto.request.EmailVerificationRequest;
-import com.bareum.server.domain.auth.dto.response.EmailVerificationSendResponse;
+import com.bareum.server.domain.auth.dto.response.EmailVerificationDeliveryResponse;
 import com.bareum.server.domain.auth.enums.VerificationPurpose;
 import com.bareum.server.domain.auth.exception.AuthErrorCode;
 import com.bareum.server.domain.auth.exception.AuthException;
@@ -48,15 +48,18 @@ class EmailVerificationSendControllerTests {
 
     @ParameterizedTest
     @EnumSource(VerificationPurpose.class)
-    void validRequestReturnsOnlyRemainingLifetime(VerificationPurpose purpose) throws Exception {
+    void validRequestReturnsAcceptedPendingJob(VerificationPurpose purpose) throws Exception {
         EmailVerificationRequest request = new EmailVerificationRequest(EMAIL, purpose);
-        when(service.send(request)).thenReturn(EmailVerificationSendResponse.of(298));
+        when(service.send(request)).thenReturn(EmailVerificationDeliveryResponse.pending(java.util.UUID.fromString("00000000-0000-4000-8000-000000000001")));
 
         mockMvc.perform(post(PATH).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"email\":\"user@example.com\",\"purpose\":\"" + purpose.name() + "\"}"))
-                .andExpect(status().isOk())
+                .andExpect(status().isAccepted())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header().string("Cache-Control","no-store"))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header().string("Location",
+                        PATH + "/deliveries/00000000-0000-4000-8000-000000000001"))
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
-                .andExpect(content().json("{\"expiresIn\":298}", JsonCompareMode.STRICT));
+                .andExpect(content().json("{\"requestId\":\"00000000-0000-4000-8000-000000000001\",\"status\":\"PENDING\",\"expiresIn\":0}", JsonCompareMode.STRICT));
 
         verify(service).send(request);
     }

@@ -22,7 +22,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
 @SpringBootTest(properties = {
         // 제한 횟수와 재설정 기간은 테스트 전용 값이며 팀 정책이 아닙니다.
@@ -40,22 +41,18 @@ class EmailVerificationConfirmServiceIntegrationTests {
     @Autowired private EmailVerificationRepository repository;
     @Autowired private EmailVerificationCodeHasher hasher;
     @Autowired private EmailVerificationTokenGenerator tokens;
-    @Autowired private EmailVerificationProperties properties;
+    @MockitoSpyBean private EmailVerificationProperties properties;
     @Autowired private JdbcTemplate jdbc;
     @MockitoBean(name = "emailVerificationClock") private Clock clock;
 
     @BeforeEach
     void setUp() {
         when(clock.instant()).thenReturn(NOW);
-        properties.setMaxVerificationAttempts(3);
-        properties.setPasswordResetVerificationTtlSeconds(420L);
     }
 
     @AfterEach
     void cleanUp() {
         jdbc.update("DELETE FROM email_verification WHERE email = ?", email);
-        properties.setMaxVerificationAttempts(3);
-        properties.setPasswordResetVerificationTtlSeconds(420L);
     }
 
     private EmailVerification seed(VerificationPurpose purpose, Instant expiresAt) {
@@ -159,7 +156,7 @@ class EmailVerificationConfirmServiceIntegrationTests {
     @Test
     void missingFailurePolicyBlocksConfirmation() {
         seed(VerificationPurpose.SIGNUP, NOW.plusSeconds(300));
-        properties.setMaxVerificationAttempts(null);
+        doThrow(new AuthException(AuthErrorCode.EMAIL_VERIFICATION_NOT_CONFIGURED)).when(properties).verificationTtlSeconds(VerificationPurpose.SIGNUP);
         expectError(AuthErrorCode.EMAIL_VERIFICATION_NOT_CONFIGURED, request(CODE));
         assertNull(latest().getVerifiedAt());
     }
@@ -168,9 +165,9 @@ class EmailVerificationConfirmServiceIntegrationTests {
     void resetProofLifetimeRequiresSeparateConfiguration() {
         var row = seed(VerificationPurpose.PASSWORD_RESET, NOW.plusSeconds(300));
         var request = new EmailVerificationConfirmRequest(email, VerificationPurpose.PASSWORD_RESET, CODE);
-        properties.setPasswordResetVerificationTtlSeconds(null);
+        doThrow(new AuthException(AuthErrorCode.EMAIL_VERIFICATION_NOT_CONFIGURED)).when(properties).verificationTtlSeconds(VerificationPurpose.PASSWORD_RESET);
         expectError(AuthErrorCode.EMAIL_VERIFICATION_NOT_CONFIGURED, request);
-        properties.setPasswordResetVerificationTtlSeconds(420L);
+        doCallRealMethod().when(properties).verificationTtlSeconds(VerificationPurpose.PASSWORD_RESET);
         assertEquals(420, service.confirm(request).expiresIn());
         assertEquals(NOW.plusSeconds(420), repository.findById(row.getId()).orElseThrow().getVerificationExpiresAt());
     }
