@@ -24,6 +24,7 @@ import java.util.List;
 @Configuration
 @EnableConfigurationProperties({
     LoginProperties.class,
+    com.bareum.server.domain.auth.config.LoginJwtProperties.class,
     com.bareum.server.domain.auth.config.GoogleLoginProperties.class,
     com.bareum.server.domain.auth.config.TokenRenewProperties.class
 })
@@ -80,6 +81,7 @@ public class SecurityConfig {
                                         .ignoringRequestMatchers(
                                                 "/api/v1/auth/login/email",
                                                 "/api/v1/auth/signup",
+                                                "/api/v1/auth/password/reset",
                                                 "/api/v1/auth/email-verification",
                                                 "/api/v1/auth/email-verification/code",
                                                 "/api/v1/auth/email-verification/resend")
@@ -95,7 +97,8 @@ public class SecurityConfig {
                                                                     "/api/v1/auth/token/renew")
                                                             && !path.equals("/api/v1/auth/logout")
                                                             && !path.equals(
-                                                                    "/api/v1/auth/login/google");
+                                                                    "/api/v1/auth/login/google")
+                                                            && !path.equals("/api/v1/auth/signup/google");
                                                 }))
                 .exceptionHandling(
                         c -> c.authenticationEntryPoint(entry).accessDeniedHandler(denied))
@@ -107,6 +110,7 @@ public class SecurityConfig {
                                                 HttpMethod.POST,
                                                 "/api/v1/auth/login/email",
                                                 "/api/v1/auth/login/google",
+                                                "/api/v1/auth/signup/google",
                                                 "/api/v1/auth/token/renew",
                                                 "/api/v1/auth/logout",
                                                 "/api/v1/auth/signup",
@@ -125,6 +129,8 @@ public class SecurityConfig {
                                                 "/v3/api-docs/**",
                                                 "/scalar",
                                                 "/scalar/**")
+                                        .permitAll()
+                                        .requestMatchers(HttpMethod.PATCH, "/api/v1/auth/password/reset")
                                         .permitAll()
                                         .anyRequest()
                                         .authenticated())

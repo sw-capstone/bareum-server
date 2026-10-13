@@ -21,6 +21,7 @@ import java.util.UUID;
 public class TokenRenewService {
     private final JdbcTemplate jdbc;
     private final LoginTokenGenerator tokens;
+    private final LoginJwtService jwt;
     private final LoginProperties login;
     private final TokenRenewProperties policy;
     private final Clock clock;
@@ -28,11 +29,13 @@ public class TokenRenewService {
     public TokenRenewService(
             JdbcTemplate jdbc,
             LoginTokenGenerator tokens,
+            LoginJwtService jwt,
             LoginProperties login,
             TokenRenewProperties policy,
             @Qualifier("loginClock") Clock clock) {
         this.jdbc = jdbc;
         this.tokens = tokens;
+        this.jwt = jwt;
         this.login = login;
         this.policy = policy;
         this.clock = clock;
@@ -40,7 +43,7 @@ public class TokenRenewService {
 
     @Transactional(noRollbackFor = RefreshTokenReplayException.class)
     public LoginSessionService.IssuedLogin renew(String refresh) {
-        if (!tokens.validFormat(refresh)) throw invalid();
+        var verified = jwt.verify(refresh, "refresh").orElseThrow(this::invalid);
         String hash = tokens.hash("refresh", refresh);
         // Resolve identity first, then use the same member -> session lock order as login.
         var identities =
@@ -80,6 +83,8 @@ public class TokenRenewService {
                         identity.memberId());
         if (sessions.isEmpty()) throw invalid();
         Session session = sessions.getFirst();
+        if (verified.memberId() != identity.memberId() || !verified.family().equals(session.family()))
+            throw invalid();
         Instant now = clock.instant();
         if (session.revoked() || !session.expiresAt().isAfter(now)) throw invalid();
         if (!hash.equals(session.refreshHash())) {
@@ -100,14 +105,19 @@ public class TokenRenewService {
                         Timestamp.from(now),
                         Timestamp.from(now),
                         identity.sessionId());
+                jdbc.update("UPDATE login_access_token SET revoked_at=? WHERE member_id=? AND family_id=?",
+                        Timestamp.from(now), identity.memberId(), session.family());
                 throw new RefreshTokenReplayException();
             }
             throw invalid();
         }
         if (!members.getFirst()) throw new AuthException(AuthErrorCode.LOGIN_ACCOUNT_RESTRICTED);
         reserve(identity.sessionId(), session.family(), now);
-        String access = tokens.generate();
-        String nextRefresh = tokens.generate();
+        now = now.truncatedTo(java.time.temporal.ChronoUnit.SECONDS);
+        Instant accessExpiry = now.plusSeconds(login.accessTtlSeconds());
+        if (accessExpiry.isAfter(session.expiresAt())) accessExpiry = session.expiresAt();
+        String access = jwt.issue("access", identity.memberId(), session.family(), now, accessExpiry);
+        String nextRefresh = jwt.issue("refresh", identity.memberId(), session.family(), now, session.expiresAt());
         String nextHash = tokens.hash("refresh", nextRefresh);
         // A newly issued value must never match an already consumed refresh token.
         Integer reused =
@@ -117,8 +127,6 @@ public class TokenRenewService {
                         nextHash);
         if (hash.equals(nextHash) || (reused != null && reused > 0))
             throw new AuthException(AuthErrorCode.LOGIN_SERVICE_UNAVAILABLE);
-        Instant accessExpiry = now.plusSeconds(login.accessTtlSeconds());
-        if (accessExpiry.isAfter(session.expiresAt())) accessExpiry = session.expiresAt();
         jdbc.update(
                 """
                 INSERT INTO used_refresh_token(token_hash,session_id,family_id,consumed_at,expires_at)
@@ -139,6 +147,11 @@ public class TokenRenewService {
                 Timestamp.from(accessExpiry),
                 Timestamp.from(now),
                 identity.sessionId());
+        jdbc.update("""
+                INSERT INTO login_access_token(token_hash,member_id,family_id,expires_at,created_at)
+                VALUES(?,?,?,?,?)
+                """, tokens.hash("access", access), identity.memberId(), session.family(),
+                Timestamp.from(accessExpiry), Timestamp.from(now));
         return new LoginSessionService.IssuedLogin(
                 access, nextRefresh, accessExpiry, session.expiresAt());
     }
