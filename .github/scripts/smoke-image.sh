@@ -26,6 +26,8 @@ trap cleanup EXIT
 # 테스트 DB는 TLS 없이 연결합니다. 운영 인증서와 Parameter Store는 사용하지 않습니다.
 printf '%s\n' 'DB_URL=jdbc:postgresql://postgres:5432/bareum_ci' \
   'DB_USERNAME=bareum_ci' 'DB_PASSWORD=ci-only-password' \
+  'EMAIL_VERIFICATION_HASH_SECRET=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=' \
+  'EMAIL_VERIFICATION_OUTBOX_ENABLED=false' \
   'SERVER_PORT=8080' 'SPRING_JPA_SHOW_SQL=false' > "$SERVER_ENV_FILE"
 touch "$RDS_CA_FILE"
 certificate_dir="$CI_LETSENCRYPT_DIR/live/api.bareum.site"

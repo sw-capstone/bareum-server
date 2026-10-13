@@ -35,6 +35,9 @@ jobs:
       DB_URL: jdbc:postgresql://localhost:5432/bareum_ci
       DB_USERNAME: bareum_ci
       DB_PASSWORD: ci-only-password
+      # 테스트 전용 키이며 운영 키를 사용하지 않습니다.
+      EMAIL_VERIFICATION_HASH_SECRET: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      EMAIL_VERIFICATION_OUTBOX_ENABLED: "false"
     steps:
       - name: Checkout source
         uses: actions/checkout@v7
