@@ -8,8 +8,32 @@ set -Eeuo pipefail
 [[ "$DEPLOY_IMAGE" =~ ^ghcr\.io/sw-capstone/bareum-${DEPLOY_SERVICE}@sha256:[a-f0-9]{64}$ ]] \
   || { echo 'Expected the published image digest for the target service.' >&2; exit 1; }
 
-# 두 레포의 배포 요청을 같은 EC2 잠금으로 직렬화합니다.
-remote_command="flock --wait 600 /opt/bareum/.actions-deploy.lock bash /opt/bareum/infra/scripts/deploy.sh $DEPLOY_SERVICE $DEPLOY_IMAGE"
+if [[ "$DEPLOY_SERVICE" == server ]]; then
+  [[ "${DEPLOY_COMMIT_SHA:-}" =~ ^[a-f0-9]{40}$ ]] \
+    || { echo 'A full deployment commit SHA is required.' >&2; exit 1; }
+  source_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
+  prepare_checksum=$(sha256sum "$source_dir/infra/scripts/prepare-infra-release.sh")
+  prepare_checksum="${prepare_checksum%% *}"
+  remote_command=$(
+    printf "bash -s -- '%s' '%s' '%s' <<'BAREUM_DEPLOY'\n" "$DEPLOY_COMMIT_SHA" "$DEPLOY_IMAGE" "$prepare_checksum"
+    cat <<'REMOTE'
+set -Eeuo pipefail
+umask 077
+work=$(mktemp -d)
+trap 'rm -rf -- "$work"' EXIT
+curl --proto '=https' --tlsv1.2 --fail --silent --show-error --location \
+  --retry 2 --connect-timeout 10 --max-time 60 \
+  "https://raw.githubusercontent.com/sw-capstone/bareum-server/$1/infra/scripts/prepare-infra-release.sh" \
+  --output "$work/prepare-infra-release.sh"
+printf '%s  %s\n' "$3" "$work/prepare-infra-release.sh" | sha256sum --check --status
+bash -n "$work/prepare-infra-release.sh"
+bash "$work/prepare-infra-release.sh" "$1" "$2" --apply
+BAREUM_DEPLOY
+REMOTE
+  )
+else
+  remote_command="flock --wait 600 /opt/bareum/.actions-deploy.lock bash /opt/bareum/infra/scripts/deploy.sh $DEPLOY_SERVICE $DEPLOY_IMAGE"
+fi
 parameters=$(jq -n --arg command "$remote_command" \
   '{commands: [$command], executionTimeout: ["1200"]}')
 command_id=$(aws ssm send-command \
