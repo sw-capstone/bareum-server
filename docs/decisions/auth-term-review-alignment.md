@@ -29,7 +29,7 @@
 
 ## 검증
 
-- Auth·Term 통합 정비 기준 `./gradlew check bootJar --no-daemon`: 전체 683개 통과, 실패·오류·건너뜀 0개, JAR 빌드 성공.
+- Auth·Term 통합 정비 기준 `./gradlew check bootJar --no-daemon`: 전체 684개 통과, 실패·오류·건너뜀 0개, JAR 빌드 성공.
 - 추가 회귀 사례 8개로 제한·탈퇴 표시 계정의 접수 거부, 접수 후 정지 계정의 SMTP 미호출·CANCELLED·암호문 삭제, 재발송 거부 시 기존 코드 보존을 확인했다.
 - 하네스 정적 검사 4개 통과, 실패 0개·해당 없음 3개. API 15개 경로와 JSON 예시 14개를 대조했다.
 - 실제 Google 계정·프론트 브라우저 연동은 이 검사에 포함하지 않는다.

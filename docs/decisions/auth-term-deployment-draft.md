@@ -30,7 +30,7 @@
 
 ## 검증 결과
 
-- `./gradlew check bootJar --no-daemon`: Auth·Term 통합 구현 기준 전체 683개 통과, 실패·오류·건너뜀 0개 및 JAR 빌드 성공.
+- `./gradlew check bootJar --no-daemon`: Auth·Term 통합 구현 기준 전체 684개 통과, 실패·오류·건너뜀 0개 및 JAR 빌드 성공.
 - 추가 설정 바인딩 10개 사례로 실제 YAML·환경변수에서 승인 약관 버전, SMTP 인증·TLS·서버 이름 검증·타임아웃, 발송 제한과 로그인·Google 설정 연결을 확인했다.
 - 환경 생성 회귀 검사 16개 통과, POSIX 심볼릭 링크 권한 검사 1개는 별도 CI 환경에서 확인한다. 모의 SSM 응답을 사용한다. 필수 값·SecureString·암호화 키·TLS·Origin·약관 버전 검증, 기존 환경 보존과 비밀값 비노출을 검사하며 실제 AWS 권한·SMTP 수신 검증을 대신하지 않는다.
 - Bash 문법·ShellCheck와 하네스 정적 검사 통과. 실제 EC2·Parameter Store 적용과 브라우저·Google 계정 연동은 별도 검증 대상이다.

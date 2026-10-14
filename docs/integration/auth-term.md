@@ -297,7 +297,7 @@ Parameter Store 준비 스크립트에 Auth·Term 설정 주입 경로를 추가
 
 ## 검증 범위와 연동 전 확인
 
-- Auth·Term 통합 정비 기준의 `./gradlew check bootJar --no-daemon`: 전체 683개 통과, 실패·오류·건너뜀 0개 및 JAR 빌드 성공. HTTP·DB·OpenAPI·동시성·롤백 검사이며 실제 웹 소비자 검증과 구분한다.
+- Auth·Term 통합 정비 기준의 `./gradlew check bootJar --no-daemon`: 전체 684개 통과, 실패·오류·건너뜀 0개 및 JAR 빌드 성공. HTTP·DB·OpenAPI·동시성·롤백 검사이며 실제 웹 소비자 검증과 구분한다.
 - API 경로·요청/응답·상태·오류 안내는 Controller·DTO·보안 설정과 대조했다. 실제 브라우저·Google 계정 연동은 미검증이다. 재설정 메일·HTTP 연결은 [재설정 문서](../decisions/password-reset-draft.md)의 검증 범위를 따른다.
 - 계약 확인 필요: Outbox 조회 주기·대기 한도, Google 인증 분기와 지원 계정, 공식 약관 원문·버전·필수 항목, 배포 Origin·쿠키 조건, 비밀번호 찾기 배포 범위.
 - 운영 준비 필요: 발송 간격 60초·시간당 5회·일일 20회와 재설정 번호 300초 임시안의 팀 확인·환경 적용, 인증 실패 제한과 복구·재설정 완료 증명 기간, 약관 DB·승인 버전, Google Client ID·승인 Origin. SIGNUP 번호 5분·완료 증명 10분은 정책 기준을 유지한다. 필수 설정 누락 시 서버가 차단하며 테스트 값을 운영 기본값으로 사용하지 않는다.
