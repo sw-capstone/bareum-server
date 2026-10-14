@@ -49,7 +49,7 @@
 ## 설정과 인증 흐름
 
 - 최초·재발송은 기존 Outbox의 202 접수·상태 조회를 사용한다. PENDING에서는 인증 타이머를 시작하지 않고 SENT의 expiresIn으로 시작한다. 번호 확인 이후에는 응답 증명과 별도 expiresIn을 사용한다.
-- `EMAIL_VERIFICATION_PASSWORD_RESET_CODE_TTL_SECONDS`, `EMAIL_VERIFICATION_PASSWORD_RESET_VERIFICATION_TTL_SECONDS`, `EMAIL_VERIFICATION_MAX_VERIFICATION_ATTEMPTS`를 application.yml의 기존 인증 속성에 연결했다. 값을 자동으로 확정하지 않으며 필수 값이 없으면 발송·확인을 차단한다.
+- `EMAIL_VERIFICATION_PASSWORD_RESET_CODE_TTL_SECONDS`, `EMAIL_VERIFICATION_PASSWORD_RESET_VERIFICATION_TTL_SECONDS`, `EMAIL_VERIFICATION_MAX_VERIFICATION_ATTEMPTS`를 application.yml의 기존 인증 속성에 연결했다. 번호 기간은 개발 서버 v2에서 300초를 임시 선택했으며 팀 확인이 필요하다. 완료 증명 기간·실패 제한은 별도 미정이다. 필수 값이 없으면 발송·확인을 차단하며 Java 기본값으로 자동 확정하지 않는다.
 - 기존 SMTP·해시 비밀키·Outbox 암호화 키·발송 횟수 설정도 필요하다. 비밀값은 공유 문서·저장소에 기록하지 않는다.
 - 실제 프론트 브라우저 연동과 운영 메일 서비스·발신 계정 결정은 남아 있다.
 

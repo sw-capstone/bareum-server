@@ -43,15 +43,17 @@ Auth·Term의 서버 설정을 기존 개발 EC2 배포 경로에 연결한다. 
 | `SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE`, `SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_REQUIRED` | String · Auth 필수 | STARTTLS이면 모두 `true`, implicit TLS이면 모두 `false` |
 | `EMAIL_VERIFICATION_MAIL_FROM` | String · Auth 필수 | 승인된 발신 이메일 주소 |
 | `LOGIN_ALLOWED_ORIGINS` | String · Auth 필수 | 쉼표로 구분한 정확한 HTTPS Origin. 와일드카드·경로·HTTP를 허용하지 않음 |
-| `EMAIL_VERIFICATION_MINIMUM_SEND_INTERVAL_SECONDS` | String · Auth 필수 | 승인된 양의 발송 간격(초) |
-| `EMAIL_VERIFICATION_MAX_SENDS_PER_HOUR`, `EMAIL_VERIFICATION_MAX_SENDS_PER_DAY` | String · Auth 필수 | 승인된 양의 발송 횟수 |
+| `EMAIL_VERIFICATION_MINIMUM_SEND_INTERVAL_SECONDS` | String · Auth 필수 | 개발 서버 v2 임시안 60초. 팀 확인·실제 환경 적용 필요 |
+| `EMAIL_VERIFICATION_MAX_SENDS_PER_HOUR`, `EMAIL_VERIFICATION_MAX_SENDS_PER_DAY` | String · Auth 필수 | 개발 서버 v2 임시안 최근 1시간 5회·24시간 20회. 팀 확인 필요 |
 | `EMAIL_VERIFICATION_MAX_VERIFICATION_ATTEMPTS` | String · Auth 필수 | 승인된 양의 인증 실패 제한 |
 | `SIGNUP_TERMS_AGE_OVER_14_VERSION`, `SIGNUP_TERMS_TERMS_OF_SERVICE_VERSION`, `SIGNUP_TERMS_PRIVACY_POLICY_VERSION`, `SIGNUP_TERMS_MARKETING_CONSENT_VERSION` | String · Auth 필수 | 약관 DB·프론트 원문과 대응하는 승인 버전. 30자 이내이며 공백·자리표시자로 대체하지 않음 |
 | `GOOGLE_CLIENT_IDS` | String · 선택 | 승인된 웹 OAuth Client ID 목록. 미설정 시 Google 로그인 차단 |
 | `GOOGLE_SIGNUP_TTL_SECONDS` | String · 선택 | 기존 구현의 1~600초 범위. 미설정 시 기존 600초 초안 유지 |
-| `EMAIL_VERIFICATION_PASSWORD_RESET_CODE_TTL_SECONDS`, `EMAIL_VERIFICATION_PASSWORD_RESET_VERIFICATION_TTL_SECONDS` | String · 선택 | 승인 시 두 값을 함께 설정. 둘 다 없으면 재설정 발송·확인은 차단 |
+| `EMAIL_VERIFICATION_PASSWORD_RESET_CODE_TTL_SECONDS`, `EMAIL_VERIFICATION_PASSWORD_RESET_VERIFICATION_TTL_SECONDS` | String · 선택 | 번호 임시안은 300초, 완료 증명 기간은 별도 미정. 재설정 활성화 시 두 값을 함께 준비 |
 
 SMTP 제공자에 따라 인증 SMTP와 implicit TLS·필수 STARTTLS 중 하나를 선택한다. 서버 이름 검증은 켜고 기존 연결·읽기·쓰기 5초 기본 타임아웃을 유지한다. 제공자가 다른 인증 방식을 요구하면 자격증명을 우회하지 않고 주입 경로와 검증 기준을 재검토한다.
+
+번호 300초·발송 간격 60초·시간당 5회·일일 20회는 개발 서버 v2의 임시 선택이며 운영 기본값이나 팀 확정 정책이 아니다. ‘재발송 5분’은 재발송 번호의 유효기간으로 우선 해석했으며 팀 확인이 필요하다. #18 v2의 `AUTH_EMAILVERIFICATION_*` 이름은 직접 바인딩용이며, 이 문서의 후속 SSM 주입 경로는 위 `EMAIL_VERIFICATION_*` 이름을 사용한다. 같은 속성의 두 이름을 서로 다른 값으로 함께 등록하지 않는다. [이메일 인증 임시 정책](../decisions/email-verification-draft.md)을 따른다.
 
 Access 15분·세션 최대 8시간, Secure·SameSite=None 쿠키, Outbox 재시도·대기 기준 등 기존 구현값을 바꾸지 않는다. 비밀번호 재설정 기간의 설정은 MVP 배포 승인을 의미하지 않는다.
 
@@ -85,9 +87,9 @@ Access 15분·세션 최대 8시간, Secure·SameSite=None 쿠키, Outbox 재시
 | 항목 | 구현 상태 | 남은 결정·적용 |
 | --- | --- | --- |
 | 운영 SMTP 제공자·발신 계정 | SMTP 인증·TLS·발신 주소 설정 경로 구현 | 운영 서비스·발신 계정 결정 및 자격증명 적용. 개발 Gmail 수신 검증을 운영 설정 완료로 취급하지 않음 |
-| 사용자별 메일 발송·인증 제한 | 발송 간격·시간당/일당 횟수·인증 실패 횟수 설정 및 누락 시 차단 구현 | 운영 수치는 미지정. Outbox worker의 임시 재시도 기본값과 별개이며 실패 횟수 복구 정책도 협의 필요 |
+| 사용자별 메일 발송·인증 제한 | 발송 간격·시간당/일당 횟수·인증 실패 횟수 설정 및 누락 시 차단 구현 | 발송 임시안은 60초·최근 1시간 5회·24시간 20회. 팀 확인·환경 주입 필요. 인증 실패 횟수·복구는 별도 미정 |
 | 공식 약관 원문·승인 버전 | 네 boolean 동의 처리·서버 버전 매핑·DB 일치 검증 구현 | 공식 원문·버전·필수 여부 승인 후 프론트 원문·서버 설정·DB 데이터 일치 확인 |
 | 허용 Origin·Google Client ID | 정확한 HTTPS Origin 제한·Client ID 검증 설정 경로 구현 | 미리보기 주소는 알려져 있으나 허용 대상 승인·환경 등록은 미확인. 실제 웹 Client ID와 Console 승인 Origin 준비 |
-| 비밀번호 찾기 | 발송·인증·재설정 구현 및 개발 메일 검증 완료 | MVP 제외 기준 유지. 배포 포함 여부·재설정용 두 유효기간은 미정이며 설정값 준비 필요 |
+| 비밀번호 찾기 | 발송·인증·재설정 구현 및 개발 메일 검증 완료 | MVP 제외 기준 유지. 번호 임시안 300초의 팀 확인, 완료 증명 기간·배포 포함 여부는 별도 결정 필요 |
 
 Access 15분·최대 세션 8시간은 합의된 구현 기준이며, 회원가입 인증번호 5분·인증 완료 후 가입 10분은 최신 정책 기준이다. 쿠키 SameSite·경로와 Outbox 재시도·대기 기본값은 임시 기준으로 이미 구현되어 있고, 위 실제 값 미지정 항목과 구분한다. Google 지원 계정 범위와 키 교체·실패 복구 기준은 기존 구현의 재검토 사항으로 남긴다.
