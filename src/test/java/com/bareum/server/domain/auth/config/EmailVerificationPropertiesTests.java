@@ -4,12 +4,34 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import com.bareum.server.domain.auth.enums.VerificationPurpose;
 import com.bareum.server.domain.auth.exception.AuthException;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import org.springframework.core.env.SystemEnvironmentPropertySource;
 
 class EmailVerificationPropertiesTests {
     private final ApplicationContextRunner context = new ApplicationContextRunner()
             .withUserConfiguration(EmailVerificationTimeConfig.class);
+
+    @Test
+    void envV2NamesBindTemporaryPeriodsAndLimitsForBothPurposes() {
+        context.withInitializer(ctx -> ctx.getEnvironment().getPropertySources().addFirst(
+                new SystemEnvironmentPropertySource("env-v2-systemEnvironment", Map.of(
+                        "AUTH_EMAILVERIFICATION_SIGNUPCODETTLSECONDS", "300",
+                        "AUTH_EMAILVERIFICATION_PASSWORDRESETCODETTLSECONDS", "300",
+                        "AUTH_EMAILVERIFICATION_MINIMUMSENDINTERVALSECONDS", "60",
+                        "AUTH_EMAILVERIFICATION_MAXSENDSPERHOUR", "5",
+                        "AUTH_EMAILVERIFICATION_MAXSENDSPERDAY", "20"))))
+                .run(ctx -> {
+                    assertNull(ctx.getStartupFailure());
+                    var properties = ctx.getBean(EmailVerificationProperties.class);
+                    assertEquals(300L, properties.codeTtlSeconds(VerificationPurpose.SIGNUP));
+                    assertEquals(300L, properties.codeTtlSeconds(VerificationPurpose.PASSWORD_RESET));
+                    assertEquals(60L, properties.getMinimumSendIntervalSeconds());
+                    assertEquals(5, properties.getMaxSendsPerHour());
+                    assertEquals(20, properties.getMaxSendsPerDay());
+                });
+    }
 
     @Test
     void defaultsKeepSignupValidityButDoNotInventSendLimits() {
