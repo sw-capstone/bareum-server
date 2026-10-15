@@ -42,13 +42,56 @@ develop에 병합
 | 배포 연결 | GitHub 변수 `EC2_INSTANCE_ID`, `AWS_ROLE_ARN`으로 대상 EC2와 OIDC 역할을 지정한다. Actions는 SSM 명령 전송·결과 조회 권한을 사용한다. |
 | 이미지·파일 접근 | EC2는 GHCR 이미지 읽기 인증과 GitHub 원본 파일·AWS 접근, Docker·배포 파일 접근 권한을 사용한다. |
 | 배포 환경변수 | `/opt/bareum/infra/env/.env.deploy`에 이미지와 경로를 관리한다. `SERVER_ENV_FILE=./env/.env.server`를 사용하며, 형식은 [예시 파일](../../infra/env/.env.deploy.example)을 참고한다. |
-| 앱 환경변수 | Parameter Store의 `/bareum/dev/server/` 아래 `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`를 읽어 `.env.server`를 생성한다. EC2에 조회·복호화 권한이 필요하며, `DB_PASSWORD`는 `SecureString`이다. |
+| 앱 환경변수 | Parameter Store의 `/bareum/dev/server/` 아래 DB·이메일 설정 9개와 템플릿의 일반 설정을 합쳐 `.env.server`를 생성한다. 필수 파라미터와 검증 기준은 아래 표를 따른다. |
 | HTTPS 인증서 | `/etc/letsencrypt/live/api.bareum.site/`에 인증서·개인 키를 보관하고, `/var/www/certbot`을 도메인 인증 경로로 사용한다. |
 | RDS 인증서 | `.env.deploy`의 `RDS_CA_FILE`이 EC2의 CA 파일 경로를 지정한다. |
 
 배포 스크립트는 Linux의 Bash·Docker Compose·AWS CLI와 `curl`, `jq`, `flock`, GNU coreutils를 사용하며, 기존 Server·Nginx가 정상 동작하는 상태에서 실행한다.
 
 앱 비밀값은 Git에 넣지 않는다. Server 배포 시 [환경변수 생성 스크립트](../../infra/scripts/prepare-server-env.sh)가 템플릿과 Parameter Store 값으로 `.env.server`를 다시 생성한다. 템플릿에 없는 수동 추가 값은 유지되지 않는다. `.env.ai`, 인증서·개인 키, RDS CA는 배포 파일로 덮어쓰지 않는다.
+
+### Parameter Store와 템플릿의 관리 범위
+
+아래 9개 파라미터를 `ap-northeast-2` 리전의 `/bareum/dev/server/` 아래에 등록한다. 예를 들어 SMTP 비밀번호의 전체 경로는 `/bareum/dev/server/SPRING_MAIL_PASSWORD`다. 실제 값은 저장소·PR·로그에 남기지 않는다.
+
+| 파라미터 이름 | 유형 | 용도·검증 기준 |
+| --- | --- | --- |
+| `DB_URL` | `String` | RDS JDBC URL. `sslmode=verify-full&sslrootcert=/etc/ssl/certs/rds-ca.pem`을 포함한 TLS 연결을 사용한다. |
+| `DB_USERNAME` | `String` | DB 접속 계정 |
+| `DB_PASSWORD` | `SecureString` | DB 접속 비밀번호 |
+| `EMAIL_VERIFICATION_HASH_SECRET` | `SecureString` | 독립적으로 생성한 최소 32바이트 난수의 Base64 문자열 |
+| `EMAIL_VERIFICATION_OUTBOX_ENCRYPTION_KEY` | `SecureString` | 해시 키와 별도로 생성한 정확히 32바이트 난수의 Base64 문자열 |
+| `SPRING_MAIL_PASSWORD` | `SecureString` | SMTP 비밀번호 또는 앱 비밀번호 |
+| `SPRING_MAIL_HOST` | `String` | 담당자가 확정한 SMTP 호스트 |
+| `SPRING_MAIL_USERNAME` | `String` | SMTP 인증 계정 |
+| `EMAIL_VERIFICATION_MAIL_FROM` | `String` | 제공자에서 승인한 발신 주소 |
+
+EC2 역할이 위 9개 경로에 `ssm:GetParameters`를 수행하고 `SecureString`을 복호화할 수 있어야 한다. 고객 관리형 KMS 키를 사용한다면 해당 키의 `kms:Decrypt` 권한과 키 정책도 확인한다. Actions의 배포 역할과 EC2에서 파라미터를 조회하는 역할을 구분한다.
+
+스크립트는 파라미터 누락·중복·공백만 있는 값·개행·널 문자, 비밀값 4개의 `SecureString` 여부, 두 키의 Base64 형식과 바이트 길이를 검사한다. 검증 실패 시 기존 `.env.server`를 유지하고 배포를 중단한다. 성공 시에만 권한 `600`으로 교체하며 임시 파일은 정리한다. 생성되는 파일은 Compose의 `format: raw`로 전달하므로 값에 따옴표를 덧붙이지 않는다.
+
+[`.env.server.template`](../../infra/env/.env.server.template)은 다음 일반 설정을 관리한다. SMTP 제공자·계정의 실제 값과 비밀키는 템플릿에 넣지 않는다.
+
+| 설정 | 현재 값 |
+| --- | --- |
+| Outbox 활성화·키 ID | `EMAIL_VERIFICATION_OUTBOX_ENABLED=true`, `EMAIL_VERIFICATION_OUTBOX_KEY_ID=v1` |
+| SMTP 포트·보안 | 587, SMTP AUTH·STARTTLS 활성화·STARTTLS 필수·서버 인증서 호스트 검증 |
+| SMTP 연결·읽기·쓰기 타임아웃 | 각각 5000ms |
+| SIGNUP·PASSWORD_RESET 인증번호 유효기간 | 각각 300초 |
+| 최소 발송 간격·발송 제한 | 60초, 최근 1시간 5회, 최근 24시간 20회 |
+
+기간·발송 제한은 개발 서버의 팀 미확정 임시 정책이다. 팀 확정 시 템플릿과 프론트 안내를 함께 검토한다. SMTP 제공자가 587/STARTTLS 구성을 지원하는지도 확인한다. Outbox는 미처리 작업이 있는 상태의 키 교체를 지원하지 않으므로, 대기 작업이 모두 종료되고 암호문이 제거된 뒤 암호화 키와 키 ID를 함께 교체한다.
+
+### 환경변수 생성·바인딩 테스트
+
+CI는 아래 환경변수 생성 테스트를 실행한다. 실제 생성 스크립트와 템플릿을 임시 디렉터리에서 사용하고 AWS CLI 응답만 모의하므로 실제 AWS 자격증명은 필요하지 않다.
+
+```bash
+bash infra/tests/prepare-server-env-test.sh
+./gradlew --no-daemon test --tests com.bareum.server.domain.auth.config.SmtpConfigurationTests --tests com.bareum.server.domain.auth.config.EmailVerificationPropertiesTests
+```
+
+생성 테스트는 정상 생성, 조회 대상, 특수문자 보존, 중복 제거, 필수값·키·저장 유형 검증, 실패 시 기존 파일 보존과 권한·임시 파일 정리를 검사한다. SMTP 테스트는 배포 템플릿의 실제 환경변수 이름으로 연결·인증·TLS·타임아웃 속성 바인딩을 확인한다. 실제 메일 제공자 연결과 수신 검증은 별도로 수행한다.
 
 ## 3. 자동 배포 결과 확인
 
@@ -68,6 +111,8 @@ curl -sS -o /dev/null -D - http://api.bareum.site/health
 ```
 
 예상 결과는 각각 `{"status":"ok"}`, HTTP `308` 및 `Location: https://api.bareum.site/health`다.
+
+`/health` 정상 응답은 SMTP 설정·메일 수신 성공을 보장하지 않는다. CI 이미지 기동 검사도 Outbox를 비활성화하므로, 이메일 인증 기능 배포 후에는 테스트 수신 주소로 API를 호출해 `202` 접수와 `requestId`를 확인하고 발송 상태가 `SENT`로 바뀌는지 조회한다. 실제 수신함 도착과 같은 요청의 DB 발송 이력·만료 시각을 대조한다. 인증번호 원문이나 자격증명을 로그·공유 자료에 남기지 않는다.
 
 EC2에서는 아래 명령으로 컨테이너·Nginx·갱신 훅을 확인한다.
 
