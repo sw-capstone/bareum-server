@@ -32,6 +32,12 @@ if ! aws ssm get-parameters \
     "$PREFIX/DB_URL" \
     "$PREFIX/DB_USERNAME" \
     "$PREFIX/DB_PASSWORD" \
+    "$PREFIX/EMAIL_VERIFICATION_HASH_SECRET" \
+    "$PREFIX/EMAIL_VERIFICATION_OUTBOX_ENCRYPTION_KEY" \
+    "$PREFIX/SPRING_MAIL_PASSWORD" \
+    "$PREFIX/SPRING_MAIL_HOST" \
+    "$PREFIX/SPRING_MAIL_USERNAME" \
+    "$PREFIX/EMAIL_VERIFICATION_MAIL_FROM" \
   --with-decryption \
   --output json \
   --no-cli-pager \
@@ -40,23 +46,41 @@ if ! aws ssm get-parameters \
 fi
 
 if ! jq -e --arg prefix "$PREFIX" '
+  def base64_byte_length:
+    if test("^([A-Za-z0-9+/]{4})*([A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$")
+    then (length / 4 * 3) - (match("=*$").length)
+    else -1 end;
+
   (.InvalidParameters == []) and
   ([.Parameters[].Name] | sort ==
     ([$prefix + "/DB_URL",
       $prefix + "/DB_USERNAME",
-      $prefix + "/DB_PASSWORD"] | sort)) and
+      $prefix + "/DB_PASSWORD",
+      $prefix + "/EMAIL_VERIFICATION_HASH_SECRET",
+      $prefix + "/EMAIL_VERIFICATION_OUTBOX_ENCRYPTION_KEY",
+      $prefix + "/SPRING_MAIL_PASSWORD",
+      $prefix + "/SPRING_MAIL_HOST",
+      $prefix + "/SPRING_MAIL_USERNAME",
+      $prefix + "/EMAIL_VERIFICATION_MAIL_FROM"] | sort)) and
   all(.Parameters[];
     (.Value | type == "string") and
-    (.Value | length > 0) and
+    (.Value | test("\\S")) and
     (.Value | test("[\r\n\u0000]") | not)) and
-  any(.Parameters[];
-    .Name == ($prefix + "/DB_PASSWORD") and
-    .Type == "SecureString")
-' "$WORK_DIR/parameters.json" >/dev/null; then
+  all(.Parameters[] | select(
+    .Name == ($prefix + "/DB_PASSWORD") or
+    .Name == ($prefix + "/EMAIL_VERIFICATION_HASH_SECRET") or
+    .Name == ($prefix + "/EMAIL_VERIFICATION_OUTBOX_ENCRYPTION_KEY") or
+    .Name == ($prefix + "/SPRING_MAIL_PASSWORD"));
+    .Type == "SecureString") and
+  all(.Parameters[] | select(.Name == ($prefix + "/EMAIL_VERIFICATION_HASH_SECRET"));
+    (.Value | base64_byte_length) >= 32) and
+  all(.Parameters[] | select(.Name == ($prefix + "/EMAIL_VERIFICATION_OUTBOX_ENCRYPTION_KEY"));
+    (.Value | base64_byte_length) == 32)
+' "$WORK_DIR/parameters.json" >/dev/null 2>&1; then
   fail "파라미터 검증 실패. 기존 파일을 유지합니다."
 fi
 
-awk '!/^DB_(URL|USERNAME|PASSWORD)=/' "$TEMPLATE" \
+awk '!/^(DB_(URL|USERNAME|PASSWORD)|EMAIL_VERIFICATION_(HASH_SECRET|OUTBOX_ENCRYPTION_KEY|MAIL_FROM)|SPRING_MAIL_(HOST|USERNAME|PASSWORD))=/' "$TEMPLATE" \
   > "$WORK_DIR/server.env"
 
 printf '\n' >> "$WORK_DIR/server.env"
