@@ -2,12 +2,18 @@ package com.bareum.server.domain.auth.config;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.HashMap;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.env.YamlPropertySourceLoader;
 import org.springframework.boot.mail.autoconfigure.MailSenderAutoConfiguration;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.core.env.SystemEnvironmentPropertySource;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.JavaMailSenderImpl;
 
@@ -47,6 +53,64 @@ class SmtpConfigurationTests {
             assertEquals("1200", properties.getProperty("mail.smtp.timeout"));
             assertEquals("1300", properties.getProperty("mail.smtp.writetimeout"));
         });
+    }
+
+    @Test
+    void deploymentEnvironmentBindsSmtpCredentialsSecurityAndTimeouts() throws IOException {
+        Map<String, Object> environment = deploymentEnvironment();
+        context.withInitializer(ctx -> ctx.getEnvironment().getPropertySources().addFirst(
+                new SystemEnvironmentPropertySource("deployment-systemEnvironment", environment)))
+                .run(ctx -> {
+                    assertNull(ctx.getStartupFailure());
+                    var sender = ctx.getBean(JavaMailSenderImpl.class);
+                    assertEquals("smtp.example.invalid", sender.getHost());
+                    assertEquals(587, sender.getPort());
+                    assertEquals("sender@example.invalid", sender.getUsername());
+                    assertEquals("test-only-smtp-password", sender.getPassword());
+                    assertEquals("sender@example.invalid", ctx.getEnvironment()
+                            .getProperty("auth.email-verification.mail-from"));
+                    var properties = sender.getJavaMailProperties();
+                    assertEquals("true", properties.getProperty("mail.smtp.auth"));
+                    assertEquals("true", properties.getProperty("mail.smtp.starttls.enable"));
+                    assertEquals("true", properties.getProperty("mail.smtp.starttls.required"));
+                    assertEquals("true", properties.getProperty("mail.smtp.ssl.checkserveridentity"));
+                    assertEquals("5000", properties.getProperty("mail.smtp.connectiontimeout"));
+                    assertEquals("5000", properties.getProperty("mail.smtp.timeout"));
+                    assertEquals("5000", properties.getProperty("mail.smtp.writetimeout"));
+                });
+    }
+
+    @Test
+    void deploymentEnvironmentOverridesReachJavaMail() throws IOException {
+        Map<String, Object> environment = deploymentEnvironment();
+        environment.put("SMTP_CONNECTION_TIMEOUT_MS", "1100");
+        environment.put("SMTP_READ_TIMEOUT_MS", "1200");
+        environment.put("SMTP_WRITE_TIMEOUT_MS", "1300");
+        context.withInitializer(ctx -> ctx.getEnvironment().getPropertySources().addFirst(
+                new SystemEnvironmentPropertySource("deployment-systemEnvironment", environment)))
+                .run(ctx -> {
+                    assertNull(ctx.getStartupFailure());
+                    var properties = ctx.getBean(JavaMailSenderImpl.class).getJavaMailProperties();
+                    assertEquals("1100", properties.getProperty("mail.smtp.connectiontimeout"));
+                    assertEquals("1200", properties.getProperty("mail.smtp.timeout"));
+                    assertEquals("1300", properties.getProperty("mail.smtp.writetimeout"));
+                });
+    }
+
+    private Map<String, Object> deploymentEnvironment() throws IOException {
+        Map<String, Object> environment = new HashMap<>();
+        for (String line : Files.readAllLines(Path.of("infra/env/.env.server.template"))) {
+            if (line.isBlank() || line.startsWith("#")) {
+                continue;
+            }
+            String[] entry = line.split("=", 2);
+            environment.put(entry[0], entry[1]);
+        }
+        environment.put("SPRING_MAIL_HOST", "smtp.example.invalid");
+        environment.put("SPRING_MAIL_USERNAME", "sender@example.invalid");
+        environment.put("SPRING_MAIL_PASSWORD", "test-only-smtp-password");
+        environment.put("EMAIL_VERIFICATION_MAIL_FROM", "sender@example.invalid");
+        return environment;
     }
 
     @Test
