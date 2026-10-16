@@ -12,7 +12,7 @@ public enum TermErrorCode implements BaseErrorCode {
 	INVALID_CONSENT_STATE(HttpStatus.BAD_REQUEST, "TERM-0001", "약관 동의 상태와 동의·철회 시각이 일치하지 않습니다."),
 	INVALID_CONSENT_REQUEST(HttpStatus.BAD_REQUEST, "TERM-0002", "약관 항목별 동의 여부를 모두 입력해 주세요."),
 	REQUIRED_TERM_NOT_AGREED(HttpStatus.BAD_REQUEST, "TERM-0003", "필수 약관에 동의해 주세요."),
-	SIGNUP_TERMS_NOT_CONFIGURED(HttpStatus.SERVICE_UNAVAILABLE, "TERM-0004", "가입 약관이 아직 준비되지 않았습니다.");
+	SIGNUP_TERMS_INVALID(HttpStatus.INTERNAL_SERVER_ERROR, "TERM-0004", "가입 약관 데이터를 처리할 수 없습니다.");
 
 	private final HttpStatus httpStatus;
 	private final String code;
