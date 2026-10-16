@@ -31,7 +31,7 @@ done
 printf '%s\n' "${names[@]}" >> "$AWS_REQUESTS"
 case "${AWS_MODE:-}" in
   fail) printf '%s\n' "$AWS_PRIVATE_MARKER" >&2; exit 1 ;;
-  late-fail) if [[ ${names[0]} == */SIGNUP_TERMS_AGE_OVER_14_VERSION ]]; then exit 1; fi ;;
+  late-fail) if [[ ${names[0]} == */SPRING_MAIL_PORT ]]; then exit 1; fi ;;
   malformed) printf '%s\n' "$AWS_PRIVATE_MARKER"; exit 0 ;;
 esac
 jq -n --slurpfile fixture "$AWS_FIXTURE" --args '
@@ -95,10 +95,6 @@ class PrepareServerEnvTests(unittest.TestCase):
             "EMAIL_VERIFICATION_MAX_SENDS_PER_HOUR": "10",
             "EMAIL_VERIFICATION_MAX_SENDS_PER_DAY": "30",
             "EMAIL_VERIFICATION_MAX_VERIFICATION_ATTEMPTS": "5",
-            "SIGNUP_TERMS_AGE_OVER_14_VERSION": "approved-age",
-            "SIGNUP_TERMS_TERMS_OF_SERVICE_VERSION": "approved-service",
-            "SIGNUP_TERMS_PRIVACY_POLICY_VERSION": "approved-privacy",
-            "SIGNUP_TERMS_MARKETING_CONSENT_VERSION": "approved-marketing",
         }
         self.secure = {"DB_PASSWORD", "LOGIN_JWT_SIGNING_KEY", "EMAIL_VERIFICATION_HASH_SECRET",
                        "EMAIL_VERIFICATION_OUTBOX_ENCRYPTION_KEY", "SPRING_MAIL_PASSWORD"}
@@ -138,8 +134,8 @@ class PrepareServerEnvTests(unittest.TestCase):
         if os.name != "nt":
             self.assertEqual(0o600, stat.S_IMODE(self.output.stat().st_mode))
         names = self.requests.read_text().splitlines()
-        self.assertEqual(29, len(names))
-        self.assertEqual(29, len(set(names)))
+        self.assertEqual(25, len(names))
+        self.assertEqual(25, len(set(names)))
 
     def test_email_mode_preserves_nine_parameters_and_ignores_inherited_activation(self):
         self.deploy.unlink()
@@ -228,8 +224,7 @@ class PrepareServerEnvTests(unittest.TestCase):
         self.assertFalse(self.requests.exists())
 
     def test_required_parameters_cannot_be_missing(self):
-        for key in ("DB_URL", "LOGIN_JWT_SIGNING_KEY", "EMAIL_VERIFICATION_HASH_SECRET", "SPRING_MAIL_PASSWORD",
-                    "SIGNUP_TERMS_PRIVACY_POLICY_VERSION"):
+        for key in ("DB_URL", "LOGIN_JWT_SIGNING_KEY", "EMAIL_VERIFICATION_HASH_SECRET", "SPRING_MAIL_PASSWORD"):
             with self.subTest(key=key):
                 value = self.values.pop(key)
                 self.assert_failure_preserves_environment()
@@ -294,11 +289,11 @@ class PrepareServerEnvTests(unittest.TestCase):
                 self.values["LOGIN_ALLOWED_ORIGINS"] = origin
                 self.assert_failure_preserves_environment()
 
-    def test_unapproved_placeholder_and_overlong_term_versions_are_rejected(self):
-        for value in ("   ", "<pending>", "v" * 31):
-            with self.subTest(value=value):
-                self.values["SIGNUP_TERMS_PRIVACY_POLICY_VERSION"] = value
-                self.assert_failure_preserves_environment()
+    def test_auth_does_not_require_or_request_separate_term_version_parameters(self):
+        result = self.run_generator()
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertNotIn("SIGNUP_TERMS_", self.requests.read_text())
+        self.assertNotIn("SIGNUP_TERMS_", self.output.read_text())
 
     def test_google_and_reset_parameters_are_optional_but_validated_when_present(self):
         self.values.update({"GOOGLE_CLIENT_IDS": "test-web.apps.googleusercontent.com",

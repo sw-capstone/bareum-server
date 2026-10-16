@@ -155,7 +155,7 @@ code는 여섯 자리 **문자열**로 전송해 앞자리 0을 보존한다. ex
 {"memberId":1}
 ```
 
-네 약관 항목 모두 boolean으로 보내며 age·service·privacy는 true, marketing은 false도 허용한다. 원문은 프론트에 고정하고 서버는 승인 ID·버전을 연결해 동의 이력을 저장한다. 공식 원문·승인 버전과 age 필수 정책은 아직 팀 확인이 필요하다. 설정·DB 약관이 불일치하면 TERM-0004로 가입을 차단한다. [약관 동의 기준](../decisions/email-verification-draft.md)을 함께 확인한다.
+네 약관 항목 모두 boolean으로 보내며 age·service·privacy는 true, marketing은 false도 허용한다. 원문은 프론트가 관리하며 개발 중 임시 원문을 사용할 수 있다. 서버는 DB 약관의 ID·버전으로 동의 이력을 기록하며 별도 버전 환경변수·비교는 사용하지 않는다. [약관 동의 기준](../decisions/signup-term-consent.md)을 따른다.
 
 이메일 가입은 **201·memberId 응답 후 별도 로그인**이다. 최신 기술 정책의 최소 12자·영문/숫자/`!@#$%&` 각 1개 이상·공백 금지를 적용한다. 이전 AUTH-001의 8~12자 문구는 적용하지 않는다. 필수 조건을 충족하는 비밀번호의 다른 비공백 문자를 추가로 금지하지 않는다. [이메일 가입 문서](../decisions/email-verification-draft.md)를 따른다. 이메일은 대소문자를 무시해 비교하지만 화면에서 수신 주소를 임의로 소문자화하지 않는다.
 
@@ -252,7 +252,7 @@ PASSWORD_RESET 목적의 발송 → 상태 조회 → 번호 확인 → PATCH `/
 | CSRF 실패 | AUTH-0018 / 403 | CSRF·Origin 설정 확인 |
 | Refresh 무효·재사용 | AUTH-0021·0022 / 401 | 다시 로그인 |
 | Google 인증·가입 분기 | AUTH-0027 / 409, AUTH-0028 / 403, AUTH-0029 / 401 | 이메일 로그인 안내 / Gmail·Workspace 신규 가입 지원 범위 안내 / Google 인증 다시 시작 |
-| 필수 약관 미동의·설정 누락 | TERM-0003 / 400, TERM-0004 / 503 | 필수 동의 안내 / 가입 준비 중 안내 |
+| 필수 약관 미동의·DB 데이터 오류 | TERM-0003 / 400, TERM-0004 / 500 | 필수 동의 안내 / 서버 오류 안내. 별도 버전 비교 503 없음 |
 
 현재 프론트와의 차이는 다음과 같다. 아래는 소비자 수정이 필요한 항목이며, 서버가 기존 Mock 경로를 추가로 제공한다는 뜻은 아니다.
 
@@ -291,7 +291,7 @@ PASSWORD_RESET 목적의 발송 → 상태 조회 → 번호 확인 → PATCH `/
 | 브라우저 인증 | HTTPS 서버 주소, `LOGIN_ALLOWED_ORIGINS`, 쿠키·CSRF | CORS에 실제 프론트 Origin을 정확히 등록한다. 개발 적용안은 `https://bareum-web-git-develop-numkites-projects.vercel.app` 하나를 정확히 등록하는 것이다. 문서상의 선택이며 실제 배포 적용·브라우저 검증은 별도다. |
 | 메일 발송 | `spring.mail`의 제공자·인증·TLS 설정, 발신 주소, Outbox 암호화 키와 활성화 | `EMAIL_VERIFICATION_MAIL_FROM`과 Base64 형식의 32바이트 `EMAIL_VERIFICATION_OUTBOX_ENCRYPTION_KEY`가 필요하다. 키·발송 설정·제한 정책이 누락되면 발송을 차단한다. 운영 제공자·발신 계정은 별도 결정한다. |
 | 인증 제한 | 최소 발송 간격·시간당/일당 횟수·인증 실패 횟수 | `auth.email-verification.minimum-send-interval-seconds`, `max-sends-per-hour`, `max-sends-per-day`와 `max-verification-attempts`를 정한다. 발송 임시안은 60초·최근 1시간 5회·24시간 20회이며 팀 확인·환경 적용이 필요하다. 인증 실패는 기본 5회·15분 제한 후 새 번호로 재시작한다. 재발송 자체로는 초기화하지 않는다. |
-| 가입 약관 | 네 약관의 DB 데이터와 `auth.signup-terms.versions` | 프론트 고정 원문에 대응하는 승인 버전을 연결한다. 데이터·필수 여부·설정 버전이 맞지 않으면 TERM-0004로 가입을 차단한다. 프론트 요청은 합의한 네 boolean 항목을 유지한다. |
+| 가입 약관 | 네 약관의 DB 데이터 | 네 boolean 응답을 DB의 약관 ID·버전과 연결한다. 필수 동의를 검증하며 별도 환경변수·버전 비교 503은 사용하지 않는다. |
 | Google 인증 | `GOOGLE_CLIENT_IDS`, Google Console의 승인 Origin | ID Token 방식의 실제 웹 Client ID를 프론트 SDK와 서버 검증에 맞춘다. 미설정 시 AUTH-0025로 차단하며 실제 Google 계정 검증은 아직 남아 있다. |
 | 비밀번호 찾기 | 배포 범위, 재설정용 인증번호·완료 증명 유효기간 | 구현과 기존 메일 경로 검증은 있으나 JWT·Argon2id 변경 후 실제 메일·브라우저 연결은 미검증이다. 최신 정책의 MVP 제외 기준을 유지하고 `EMAIL_VERIFICATION_PASSWORD_RESET_CODE_TTL_SECONDS`와 `EMAIL_VERIFICATION_PASSWORD_RESET_VERIFICATION_TTL_SECONDS` 중 번호는 300초 임시안, 완료 증명은 600초 임시안을 사용한다. |
 
@@ -326,7 +326,7 @@ Parameter Store 준비 스크립트에 Auth·Term 설정 주입 경로를 추가
 | 로그인·갱신 제한 | 이메일별 로그인 성공·실패 합산 60초에 10회, 세션별 성공 갱신 60초에 30회 | 운영 수치·전역/IP 제한·기록 보존 기준은 팀 미확정이다. 배포 처리량·남용 방지 정책을 정할 때 재검토한다. |
 | Outbox 처리 | 최초 포함 최대 3회, 재시도 5초, lease 120초, 최대 대기 300초, worker 조회 간격 1초·배치 10개. 같은 작업·번호로 복구 | worker 기본값은 임시 운영안이며 사용자 발송 제한과 프론트 조회 간격을 정한 것이 아니다. SMTP·DB 경계의 중복 메일 가능성과 장애 복구를 검토한다. [Outbox 기준](../decisions/email-verification-draft.md) 참고. |
 | 재발송·최종 실패 복구 | 접수 커밋 시 이전 번호·미사용 완료 증명 무효화. 진행 중 추가 접수는 429. 실패 5회 후 900초가 지나 새 번호를 접수하면 시도 횟수 초기화. 최종 실패 후 조건 충족 시 새 작업 접수 | 무효화 시점·완료 증명 보존/폐기·실패 복구·접수 응답 유실에 대한 사용자 흐름을 확정한다. 인증 실패 횟수는 기존 명세대로 재발송으로 초기화하지 않는다. [재발송 기준](../decisions/email-resend-outbox-draft.md) 참고. |
-| 고정 약관 매핑 | age·service·privacy 필수, marketing 선택. 승인 버전을 서버 설정으로 연결하고 DB 불일치 시 가입 차단 | boolean 전달은 합의됐지만 공식 원문·승인 버전과 후보 항목의 필수 여부는 팀 확인이 필요하다. 원문·항목 변경 시 양쪽을 함께 수정한다. [약관 기준](../decisions/email-verification-draft.md) 참고. |
+| 약관 매핑 | age·service·privacy 필수, marketing 선택. DB 약관에 동의·버전·시각 연결 | 개발 중 임시 원문을 허용한다. 실제 사용자 적용 전 표시 원문과 DB 버전을 맞춘다. [약관 기준](../decisions/signup-term-consent.md) 참고. |
 | Google 인증·가입 증명 | SDK ID Token JSON 방식, 신규 가입 증명 최대 10분·동일 sub의 최신 증명만 유지. 신규 이메일은 검증된 Gmail·Workspace만 허용 | 전달 방식·기간·제3자 이메일의 추가 인증·탈퇴 sub 재가입 기준은 미확정이다. 실제 Google SDK·지원 계정 검토 시 [Google 로그인](../decisions/google-login-draft.md)·[가입](../decisions/google-signup-draft.md) 기준을 재검토한다. |
 | 비밀번호 재설정 | 최종 입력 필드는 password, 성공 204·별도 로그인. 회원의 기존 Access·Refresh 세션 모두 폐기 | 입력·응답·폐기 범위는 임시 계약이다. MVP 제외·3순위는 유지하며 배포 포함과 번호 300초 임시안의 승인 여부·완료 증명 600초의 임시안을 검토한다. [재설정 기준](../decisions/password-reset-draft.md) 참고. |
 
@@ -338,7 +338,7 @@ Parameter Store 준비 스크립트에 Auth·Term 설정 주입 경로를 추가
 | --- | --- | --- |
 | 운영 메일 서비스·발신 계정 | SMTP 설정 경로 구현·개발 Gmail 실제 수신 검증 완료. 운영 서비스·계정은 미정 | 운영 제공자·발신 주소·자격증명·TLS 설정 결정 및 적용 |
 | 사용자별 메일 발송·인증 제한 | 제한 검사·설정 누락 시 차단 구현. 발송 임시안 60초·최근 1시간 5회·24시간 20회 작성 | 임시안 검토·환경 적용. 인증 실패 5회·15분 대기·재인증 방식은 개발 적용안이며 Outbox 재시도와 별개 |
-| 공식 약관 원문·버전 | 네 boolean 전달·서버 ID/버전 매핑·이력 저장 구현 | 승인 원문·버전·필수 여부와 프론트 원문·서버 설정·DB 데이터를 일치시킴 |
+| 약관 동의 | 네 boolean 검증·DB 버전 연결·이력 저장 | 개발용 네 항목 데이터를 준비하고 실제 사용자 적용 전 원문·DB 버전 대응 확인 |
 | 실제 허용 Origin·Google Client ID | Origin·Client ID 검증 경로 구현. 미리보기 주소는 알려져 있으나 허용 대상 승인·등록은 미확인 | 연동 도메인 확정, CORS·Google Console 등록, 프론트 SDK·서버 Client ID 일치 |
 | 비밀번호 찾기 배포·유효기간 | 재설정 코드와 개발 메일 검증 완료. MVP 제외 기준 유지 | 번호 300초 임시안의 팀 확인·환경 적용, 배포 포함 여부·완료 증명 유효기간 결정 |
 

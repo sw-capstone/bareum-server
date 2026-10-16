@@ -49,11 +49,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
         "auth.email-verification.max-verification-attempts=3",
         "auth.email-verification.hash-secret=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
         "auth.email-verification.outbox.poll-delay-ms=3600000",
-        "auth.email-verification.outbox.encryption-key=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
-        "auth.signup-terms.versions.AGE_OVER_14=test-fixed-v1",
-        "auth.signup-terms.versions.TERMS_OF_SERVICE=test-fixed-v1",
-        "auth.signup-terms.versions.PRIVACY_POLICY=test-fixed-v1",
-        "auth.signup-terms.versions.MARKETING_CONSENT=test-fixed-v1"
+        "auth.email-verification.outbox.encryption-key=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
 })
 class EmailSignupServiceIntegrationTests {
 
@@ -188,14 +184,18 @@ class EmailSignupServiceIntegrationTests {
 
     @ParameterizedTest
     @ValueSource(strings = {"AGE_OVER_14", "TERMS_OF_SERVICE", "PRIVACY_POLICY", "MARKETING_CONSENT"})
-    void changedDatabaseVersionDoesNotSilentlyRecordAgreementToNewText(String code) {
+    void databaseVersionIsRecordedWithoutSeparateVersionConfiguration(String code) {
         String token = proof(VerificationPurpose.SIGNUP);
         jdbc.update("UPDATE term SET version = 'different-version' WHERE code = ?", code);
-        expectTerm(TermErrorCode.SIGNUP_TERMS_NOT_CONFIGURED, request(token));
+        var result = service.signup(request(token));
+        assertEquals("different-version", jdbc.queryForObject(
+                "SELECT t.version FROM member_term mt JOIN term t ON t.id = mt.term_id WHERE mt.member_id = ? AND t.code = ?",
+                String.class, result.memberId(), code));
+        assertEquals(NOW, latest().getConsumedAt());
     }
 
     @Test
-    void selectedTermsAreMappedByCodeAndPinnedVersionRatherThanDatabaseOrder() {
+    void selectedTermsAreMappedByCodeRatherThanDatabaseOrder() {
         for (Long id : termIds) terms.deleteById(id);
         termIds.clear();
         for (TermCode code : List.of(TermCode.MARKETING_CONSENT, TermCode.PRIVACY_POLICY,
@@ -217,14 +217,14 @@ class EmailSignupServiceIntegrationTests {
     void missingFixedCatalogItemBlocksSignupEvenIfMarketingWasDeclined(String code) {
         String token = proof(VerificationPurpose.SIGNUP);
         jdbc.update("DELETE FROM term WHERE code = ?", code);
-        expectTerm(TermErrorCode.SIGNUP_TERMS_NOT_CONFIGURED, request(token));
+        expectTerm(TermErrorCode.SIGNUP_TERMS_INVALID, request(token));
     }
 
     @Test
     void absentCatalogBlocksSignupInsteadOfSkippingRequiredConsent() {
         String token = proof(VerificationPurpose.SIGNUP);
         for (Long id : termIds) terms.deleteById(id);
-        expectTerm(TermErrorCode.SIGNUP_TERMS_NOT_CONFIGURED, request(token));
+        expectTerm(TermErrorCode.SIGNUP_TERMS_INVALID, request(token));
     }
 
     @Test
@@ -232,7 +232,7 @@ class EmailSignupServiceIntegrationTests {
         String token = proof(VerificationPurpose.SIGNUP);
         var extra = terms.saveAndFlush(Term.create(TermCode.TERMS_OF_SERVICE, "other", true));
         termIds.add(extra.getId());
-        expectTerm(TermErrorCode.SIGNUP_TERMS_NOT_CONFIGURED, request(token));
+        expectTerm(TermErrorCode.SIGNUP_TERMS_INVALID, request(token));
     }
 
     @ParameterizedTest
@@ -240,7 +240,7 @@ class EmailSignupServiceIntegrationTests {
     void coreTermsCannotBeConfiguredAsOptional(String code) {
         String token = proof(VerificationPurpose.SIGNUP);
         jdbc.update("UPDATE term SET is_required = false WHERE code = ?", code);
-        expectTerm(TermErrorCode.SIGNUP_TERMS_NOT_CONFIGURED, request(token));
+        expectTerm(TermErrorCode.SIGNUP_TERMS_INVALID, request(token));
     }
 
     @ParameterizedTest

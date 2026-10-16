@@ -65,14 +65,14 @@ public interface GoogleSignupControllerDocs {
                             schema = @Schema(ref = "#/components/schemas/ProblemDetail")))
     @ApiResponse(
             responseCode = "500",
-            description = "예상하지 못한 저장 오류",
+            description = "약관 데이터 무결성 오류 또는 예상하지 못한 저장 오류",
             content =
                     @Content(
                             mediaType = "application/problem+json",
                             schema = @Schema(ref = "#/components/schemas/ProblemDetail")))
     @ApiResponse(
             responseCode = "503",
-            description = "약관 미설정·버전 불일치 또는 가입 저장소 장애",
+            description = "가입 저장소 장애",
             content =
                     @Content(
                             mediaType = "application/problem+json",

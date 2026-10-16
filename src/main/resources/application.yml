@@ -49,12 +49,6 @@ scalar:
   layout: classic
 
 auth:
-  signup-terms:
-    versions:
-      AGE_OVER_14: ${SIGNUP_TERMS_AGE_OVER_14_VERSION:}
-      TERMS_OF_SERVICE: ${SIGNUP_TERMS_TERMS_OF_SERVICE_VERSION:}
-      PRIVACY_POLICY: ${SIGNUP_TERMS_PRIVACY_POLICY_VERSION:}
-      MARKETING_CONSENT: ${SIGNUP_TERMS_MARKETING_CONSENT_VERSION:}
   google:
     client-ids: ${GOOGLE_CLIENT_IDS:}
     signup-ttl-seconds: ${GOOGLE_SIGNUP_TTL_SECONDS:600}
