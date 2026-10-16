@@ -48,7 +48,7 @@ public class EmailVerificationConfirmService {
         if (verification.getAttemptCount() >= properties.getMaxVerificationAttempts()) {
             throw new AuthException(AuthErrorCode.EMAIL_VERIFICATION_ATTEMPTS_EXCEEDED);
         }
-        if (!codeHasher.matches(request.email(), request.purpose(), request.code(), verification.getCodeHash())) {
+        if (!codeHasher.matches(verification.getEmail(), request.purpose(), request.code(), verification.getCodeHash())) {
             verification.recordFailedAttempt();
             throw new EmailVerificationCodeMismatchException();
         }
