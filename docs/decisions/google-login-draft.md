@@ -87,7 +87,7 @@ Refresh Token은 본문에 포함하지 않고 bareum_refresh HttpOnly·Secure �
 | GOOGLE_SIGNUP_TTL_SECONDS | 600 | 가입용 증명 유효기간. 1~600초 |
 | LOGIN_ALLOWED_ORIGINS | 비어 있음 | 기존 로그인 CORS 기준의 정확한 프론트 Origin |
 
-설정 예시는 [환경변수 예시](../../env/local/.env.example)에 포함한다. Google Console의 프로젝트·실제 Client ID·승인된 Origin은 별도로 준비해야 한다. 이 설정만으로 Google 동의 화면이나 프론트 SDK가 구성되지는 않는다.
+설정 예시는 [환경변수 예시](../../env/local/.env.example)에 포함한다. 프론트 주소 확정 후 백엔드 담당 이서현이 Google Console의 바름용 프로젝트·웹 Client ID를 생성하고 프론트에 공유한다. 해당 주소의 승인 Origin 등록과 인프라 담당자의 서버 GOOGLE_CLIENT_IDS 적용을 연결한다. 주소 확인 전에는 실제 리소스를 생성하지 않는다. Client ID 없이 서버 로직·모의 검증과 프론트 코드 준비는 가능하지만 실제 Google 연동 검증은 설정 후 진행한다. 이 설정만으로 Google 동의 화면이나 프론트 SDK가 구성되지는 않는다.
 
 ## 검증과 남은 범위
 

@@ -16,7 +16,7 @@
 
 ## Auth2. 개발 도메인과 쿠키
 
-- 개발 연동안: 프론트 `https://bareum-web-git-develop-numkites-projects.vercel.app`, API `https://api.bareum.site`.
+- 개발 연동 후보: 현재 프론트 `https://bareum-web-git-develop-numkites-projects.vercel.app`, API `https://api.bareum.site`. Vercel 유지 또는 bareum.site 프론트 도메인 전환 여부는 프론트·인프라 확인 후 확정한다.
 - `LOGIN_ALLOWED_ORIGINS`에는 이 프론트 Origin을 정확히 지정한다. 와일드카드·경로·임의 미리보기 도메인을 허용하지 않는다. 문서 기입은 실제 서버 설정 적용을 의미하지 않는다.
 - Refresh·CSRF 쿠키는 HttpOnly·Secure·SameSite=None·호스트 전용·`Path=/api/v1/auth`를 유지한다. 요청은 credentials와 CSRF 계약을 따른다.
 - 재검토: 실제 브라우저의 타사 쿠키 차단으로 갱신이 불가능하면 같은 사이트의 프론트 서브도메인 또는 프록시로 전환한다. DNS·인프라를 이 변경에서 수정하지 않는다.
@@ -61,7 +61,7 @@ LOGIN_ALLOWED_ORIGINS=https://bareum-web-git-develop-numkites-projects.vercel.ap
 - 이번 개발 적용안은 Gmail·검증된 Workspace 계정만 신규 가입시킨다. 기존 Google 회원은 이메일 문자열 대신 검증된 `sub`로 식별한다.
 - Google이 현재 이메일 소유권을 보증하지 않는 제3자 이메일 신규 가입은 `AUTH-0028/403`으로 제한하고 지원 범위를 안내한다.
 - 제3자 이메일에 `email_verified=true`가 있다는 이유만으로 신규 계정을 생성하지 않는다. 추가 이메일 인증 화면·목적·증명 계약을 이번 변경에 추가하지 않는다.
-- 실제 Google Client ID와 Console의 승인 Origin은 리소스 소유자가 준비해야 한다. 가짜 값을 넣어 인증을 통과시키지 않는다.
+- 프론트 주소 확정 후 백엔드 담당 이서현이 바름용 Google 프로젝트·웹 Client ID를 생성해 프론트에 공유하고, 인프라와 서버 설정 적용을 연결한다. 주소 확인 전에는 생성하지 않는다. 실제 Google 인증 검증은 ID·승인 Origin·서버 설정을 준비한 뒤 진행하며 가짜 값으로 인증을 통과시키지 않는다.
 - 재검토: 제3자 이메일 지원 요구가 생기면 별도 서비스 이메일 인증과 Google 가입 증명의 결합을 설계하고 프론트와 함께 연결한다.
 
 ## 검토 자료
