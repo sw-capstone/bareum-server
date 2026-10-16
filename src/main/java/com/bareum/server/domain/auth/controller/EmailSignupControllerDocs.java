@@ -17,8 +17,8 @@ public interface EmailSignupControllerDocs {
             + "회원·동의 이력 저장과 증명 사용을 함께 처리합니다. 비밀번호는 최소 12자로 영문·숫자·!@#$%& 각각 포함, "
             + "공백 금지입니다. agreements에 age·service·privacy·marketing을 모두 true/false로 전달합니다. "
             + "age·service·privacy는 필수, marketing은 false도 가입 가능합니다. 가입 후 자동 로그인하지 않습니다. "
-            + "약관 원문은 프론트에서 고정해 표시하며 서버가 항목별 약관 ID·고정 버전을 연결합니다. "
-            + "약관 데이터·고정 버전 설정이 없거나 일치하지 않거나 같은 코드에 여러 버전이 있으면 가입을 차단합니다.")
+            + "약관 원문은 프론트에서 표시하며 서버가 DB의 항목별 약관 ID·버전을 연결해 동의 이력을 저장합니다. "
+            + "별도 약관 버전 환경변수나 원문 확정 여부를 검사하지 않습니다.")
     @ApiResponses({
             @ApiResponse(responseCode = "201", description = "가입 완료. 회원 ID만 반환",
                     content = @Content(mediaType = "application/json", schema = @Schema(implementation = EmailSignupResponse.class))),
@@ -27,9 +27,7 @@ public interface EmailSignupControllerDocs {
                     content = @Content(mediaType = "application/problem+json", schema = @Schema(ref = "#/components/schemas/BadRequestProblemDetail"))),
             @ApiResponse(responseCode = "409", description = "이미 가입된 이메일(AUTH-0001)",
                     content = @Content(mediaType = "application/problem+json", schema = @Schema(ref = "#/components/schemas/ProblemDetail"))),
-            @ApiResponse(responseCode = "503", description = "가입 약관 데이터 또는 적용 버전 미확정(TERM-0004)",
-                    content = @Content(mediaType = "application/problem+json", schema = @Schema(ref = "#/components/schemas/ProblemDetail"))),
-            @ApiResponse(responseCode = "500", description = "서버 오류",
+            @ApiResponse(responseCode = "500", description = "서버 오류 또는 약관 데이터 무결성 오류(TERM-0004)",
                     content = @Content(mediaType = "application/problem+json", schema = @Schema(ref = "#/components/schemas/ProblemDetail")))
     })
     ResponseEntity<EmailSignupResponse> signup(EmailSignupRequest request);

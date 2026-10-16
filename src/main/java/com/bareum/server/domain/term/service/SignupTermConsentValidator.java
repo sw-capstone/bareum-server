@@ -1,6 +1,5 @@
 package com.bareum.server.domain.term.service;
 
-import com.bareum.server.domain.term.config.SignupTermProperties;
 import com.bareum.server.domain.term.dto.request.SignupAgreementsRequest;
 import com.bareum.server.domain.term.entity.Term;
 import com.bareum.server.domain.term.enums.TermCode;
@@ -21,7 +20,6 @@ import org.springframework.transaction.annotation.Transactional;
 public class SignupTermConsentValidator {
 
     private final TermRepository termRepository;
-    private final SignupTermProperties properties;
 
     @Transactional(propagation = Propagation.MANDATORY)
     public List<ValidatedConsent> validate(SignupAgreementsRequest request) {
@@ -36,16 +34,15 @@ public class SignupTermConsentValidator {
         Map<TermCode, Term> byCode = new EnumMap<>(TermCode.class);
         for (Term term : termRepository.findAllForSignup()) {
             if (byCode.putIfAbsent(term.getCode(), term) != null) {
-                throw new TermException(TermErrorCode.SIGNUP_TERMS_NOT_CONFIGURED);
+                throw new TermException(TermErrorCode.SIGNUP_TERMS_INVALID);
             }
         }
         List<ValidatedConsent> selected = new ArrayList<>();
         for (TermCode code : TermCode.values()) {
             Term term = byCode.get(code);
             boolean required = code != TermCode.MARKETING_CONSENT;
-            if (term == null || term.isRequired() != required
-                    || !properties.versionFor(code).equals(term.getVersion())) {
-                throw new TermException(TermErrorCode.SIGNUP_TERMS_NOT_CONFIGURED);
+            if (term == null || term.isRequired() != required) {
+                throw new TermException(TermErrorCode.SIGNUP_TERMS_INVALID);
             }
             boolean agreed = request.agreed(code);
             if (required && !agreed) {
