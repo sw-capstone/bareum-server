@@ -71,7 +71,7 @@ LOGIN_ALLOWED_ORIGINS=https://bareum-web-git-develop-numkites-projects.vercel.ap
 
 ## 검증 및 적용 범위
 
-- 전체 서버 `./gradlew check bootJar --no-daemon`: 688개 테스트 통과, 실패·오류·건너뜀 0개 및 JAR 빌드 성공.
+- 전체 서버 `./gradlew check bootJar --no-daemon`: 687개 테스트 통과, 실패·오류·건너뜀 0개 및 JAR 빌드 성공.
 - 복구 통합 테스트 12개: 동시 오입력 제한, 대소문자·최초/재발송 우회 차단, 제한 종료 경계, 새 번호·완료 증명 교체, 기존 증명의 가입 차단, 접수 실패·DB 오류 롤백, 과거 데이터 복구와 증명 소비 후 차단을 확인했다.
 - 설정 기본값·재정의·잘못된 대기 시간과 migration·Hibernate 매핑을 검증했다. 메일은 모의 발송이며 실제 브라우저·외부 Google 계정 검증은 포함하지 않았다.
 - 배포 설정 모의 검사 22개 중 21개 통과, POSIX 심볼릭 링크 권한 검사 1개는 Linux CI 확인 대상이다. 실제 Parameter Store는 조회·변경하지 않았다.
