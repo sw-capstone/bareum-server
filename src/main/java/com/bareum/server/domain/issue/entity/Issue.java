@@ -1,12 +1,16 @@
 package com.bareum.server.domain.issue.entity;
 
-import com.bareum.server.domain.issue.exception.IssueException;
-import com.bareum.server.domain.issue.exception.IssueErrorCode;
+import java.util.Objects;
+
+import org.hibernate.annotations.ColumnDefault;
 
 import com.bareum.server.domain.analysis.entity.ReportAnalysisAreaResult;
 import com.bareum.server.domain.issue.enums.IssueSeverity;
 import com.bareum.server.domain.issue.enums.IssueStatus;
+import com.bareum.server.domain.issue.exception.IssueErrorCode;
+import com.bareum.server.domain.issue.exception.IssueException;
 import com.bareum.server.global.entity.BaseTimeEntity;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -18,12 +22,10 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
-import java.util.Objects;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import org.hibernate.annotations.ColumnDefault;
 
 @Entity
 @Table(name = "issue")
@@ -91,13 +93,13 @@ public class Issue extends BaseTimeEntity {
 		String reviewGuidance
 	) {
 		return Issue.builder()
-			.analysisAreaResult(analysisAreaResult)
-			.issueGroup(issueGroup)
-			.severity(severity)
-			.title(title)
-			.reason(reason)
-			.reviewGuidance(reviewGuidance)
-			.build();
+				.analysisAreaResult(analysisAreaResult)
+				.issueGroup(issueGroup)
+				.severity(severity)
+				.title(title)
+				.reason(reason)
+				.reviewGuidance(reviewGuidance)
+				.build();
 	}
 
 	public void markProcessed() {

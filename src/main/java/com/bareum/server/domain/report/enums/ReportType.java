@@ -4,4 +4,3 @@ public enum ReportType {
 	PLAN,
 	RESULT
 }
-

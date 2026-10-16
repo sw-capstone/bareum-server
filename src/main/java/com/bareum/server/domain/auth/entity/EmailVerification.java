@@ -1,7 +1,13 @@
 package com.bareum.server.domain.auth.entity;
 
+import java.time.Instant;
+import java.util.Objects;
+
+import org.hibernate.annotations.ColumnDefault;
+
 import com.bareum.server.domain.auth.enums.VerificationPurpose;
 import com.bareum.server.global.entity.BaseTimeEntity;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -10,12 +16,9 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
-import java.time.Instant;
-import java.util.Objects;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import org.hibernate.annotations.ColumnDefault;
 
 @Entity
 @Table(name = "email_verification")
@@ -61,10 +64,10 @@ public class EmailVerification extends BaseTimeEntity {
 	private Instant consumedAt;
 
 	private EmailVerification(
-			String email,
-			VerificationPurpose purpose,
-			String codeHash,
-			Instant expiresAt
+		String email,
+		VerificationPurpose purpose,
+		String codeHash,
+		Instant expiresAt
 	) {
 		Objects.requireNonNull(purpose, "purpose");
 		Objects.requireNonNull(expiresAt, "expiresAt");
@@ -77,20 +80,20 @@ public class EmailVerification extends BaseTimeEntity {
 	}
 
 	public static EmailVerification request(
-			String email,
-			VerificationPurpose purpose,
-			String codeHash,
-			Instant expiresAt
+		String email,
+		VerificationPurpose purpose,
+		String codeHash,
+		Instant expiresAt
 	) {
 		return new EmailVerification(email, purpose, codeHash, expiresAt);
 	}
 
 	public static EmailVerification request(
-			String email,
-			VerificationPurpose purpose,
-			String codeHash,
-			Instant expiresAt,
-			int previousAttemptCount
+		String email,
+		VerificationPurpose purpose,
+		String codeHash,
+		Instant expiresAt,
+		int previousAttemptCount
 	) {
 		if (previousAttemptCount < 0) {
 			throw new IllegalArgumentException(
