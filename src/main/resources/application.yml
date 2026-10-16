@@ -77,8 +77,10 @@ auth:
     max-sends-per-hour: ${EMAIL_VERIFICATION_MAX_SENDS_PER_HOUR:}
     max-sends-per-day: ${EMAIL_VERIFICATION_MAX_SENDS_PER_DAY:}
     password-reset-code-ttl-seconds: ${EMAIL_VERIFICATION_PASSWORD_RESET_CODE_TTL_SECONDS:}
-    password-reset-verification-ttl-seconds: ${EMAIL_VERIFICATION_PASSWORD_RESET_VERIFICATION_TTL_SECONDS:}
-    max-verification-attempts: ${EMAIL_VERIFICATION_MAX_VERIFICATION_ATTEMPTS:}
+    password-reset-verification-ttl-seconds: ${EMAIL_VERIFICATION_PASSWORD_RESET_VERIFICATION_TTL_SECONDS:600}
+    max-verification-attempts: ${EMAIL_VERIFICATION_MAX_VERIFICATION_ATTEMPTS:5}
+    recovery:
+      attempt-cooldown-seconds: ${EMAIL_VERIFICATION_ATTEMPT_COOLDOWN_SECONDS:900}
     mail-from: ${EMAIL_VERIFICATION_MAIL_FROM:}
     outbox:
       encryption-key: ${EMAIL_VERIFICATION_OUTBOX_ENCRYPTION_KEY:}

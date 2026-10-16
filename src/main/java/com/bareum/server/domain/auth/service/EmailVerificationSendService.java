@@ -2,6 +2,7 @@ package com.bareum.server.domain.auth.service;
 
 import com.bareum.server.domain.auth.config.EmailOutboxProperties;
 import com.bareum.server.domain.auth.config.EmailVerificationProperties;
+import com.bareum.server.domain.auth.config.EmailVerificationRecoveryProperties;
 import com.bareum.server.domain.auth.dto.request.EmailVerificationRequest;
 import com.bareum.server.domain.auth.dto.response.EmailVerificationDeliveryResponse;
 import com.bareum.server.domain.auth.entity.EmailVerification;
@@ -29,6 +30,7 @@ public class EmailVerificationSendService {
     private final EmailOutboxCipher cipher;
     private final EmailOutboxProperties outboxProperties;
     private final EmailVerificationMailSender mailSender;
+    private final EmailVerificationRecoveryProperties recovery;
     private final Clock emailVerificationClock;
 
     @Transactional(isolation = Isolation.READ_COMMITTED)
@@ -43,7 +45,9 @@ public class EmailVerificationSendService {
         outbox.checkCanQueue(recipient, now, properties);
         int previousAttemptCount = verificationRepository
                 .findFirstByEmailIgnoreCaseAndPurposeOrderByIdDesc(recipient, request.purpose())
-                .map(EmailVerification::getAttemptCount).orElse(0);
+                .map(previous -> previous.attemptsForNewCode(now,
+                        properties.getMaxVerificationAttempts(), recovery.attemptCooldownSeconds()))
+                .orElse(0);
         String code = codeGenerator.generate();
         String codeHash = codeHasher.hash(recipient, request.purpose(), code);
         // Pending requests are ineligible for code confirmation: lastSentAt stays null.

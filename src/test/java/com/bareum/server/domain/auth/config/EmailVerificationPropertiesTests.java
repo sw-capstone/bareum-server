@@ -34,6 +34,17 @@ class EmailVerificationPropertiesTests {
     }
 
     @Test
+    void recoveryCooldownCanBeOverriddenButInvalidBoundsAreRejected() {
+        context.withPropertyValues("auth.email-verification.recovery.attempt-cooldown-seconds=1200")
+                .run(ctx -> assertEquals(1200,
+                        ctx.getBean(EmailVerificationRecoveryProperties.class).attemptCooldownSeconds()));
+        for (String value : new String[]{"0", "-1", "86401"}) {
+            context.withPropertyValues("auth.email-verification.recovery.attempt-cooldown-seconds=" + value)
+                    .run(ctx -> assertNotNull(ctx.getStartupFailure()));
+        }
+    }
+
+    @Test
     void defaultsKeepSignupValidityButDoNotInventSendLimits() {
         context.run(ctx -> {
             assertNull(ctx.getStartupFailure());
@@ -69,19 +80,21 @@ class EmailVerificationPropertiesTests {
                 .codeTtlSeconds(VerificationPurpose.PASSWORD_RESET)));
     }
     @Test
-    void confirmationDefaultsDoNotInventAttemptLimitsOrResetProofLifetime() {
+    void confirmationUsesDocumentedProvisionalDefaultsAndAllowsOverrides() {
         context.run(ctx -> {
             var properties = ctx.getBean(EmailVerificationProperties.class);
             assertEquals(600, properties.getSignupVerificationTtlSeconds());
-            assertNull(properties.getMaxVerificationAttempts());
-            assertNull(properties.getPasswordResetVerificationTtlSeconds());
-            assertThrows(AuthException.class, () -> properties.verificationTtlSeconds(VerificationPurpose.SIGNUP));
+            assertEquals(5, properties.getMaxVerificationAttempts());
+            assertEquals(600, properties.getPasswordResetVerificationTtlSeconds());
+            assertEquals(600, properties.verificationTtlSeconds(VerificationPurpose.SIGNUP));
+            assertEquals(600, properties.verificationTtlSeconds(VerificationPurpose.PASSWORD_RESET));
+            assertEquals(900, ctx.getBean(EmailVerificationRecoveryProperties.class).attemptCooldownSeconds());
         });
         context.withPropertyValues("auth.email-verification.max-verification-attempts=3")
                 .run(ctx -> {
                     var properties = ctx.getBean(EmailVerificationProperties.class);
                     assertEquals(600, properties.verificationTtlSeconds(VerificationPurpose.SIGNUP));
-                    assertThrows(AuthException.class, () -> properties.verificationTtlSeconds(VerificationPurpose.PASSWORD_RESET));
+                    assertEquals(600, properties.verificationTtlSeconds(VerificationPurpose.PASSWORD_RESET));
                 });
         context.withPropertyValues("auth.email-verification.max-verification-attempts=3",
                 "auth.email-verification.password-reset-verification-ttl-seconds=420")

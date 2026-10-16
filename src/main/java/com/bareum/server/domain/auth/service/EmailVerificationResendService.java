@@ -2,6 +2,7 @@ package com.bareum.server.domain.auth.service;
 
 import com.bareum.server.domain.auth.config.EmailOutboxProperties;
 import com.bareum.server.domain.auth.config.EmailVerificationProperties;
+import com.bareum.server.domain.auth.config.EmailVerificationRecoveryProperties;
 import com.bareum.server.domain.auth.dto.request.EmailVerificationRequest;
 import com.bareum.server.domain.auth.dto.response.EmailVerificationDeliveryResponse;
 import com.bareum.server.domain.auth.entity.EmailVerification;
@@ -34,6 +35,7 @@ public class EmailVerificationResendService {
     private final EmailOutboxCipher cipher;
     private final EmailOutboxProperties outboxProperties;
     private final EmailVerificationMailSender mailSender;
+    private final EmailVerificationRecoveryProperties recovery;
     private final Clock emailVerificationClock;
 
     @Transactional(isolation = Isolation.READ_COMMITTED)
@@ -51,10 +53,12 @@ public class EmailVerificationResendService {
         if (verification.getConsumedAt() != null) {
             throw new AuthException(AuthErrorCode.EMAIL_VERIFICATION_INVALID);
         }
-        if (verification.getVerifiedAt() != null
+        if ((verification.getVerifiedAt() != null
                 || verification.getVerificationTokenHash() != null
-                || verification.getVerificationExpiresAt() != null) {
-            // Completed proof replacement remains blocked until the recovery policy is agreed.
+                || verification.getVerificationExpiresAt() != null)
+                && (verification.getVerifiedAt() == null
+                || verification.getVerificationTokenHash() == null
+                || verification.getVerificationExpiresAt() == null)) {
             throw new AuthException(AuthErrorCode.EMAIL_VERIFICATION_NOT_CONFIGURED);
         }
         String recipient =
@@ -64,6 +68,8 @@ public class EmailVerificationResendService {
         // Reservations include in-flight jobs across initial send and resend; no live job is
         // replaced.
         outbox.checkCanQueue(recipient, now, properties);
+        int retainedAttempts = verification.attemptsForNewCode(now,
+                properties.getMaxVerificationAttempts(), recovery.attemptCooldownSeconds());
         if (verification.getLastSentAt() == null && !outbox.hasTerminalDelivery(verification)) {
             throw new AuthException(AuthErrorCode.EMAIL_VERIFICATION_INVALID);
         }
@@ -73,7 +79,7 @@ public class EmailVerificationResendService {
             throw new AuthException(AuthErrorCode.EMAIL_SEND_FAILED);
         }
         String hash = codeHasher.hash(recipient, request.purpose(), code);
-        verification.queueReplacement(recipient, hash, now);
+        verification.queueReplacement(recipient, hash, now, retainedAttempts);
         verificationRepository.flush();
         UUID id = UUID.randomUUID();
         byte[] encrypted =

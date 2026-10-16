@@ -47,6 +47,9 @@ public class EmailVerification extends BaseTimeEntity {
 	@ColumnDefault("0")
 	private int attemptCount;
 
+	@Column(name = "attempts_blocked_until")
+	private Instant attemptsBlockedUntil;
+
 	@Column(name = "last_sent_at", nullable = true)
 	private Instant lastSentAt;
 
@@ -120,6 +123,35 @@ public class EmailVerification extends BaseTimeEntity {
 		this.attemptCount = Math.incrementExact(attemptCount);
 	}
 
+    public void recordFailedAttempt(Instant now, int limit, long cooldownSeconds) {
+        recordFailedAttempt();
+        if (attemptCount >= limit) {
+            attemptsBlockedUntil = now.plusSeconds(cooldownSeconds);
+        }
+    }
+
+    /** A new code starts a fresh budget only after the cooldown; resending alone never resets it. */
+    public int attemptsForNewCode(Instant now, Integer limit, long cooldownSeconds) {
+        if (limit == null || limit <= 0) {
+            throw new AuthException(AuthErrorCode.EMAIL_VERIFICATION_NOT_CONFIGURED);
+        }
+        if (attemptsBlockedUntil != null) {
+            if (now.isBefore(attemptsBlockedUntil)) {
+                throw new AuthException(AuthErrorCode.EMAIL_VERIFICATION_ATTEMPTS_EXCEEDED);
+            }
+            return 0;
+        }
+        if (attemptCount >= limit) {
+            // Existing rows predate the cooldown column. Do not leave them permanently blocked.
+            Instant anchor = lastSentAt != null ? lastSentAt : expiresAt;
+            if (now.isBefore(anchor.plusSeconds(cooldownSeconds))) {
+                throw new AuthException(AuthErrorCode.EMAIL_VERIFICATION_ATTEMPTS_EXCEEDED);
+            }
+            return 0;
+        }
+        return attemptCount;
+    }
+
 	public void markVerified(String tokenHash, Instant verifiedAt, Instant tokenExpiresAt) {
 		this.verificationTokenHash = Objects.requireNonNull(tokenHash, "tokenHash");
 		this.verifiedAt = Objects.requireNonNull(verifiedAt, "verifiedAt");
@@ -146,10 +178,19 @@ public class EmailVerification extends BaseTimeEntity {
     }
 
     /** Preserve request ID and failed attempts; pending codes cannot be confirmed. */
-    public void queueReplacement(String recipient, String newCodeHash, Instant queuedAt) {
+    public void queueReplacement(String recipient, String newCodeHash, Instant queuedAt,
+            int retainedAttempts) {
+        if (retainedAttempts < 0 || retainedAttempts > attemptCount) {
+            throw new IllegalArgumentException("Invalid retained verification attempts");
+        }
         this.email = Objects.requireNonNull(recipient, "recipient");
         this.codeHash = Objects.requireNonNull(newCodeHash, "newCodeHash");
         this.expiresAt = Objects.requireNonNull(queuedAt, "queuedAt");
         this.lastSentAt = null;
+        this.attemptCount = retainedAttempts;
+        this.attemptsBlockedUntil = null;
+        this.verifiedAt = null;
+        this.verificationTokenHash = null;
+        this.verificationExpiresAt = null;
     }
 }

@@ -6,7 +6,8 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
-@EnableConfigurationProperties({EmailVerificationProperties.class, EmailOutboxProperties.class})
+@EnableConfigurationProperties({EmailVerificationProperties.class, EmailOutboxProperties.class,
+        EmailVerificationRecoveryProperties.class})
 @org.springframework.scheduling.annotation.EnableScheduling
 public class EmailVerificationTimeConfig {
 

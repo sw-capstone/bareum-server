@@ -20,15 +20,16 @@ public interface EmailVerificationResendControllerDocs {
             summary = "이메일 인증 코드 재발송",
             description =
                     """
-                    이메일·목적에 해당하는 최신 미인증 요청의 번호를 교체합니다.
-                    만료된 번호도 다시 발송할 수 있으며 검증 실패 횟수는 초기화하지 않습니다.
+                    이메일·목적에 해당하는 최신 미사용 요청의 번호를 교체합니다.
+                    만료된 번호도 다시 발송할 수 있으며 재발송만으로 검증 실패 횟수를 초기화하지 않습니다.
                     인증 요청과 암호화한 발송 작업을 함께 커밋하고 별도 worker가 메일을 발송합니다.
                     회원가입 인증번호 유효기간은 SMTP 수락 시점부터 5분입니다.
                     202 접수 응답은 requestId·PENDING·expiresIn=0이며 Location에서 상태를 조회합니다.
                     대기 중에는 타이머를 시작하지 않고 SENT의 남은 시간(초)을 사용합니다.
                     최종 실패·취소는 FAILED·CANCELLED로 안내하며 인증번호 원문은 반환하지 않습니다.
                     최초 발송과 같은 발송 제한을 적용합니다. 필수 설정 누락 시 발송하지 않습니다.
-                    인증 완료 후 재발송 정책이 미정이므로 완료 증명이 있는 요청은 변경하지 않고 503을 반환합니다.
+                    완료 증명을 잃으면 이 API로 다시 인증합니다. 접수 시 기존 증명을 무효화하며 새 번호 확인 전에는 새 증명을 발급하지 않습니다.
+                    기본 5회 실패 후 15분 동안 새 발송을 제한합니다. 제한 종료 후 새 번호 접수 시에만 실패 횟수를 초기화합니다.
                     요청·응답·오류 매핑과 인증 요청 식별 방식은 팀 검토가 필요한 구현 초안입니다.
                     """)
     @ApiResponses({
@@ -74,7 +75,7 @@ public interface EmailVerificationResendControllerDocs {
                                 schema = @Schema(ref = "#/components/schemas/ProblemDetail"))),
         @ApiResponse(
                 responseCode = "429",
-                description = "인증 메일 발송 제한 초과(AUTH-0004)",
+                description = "인증 메일 발송 제한(AUTH-0004) 또는 인증 실패 제한 시간 미경과(AUTH-0010)",
                 content =
                         @Content(
                                 mediaType = "application/problem+json",
@@ -88,7 +89,7 @@ public interface EmailVerificationResendControllerDocs {
                                 schema = @Schema(ref = "#/components/schemas/ProblemDetail"))),
         @ApiResponse(
                 responseCode = "503",
-                description = "필수 설정 누락 또는 인증 완료 후 재발송 정책 미확정(AUTH-0006)",
+                description = "필수 설정 누락 또는 불완전한 인증 데이터(AUTH-0006)",
                 content =
                         @Content(
                                 mediaType = "application/problem+json",

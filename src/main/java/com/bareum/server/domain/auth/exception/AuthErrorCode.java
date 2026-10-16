@@ -65,7 +65,7 @@ public enum AuthErrorCode implements BaseErrorCode {
     GOOGLE_LOGIN_NOT_CONFIGURED(HttpStatus.SERVICE_UNAVAILABLE,"AUTH-0025","Google 로그인 서비스가 아직 준비되지 않았습니다."),
     GOOGLE_AUTHENTICATION_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE,"AUTH-0026","Google 인증을 일시적으로 확인할 수 없습니다."),
     EMAIL_LOGIN_REQUIRED(HttpStatus.CONFLICT,"AUTH-0027","이미 이메일로 가입된 계정입니다. 이메일 로그인을 이용해 주세요."),
-    GOOGLE_EMAIL_VERIFICATION_REQUIRED(HttpStatus.FORBIDDEN,"AUTH-0028","이 Google 계정의 이메일은 추가 확인이 필요합니다."),
+    GOOGLE_EMAIL_VERIFICATION_REQUIRED(HttpStatus.FORBIDDEN,"AUTH-0028","현재 Google 신규 가입은 Gmail 또는 Google Workspace 계정으로만 가능합니다."),
     INVALID_GOOGLE_SIGNUP_PROOF(HttpStatus.UNAUTHORIZED,"AUTH-0029","유효한 Google 가입 증명이 필요합니다. Google 인증을 다시 진행해 주세요."),
     GOOGLE_SIGNUP_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE,"AUTH-0030","Google 가입을 일시적으로 완료할 수 없습니다. 잠시 후 다시 시도해 주세요.");
 

@@ -1,6 +1,7 @@
 package com.bareum.server.domain.auth.service;
 
 import com.bareum.server.domain.auth.config.EmailVerificationProperties;
+import com.bareum.server.domain.auth.config.EmailVerificationRecoveryProperties;
 import com.bareum.server.domain.auth.dto.request.EmailVerificationConfirmRequest;
 import com.bareum.server.domain.auth.dto.response.EmailVerificationConfirmResponse;
 import com.bareum.server.domain.auth.entity.EmailVerification;
@@ -24,6 +25,7 @@ public class EmailVerificationConfirmService {
     private final EmailVerificationRepository verificationRepository;
     private final EmailVerificationCodeHasher codeHasher;
     private final EmailVerificationTokenGenerator tokenGenerator;
+    private final EmailVerificationRecoveryProperties recovery;
     private final Clock emailVerificationClock;
 
     @Transactional(isolation = Isolation.READ_COMMITTED,
@@ -45,11 +47,13 @@ public class EmailVerificationConfirmService {
         if (!now.isBefore(verification.getExpiresAt())) {
             throw new AuthException(AuthErrorCode.EMAIL_VERIFICATION_EXPIRED);
         }
-        if (verification.getAttemptCount() >= properties.getMaxVerificationAttempts()) {
+        if (verification.getAttemptsBlockedUntil() != null
+                || verification.getAttemptCount() >= properties.getMaxVerificationAttempts()) {
             throw new AuthException(AuthErrorCode.EMAIL_VERIFICATION_ATTEMPTS_EXCEEDED);
         }
         if (!codeHasher.matches(request.email(), request.purpose(), request.code(), verification.getCodeHash())) {
-            verification.recordFailedAttempt();
+            verification.recordFailedAttempt(now, properties.getMaxVerificationAttempts(),
+                    recovery.attemptCooldownSeconds());
             throw new EmailVerificationCodeMismatchException();
         }
 

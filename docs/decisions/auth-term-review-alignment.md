@@ -1,5 +1,7 @@
 # Auth·Term 명세·리뷰 기준 정비
 
+> 이메일 인증의 실패 제한·재인증·재설정 완료 증명과 Google 지원 범위는 [2026-10-16 임시 적용 기준](auth-term-policy-implementation.md)을 우선한다. 아래 이전 구현·검증 기록에서 미정 또는 차단으로 표시한 해당 항목은 당시 상태다. 실제 배포·프론트 연결 완료를 의미하지 않는다.
+
 - 기준일: 2026-10-13
 - 관련 작업: [GitHub #22](https://github.com/sw-capstone/bareum-server/issues/22), BRM-25
 - 상태: 구현 대조 결과·팀 미확정 정책은 별도 검토

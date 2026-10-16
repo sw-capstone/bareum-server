@@ -1,5 +1,7 @@
 # Auth·Term 배포 설정 준비
 
+> 정책 기본값과 복구 동작은 [Auth·Term 임시 적용 기준](../decisions/auth-term-policy-implementation.md)을 따른다. #18 env v2는 그대로 유지하고 후속 인증 이미지의 설정에서 아래 항목을 추가한다. 실제 AWS 등록·배포 완료와 구분한다.
+
 Auth·Term의 서버 설정을 기존 개발 EC2 배포 경로에 연결한다. 코드·설정 준비와 운영 정책 승인·실제 환경 적용은 구분한다. [배포 구성](deployment-guide.md)과 [Auth·Term 연동 안내](../integration/auth-term.md)를 함께 따른다.
 
 ## 구현·설정 상태 구분
@@ -45,11 +47,12 @@ Auth·Term의 서버 설정을 기존 개발 EC2 배포 경로에 연결한다. 
 | `LOGIN_ALLOWED_ORIGINS` | String · Auth 필수 | 쉼표로 구분한 정확한 HTTPS Origin. 와일드카드·경로·HTTP를 허용하지 않음 |
 | `EMAIL_VERIFICATION_MINIMUM_SEND_INTERVAL_SECONDS` | String · Auth 필수 | 개발 서버 v2 임시안 60초. 팀 확인·실제 환경 적용 필요 |
 | `EMAIL_VERIFICATION_MAX_SENDS_PER_HOUR`, `EMAIL_VERIFICATION_MAX_SENDS_PER_DAY` | String · Auth 필수 | 개발 서버 v2 임시안 최근 1시간 5회·24시간 20회. 팀 확인 필요 |
-| `EMAIL_VERIFICATION_MAX_VERIFICATION_ATTEMPTS` | String · Auth 필수 | 승인된 양의 인증 실패 제한 |
+| `EMAIL_VERIFICATION_MAX_VERIFICATION_ATTEMPTS` | String · Auth 필수 | 개발 임시안 5회 |
+| `EMAIL_VERIFICATION_ATTEMPT_COOLDOWN_SECONDS` | String · 선택 | 개발 임시안 900초, 1~86400초. 누락 시 코드 기본값 900초 |
 | `SIGNUP_TERMS_AGE_OVER_14_VERSION`, `SIGNUP_TERMS_TERMS_OF_SERVICE_VERSION`, `SIGNUP_TERMS_PRIVACY_POLICY_VERSION`, `SIGNUP_TERMS_MARKETING_CONSENT_VERSION` | String · Auth 필수 | 약관 DB·프론트 원문과 대응하는 승인 버전. 30자 이내이며 공백·자리표시자로 대체하지 않음 |
 | `GOOGLE_CLIENT_IDS` | String · 선택 | 승인된 웹 OAuth Client ID 목록. 미설정 시 Google 로그인 차단 |
 | `GOOGLE_SIGNUP_TTL_SECONDS` | String · 선택 | 기존 구현의 1~600초 범위. 미설정 시 기존 600초 초안 유지 |
-| `EMAIL_VERIFICATION_PASSWORD_RESET_CODE_TTL_SECONDS`, `EMAIL_VERIFICATION_PASSWORD_RESET_VERIFICATION_TTL_SECONDS` | String · 선택 | 번호 임시안은 300초, 완료 증명 기간은 별도 미정. 재설정 활성화 시 두 값을 함께 준비 |
+| `EMAIL_VERIFICATION_PASSWORD_RESET_CODE_TTL_SECONDS`, `EMAIL_VERIFICATION_PASSWORD_RESET_VERIFICATION_TTL_SECONDS` | String · 선택 | 번호 임시안은 300초, 완료 증명은 별도 임시안 600초. 재설정 활성화 시 두 값을 함께 준비 |
 
 SMTP 제공자에 따라 인증 SMTP와 implicit TLS·필수 STARTTLS 중 하나를 선택한다. 서버 이름 검증은 켜고 기존 연결·읽기·쓰기 5초 기본 타임아웃을 유지한다. 제공자가 다른 인증 방식을 요구하면 자격증명을 우회하지 않고 주입 경로와 검증 기준을 재검토한다.
 
@@ -87,9 +90,9 @@ Access 15분·세션 최대 8시간, Secure·SameSite=None 쿠키, Outbox 재시
 | 항목 | 구현 상태 | 남은 결정·적용 |
 | --- | --- | --- |
 | 운영 SMTP 제공자·발신 계정 | SMTP 인증·TLS·발신 주소 설정 경로 구현 | 운영 서비스·발신 계정 결정 및 자격증명 적용. 개발 Gmail 수신 검증을 운영 설정 완료로 취급하지 않음 |
-| 사용자별 메일 발송·인증 제한 | 발송 간격·시간당/일당 횟수·인증 실패 횟수 설정 및 누락 시 차단 구현 | 발송 임시안은 60초·최근 1시간 5회·24시간 20회. 팀 확인·환경 주입 필요. 인증 실패 횟수·복구는 별도 미정 |
+| 사용자별 메일 발송·인증 제한 | 발송 간격·시간당/일당 횟수·인증 실패 횟수 설정 및 누락 시 차단 구현 | 발송 임시안은 60초·최근 1시간 5회·24시간 20회. 팀 확인·환경 주입 필요. 인증 실패는 임시안 5회·15분 제한 후 새 번호로 재시작 |
 | 공식 약관 원문·승인 버전 | 네 boolean 동의 처리·서버 버전 매핑·DB 일치 검증 구현 | 공식 원문·버전·필수 여부 승인 후 프론트 원문·서버 설정·DB 데이터 일치 확인 |
 | 허용 Origin·Google Client ID | 정확한 HTTPS Origin 제한·Client ID 검증 설정 경로 구현 | 미리보기 주소는 알려져 있으나 허용 대상 승인·환경 등록은 미확인. 실제 웹 Client ID와 Console 승인 Origin 준비 |
-| 비밀번호 찾기 | 발송·인증·재설정 구현 및 개발 메일 검증 완료 | MVP 제외 기준 유지. 번호 임시안 300초의 팀 확인, 완료 증명 기간·배포 포함 여부는 별도 결정 필요 |
+| 비밀번호 찾기 | 발송·인증·재설정 구현 및 개발 메일 검증 완료 | MVP 제외 기준 유지. 번호 임시안 300초의 팀 확인, 완료 증명은 600초 임시안이며 배포 포함 여부는 별도 결정 필요 |
 
 Access 15분·최대 세션 8시간은 합의된 구현 기준이며, 회원가입 인증번호 5분·인증 완료 후 가입 10분은 최신 정책 기준이다. 쿠키 SameSite·경로와 Outbox 재시도·대기 기본값은 임시 기준으로 이미 구현되어 있고, 위 실제 값 미지정 항목과 구분한다. Google 지원 계정 범위와 키 교체·실패 복구 기준은 기존 구현의 재검토 사항으로 남긴다.

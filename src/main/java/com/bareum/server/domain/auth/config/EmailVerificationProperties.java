@@ -23,9 +23,9 @@ public final class EmailVerificationProperties {
             Long minimumSendIntervalSeconds,
             Integer maxSendsPerHour,
             Integer maxSendsPerDay,
-            Integer maxVerificationAttempts,
+            @DefaultValue("5") Integer maxVerificationAttempts,
             @DefaultValue("600") long signupVerificationTtlSeconds,
-            Long passwordResetVerificationTtlSeconds
+            @DefaultValue("600") Long passwordResetVerificationTtlSeconds
     ) {
         this.signupCodeTtlSeconds = signupCodeTtlSeconds;
         this.passwordResetCodeTtlSeconds = passwordResetCodeTtlSeconds;

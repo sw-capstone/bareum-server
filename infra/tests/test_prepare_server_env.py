@@ -138,8 +138,8 @@ class PrepareServerEnvTests(unittest.TestCase):
         if os.name != "nt":
             self.assertEqual(0o600, stat.S_IMODE(self.output.stat().st_mode))
         names = self.requests.read_text().splitlines()
-        self.assertEqual(28, len(names))
-        self.assertEqual(28, len(set(names)))
+        self.assertEqual(29, len(names))
+        self.assertEqual(29, len(set(names)))
 
     def test_db_only_is_backward_compatible_and_ignores_inherited_activation(self):
         self.deploy.unlink()
@@ -258,6 +258,15 @@ class PrepareServerEnvTests(unittest.TestCase):
         self.output.symlink_to(target)
         self.assert_failure_preserves_environment()
         self.assertEqual(self.original, target.read_bytes())
+
+    def test_recovery_cooldown_is_optional_and_validated_before_environment_replacement(self):
+        self.values["EMAIL_VERIFICATION_ATTEMPT_COOLDOWN_SECONDS"] = "900"
+        self.assertEqual(0, self.run_generator().returncode)
+        self.output.write_bytes(self.original)
+        for value in ("0", "-1", "86401", "not-a-duration"):
+            with self.subTest(value=value):
+                self.values["EMAIL_VERIFICATION_ATTEMPT_COOLDOWN_SECONDS"] = value
+                self.assert_failure_preserves_environment()
 
 
 if __name__ == "__main__":

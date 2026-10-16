@@ -6,6 +6,7 @@ import static org.mockito.Mockito.*;
 
 import com.bareum.server.domain.auth.config.EmailOutboxProperties;
 import com.bareum.server.domain.auth.config.EmailVerificationProperties;
+import com.bareum.server.domain.auth.config.EmailVerificationRecoveryProperties;
 import com.bareum.server.domain.auth.dto.request.EmailVerificationRequest;
 import com.bareum.server.domain.auth.entity.EmailVerification;
 import com.bareum.server.domain.auth.enums.VerificationPurpose;
@@ -34,7 +35,7 @@ class EmailVerificationSendServiceTests {
     private final EmailOutboxRepository outbox = mock(EmailOutboxRepository.class);
     private final EmailOutboxCipher cipher = mock(EmailOutboxCipher.class);
     private final EmailVerificationMailSender sender = mock(EmailVerificationMailSender.class);
-    private EmailVerificationProperties policy = new EmailVerificationProperties(300,420L,60L,5,20, null, 600, null);
+    private EmailVerificationProperties policy = new EmailVerificationProperties(300,420L,60L,5,20, 5, 600, 600L);
     private EmailVerificationSendService service;
 
     @BeforeEach
@@ -145,6 +146,6 @@ class EmailVerificationSendServiceTests {
     private EmailVerificationSendService service() {
         return new EmailVerificationSendService(policy,lock,accounts,limits,codes,hasher,verifications,outbox,
                 cipher,new EmailOutboxProperties(true,3,5,120,300,10,"v1","test"),sender,
-                Clock.fixed(NOW,ZoneOffset.UTC));
+                new EmailVerificationRecoveryProperties(900), Clock.fixed(NOW,ZoneOffset.UTC));
     }
 }
