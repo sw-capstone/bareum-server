@@ -148,11 +148,11 @@ class GoogleSignupIntegrationTests {
     }
 
     @Test
-    void signupRecordsDatabaseVersionsWithoutSeparateTermVersionConfiguration() {
-        jdbc.update("UPDATE term SET version = 'google-catalog-v2' WHERE code = 'TERMS_OF_SERVICE'");
+    void signupDoesNotValidateTermVersionAndRecordsConsents() {
+        jdbc.update("UPDATE term SET version = '' WHERE code = 'TERMS_OF_SERVICE'");
         var result = service.signup(input());
         long memberId = sessions.authenticate(result.accessToken()).orElseThrow().memberId();
-        assertEquals("google-catalog-v2", jdbc.queryForObject(
+        assertEquals("", jdbc.queryForObject(
                 "SELECT t.version FROM member_term mt JOIN term t ON t.id = mt.term_id WHERE mt.member_id = ? AND t.code = 'TERMS_OF_SERVICE'",
                 String.class, memberId));
         assertEquals(4, jdbc.queryForObject("SELECT count(*) FROM member_term WHERE member_id = ?",
@@ -399,7 +399,6 @@ class GoogleSignupIntegrationTests {
             strings = {
                 "absent",
                 "null-field",
-                "blank-version",
                 "required-flag",
                 "duplicate-version",
                 "missing-term"
@@ -408,10 +407,6 @@ class GoogleSignupIntegrationTests {
         switch (mode) {
             case "absent" -> agreements = null;
             case "null-field" -> agreements = new SignupAgreementsRequest(true, true, true, null);
-            case "blank-version" ->
-                    jdbc.update(
-                            "UPDATE term SET version='' WHERE id=?",
-                            termIds.getFirst());
             case "required-flag" ->
                     jdbc.update("UPDATE term SET is_required=false WHERE id=?", termIds.getFirst());
             case "duplicate-version" ->
