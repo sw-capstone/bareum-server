@@ -1,12 +1,13 @@
 package com.bareum.server.global.exception;
 
-import com.bareum.server.global.exception.code.BaseErrorCode;
+import static org.assertj.core.api.Assertions.assertThat;
+
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.http.HttpStatus;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import com.bareum.server.global.exception.code.BaseErrorCode;
 
 class BusinessExceptionTests {
 

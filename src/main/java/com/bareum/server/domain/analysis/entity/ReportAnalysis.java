@@ -1,12 +1,17 @@
 package com.bareum.server.domain.analysis.entity;
 
-import com.bareum.server.domain.analysis.exception.AnalysisException;
-import com.bareum.server.domain.analysis.exception.AnalysisErrorCode;
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.Objects;
+import java.util.UUID;
 
 import com.bareum.server.domain.analysis.enums.AnalysisStatus;
+import com.bareum.server.domain.analysis.exception.AnalysisErrorCode;
+import com.bareum.server.domain.analysis.exception.AnalysisException;
 import com.bareum.server.domain.report.entity.ReportContent;
 import com.bareum.server.domain.report.enums.ContentStatus;
 import com.bareum.server.global.entity.BaseTimeEntity;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -18,10 +23,6 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
-import java.math.BigDecimal;
-import java.time.Instant;
-import java.util.Objects;
-import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -82,7 +83,12 @@ public class ReportAnalysis extends BaseTimeEntity {
 		this.promptVersion = promptVersion;
 	}
 
-	public static ReportAnalysis request(ReportContent content, UUID requestKey, String rulesetVersion, String promptVersion) {
+	public static ReportAnalysis request(
+		ReportContent content,
+		UUID requestKey,
+		String rulesetVersion,
+		String promptVersion
+	) {
 		return new ReportAnalysis(content, requestKey, rulesetVersion, promptVersion);
 	}
 
@@ -96,7 +102,8 @@ public class ReportAnalysis extends BaseTimeEntity {
 
 	public void succeed(BigDecimal totalScore, Instant finishedAt) {
 		requireProcessing();
-		if (totalScore == null || totalScore.signum() < 0 || totalScore.precision() - totalScore.scale() > 3 || totalScore.stripTrailingZeros().scale() > 2) {
+		if (totalScore == null || totalScore.signum() < 0 || totalScore.precision() - totalScore.scale() > 3
+				|| totalScore.stripTrailingZeros().scale() > 2) {
 			throw new AnalysisException(AnalysisErrorCode.INVALID_SCORE);
 		}
 		validateFinishTime(finishedAt);

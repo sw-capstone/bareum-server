@@ -4,4 +4,3 @@ public enum SignupMethod {
 	LOCAL,
 	GOOGLE
 }
-

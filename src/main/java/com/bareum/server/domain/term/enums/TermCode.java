@@ -6,4 +6,3 @@ public enum TermCode {
 	PRIVACY_POLICY,
 	MARKETING_CONSENT
 }
-
