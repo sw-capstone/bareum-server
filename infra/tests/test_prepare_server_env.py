@@ -141,13 +141,76 @@ class PrepareServerEnvTests(unittest.TestCase):
         self.assertEqual(28, len(names))
         self.assertEqual(28, len(set(names)))
 
-    def test_db_only_is_backward_compatible_and_ignores_inherited_activation(self):
+    def test_email_mode_preserves_nine_parameters_and_ignores_inherited_activation(self):
         self.deploy.unlink()
         self.environment["AUTH_ENV_ENABLED"] = "true"
         self.assertEqual(0, self.run_generator().returncode)
-        self.assertEqual({PREFIX + key for key in ("DB_URL", "DB_USERNAME", "DB_PASSWORD")},
+        self.assertEqual({PREFIX + key for key in (
+            "DB_URL", "DB_USERNAME", "DB_PASSWORD", "EMAIL_VERIFICATION_HASH_SECRET",
+            "EMAIL_VERIFICATION_OUTBOX_ENCRYPTION_KEY", "SPRING_MAIL_PASSWORD",
+            "SPRING_MAIL_HOST", "SPRING_MAIL_USERNAME", "EMAIL_VERIFICATION_MAIL_FROM")},
                          set(self.requests.read_text().splitlines()))
-        self.assertNotIn("EMAIL_VERIFICATION_HASH_SECRET=", self.output.read_text())
+        self.assertIn("EMAIL_VERIFICATION_HASH_SECRET=", self.output.read_text())
+        self.assertNotIn("LOGIN_JWT_SIGNING_KEY=", self.output.read_text())
+
+    def test_email_mode_preserves_v2_template_without_enabling_confirmation(self):
+        self.deploy.write_text("AUTH_ENV_ENABLED=false\n", encoding="utf-8")
+        template = SCRIPT.parents[1] / "env" / ".env.server.template"
+        self.template.write_text(template.read_text(encoding="utf-8"), encoding="utf-8")
+        self.assertEqual(0, self.run_generator().returncode)
+        generated = dict(line.split("=", 1) for line in self.output.read_text(encoding="utf-8").splitlines()
+                         if "=" in line and not line.startswith("#"))
+        for line in template.read_text(encoding="utf-8").splitlines():
+            if "=" in line and not line.startswith("#"):
+                key, value = line.split("=", 1)
+                self.assertEqual(value, generated[key], key)
+        self.assertNotIn("EMAIL_VERIFICATION_MAX_VERIFICATION_ATTEMPTS", generated)
+        self.assertNotIn("LOGIN_JWT_SIGNING_KEY", generated)
+
+    def test_email_mode_still_requires_all_base_parameters(self):
+        self.deploy.write_text("AUTH_ENV_ENABLED=false\n", encoding="utf-8")
+        for key in ("DB_PASSWORD", "EMAIL_VERIFICATION_HASH_SECRET",
+                    "EMAIL_VERIFICATION_OUTBOX_ENCRYPTION_KEY", "SPRING_MAIL_HOST",
+                    "SPRING_MAIL_USERNAME", "SPRING_MAIL_PASSWORD", "EMAIL_VERIFICATION_MAIL_FROM"):
+            with self.subTest(key=key):
+                previous = self.values.pop(key)
+                self.assert_failure_preserves_environment()
+                self.values[key] = previous
+
+    def test_email_mode_validates_keys_and_secure_string(self):
+        self.deploy.write_text("AUTH_ENV_ENABLED=false\n", encoding="utf-8")
+        for key, value in (("EMAIL_VERIFICATION_HASH_SECRET", "not-base64"),
+                           ("EMAIL_VERIFICATION_HASH_SECRET", base64.b64encode(b"H" * 31).decode()),
+                           ("EMAIL_VERIFICATION_OUTBOX_ENCRYPTION_KEY", base64.b64encode(b"O" * 33).decode()),
+                           ("DB_URL", "   ")):
+            with self.subTest(key=key):
+                previous = self.values[key]
+                self.values[key] = value
+                self.assert_failure_preserves_environment()
+                self.values[key] = previous
+        self.secure.remove("SPRING_MAIL_PASSWORD")
+        self.assert_failure_preserves_environment()
+
+    def test_full_auth_replaces_legacy_aliases_only_when_ssm_supplies_the_policy(self):
+        self.template.write_text("SERVER_PORT=8080\n"
+                                 "AUTH_EMAILVERIFICATION_SIGNUPCODETTLSECONDS=300\n"
+                                 "AUTH_EMAILVERIFICATION_MINIMUMSENDINTERVALSECONDS=99\n"
+                                 "AUTH_EMAILVERIFICATION_MAXSENDSPERHOUR=99\n"
+                                 "AUTH_EMAILVERIFICATION_MAXSENDSPERDAY=99\n"
+                                 "AUTH_EMAILVERIFICATION_PASSWORDRESETCODETTLSECONDS=300\n",
+                                 encoding="utf-8")
+        self.assertEqual(0, self.run_generator().returncode)
+        generated = self.output.read_text()
+        self.assertNotIn("AUTH_EMAILVERIFICATION_MINIMUMSENDINTERVALSECONDS=", generated)
+        self.assertNotIn("AUTH_EMAILVERIFICATION_MAXSENDSPERHOUR=", generated)
+        self.assertNotIn("AUTH_EMAILVERIFICATION_MAXSENDSPERDAY=", generated)
+        self.assertIn("AUTH_EMAILVERIFICATION_SIGNUPCODETTLSECONDS=300", generated)
+        self.assertIn("AUTH_EMAILVERIFICATION_PASSWORDRESETCODETTLSECONDS=300", generated)
+        self.values["EMAIL_VERIFICATION_PASSWORD_RESET_CODE_TTL_SECONDS"] = "420"
+        self.values["EMAIL_VERIFICATION_PASSWORD_RESET_VERIFICATION_TTL_SECONDS"] = "600"
+        self.assertEqual(0, self.run_generator().returncode)
+        self.assertNotIn("AUTH_EMAILVERIFICATION_PASSWORDRESETCODETTLSECONDS=", self.output.read_text())
+        self.assertIn("EMAIL_VERIFICATION_PASSWORD_RESET_CODE_TTL_SECONDS=420", self.output.read_text())
 
     def test_explicit_auth_flag_overrides_disabled_file(self):
         self.deploy.write_text("AUTH_ENV_ENABLED=false\n", encoding="utf-8")

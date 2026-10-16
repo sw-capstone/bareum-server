@@ -33,14 +33,17 @@ done
 [[ ! -L "$OUTPUT" && ( ! -e "$OUTPUT" || -f "$OUTPUT" ) ]] \
   || fail 'Existing .env.server must be a regular file.'
 
-DB_KEYS=(DB_URL DB_USERNAME DB_PASSWORD)
+BASE_KEYS=(
+  DB_URL DB_USERNAME DB_PASSWORD
+  EMAIL_VERIFICATION_HASH_SECRET EMAIL_VERIFICATION_OUTBOX_ENCRYPTION_KEY
+  SPRING_MAIL_PASSWORD SPRING_MAIL_HOST SPRING_MAIL_USERNAME EMAIL_VERIFICATION_MAIL_FROM
+)
 AUTH_REQUIRED=(
   LOGIN_JWT_SIGNING_KEY
-  EMAIL_VERIFICATION_HASH_SECRET EMAIL_VERIFICATION_OUTBOX_ENCRYPTION_KEY
-  SPRING_MAIL_HOST SPRING_MAIL_PORT SPRING_MAIL_USERNAME SPRING_MAIL_PASSWORD
+  SPRING_MAIL_PORT
   SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH SPRING_MAIL_PROPERTIES_MAIL_SMTP_SSL_ENABLE
   SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_REQUIRED
-  EMAIL_VERIFICATION_MAIL_FROM LOGIN_ALLOWED_ORIGINS
+  LOGIN_ALLOWED_ORIGINS
   EMAIL_VERIFICATION_MINIMUM_SEND_INTERVAL_SECONDS EMAIL_VERIFICATION_MAX_SENDS_PER_HOUR
   EMAIL_VERIFICATION_MAX_SENDS_PER_DAY EMAIL_VERIFICATION_MAX_VERIFICATION_ATTEMPTS
   SIGNUP_TERMS_AGE_OVER_14_VERSION SIGNUP_TERMS_TERMS_OF_SERVICE_VERSION
@@ -52,7 +55,7 @@ AUTH_OPTIONAL=(
   EMAIL_VERIFICATION_PASSWORD_RESET_VERIFICATION_TTL_SECONDS
 )
 SECRET_KEYS=(DB_PASSWORD LOGIN_JWT_SIGNING_KEY EMAIL_VERIFICATION_HASH_SECRET EMAIL_VERIFICATION_OUTBOX_ENCRYPTION_KEY SPRING_MAIL_PASSWORD)
-KEYS=("${DB_KEYS[@]}")
+KEYS=("${BASE_KEYS[@]}")
 if [[ "$AUTH_ENABLED" == true ]]; then KEYS+=("${AUTH_REQUIRED[@]}" "${AUTH_OPTIONAL[@]}"); fi
 
 WORK_DIR=$(mktemp -d "$REPO_DIR/infra/env/.env.prepare.XXXXXX")
@@ -85,7 +88,7 @@ for ((offset=0; offset<${#KEYS[@]}; offset+=10)); do
     (([.Parameters[].Name] + .InvalidParameters | sort) == ($expected[0] | sort)) and
     all(.InvalidParameters[]; . as $name | ($optional[0] | index($name | ltrimstr($prefix + "/"))) != null) and
     all(.Parameters[];
-      (.Value | type == "string") and (.Value | length > 0) and
+      (.Value | type == "string") and (.Value | test("\\S")) and
       (.Value | test("[\r\n\u0000]") | not) and
       (.Type == "String" or .Type == "SecureString") and
       (.Name as $name | if ($secrets[0] | index($name | ltrimstr($prefix + "/"))) != null
@@ -128,7 +131,11 @@ if [[ "$AUTH_ENABLED" == true ]]; then
   ' "$WORK_DIR/parameters.json" >/dev/null 2> "$WORK_DIR/json-error"; then
     fail 'Auth configuration is incomplete or invalid. Existing environment is unchanged.'
   fi
-  for key in LOGIN_JWT_SIGNING_KEY EMAIL_VERIFICATION_HASH_SECRET EMAIL_VERIFICATION_OUTBOX_ENCRYPTION_KEY; do
+fi
+
+KEY_VALIDATIONS=(EMAIL_VERIFICATION_HASH_SECRET EMAIL_VERIFICATION_OUTBOX_ENCRYPTION_KEY)
+if [[ "$AUTH_ENABLED" == true ]]; then KEY_VALIDATIONS+=(LOGIN_JWT_SIGNING_KEY); fi
+for key in "${KEY_VALIDATIONS[@]}"; do
     value=$(jq -r --arg name "$PREFIX/$key" '.[] | select(.Name == $name) | .Value' "$WORK_DIR/parameters.json")
     [[ "$value" =~ ^[A-Za-z0-9+/]+={0,2}$ ]] || fail 'Invalid Auth encryption key.'
     printf '%s' "$value" | base64 --decode > "$WORK_DIR/key.bin" 2>/dev/null \
@@ -140,12 +147,30 @@ if [[ "$AUTH_ENABLED" == true ]]; then
       (( size == 32 )) || fail 'Outbox key must contain exactly 32 bytes.'
     fi
     unset value
-  done
-fi
+done
 
 # Parameter Store owns these keys; discard template duplicates before appending raw values.
-printf '%s\n' "${DB_KEYS[@]}" "${AUTH_REQUIRED[@]}" "${AUTH_OPTIONAL[@]}" \
-  > "$WORK_DIR/managed-keys"
+printf '%s\n' "${BASE_KEYS[@]}" > "$WORK_DIR/managed-keys"
+if [[ "$AUTH_ENABLED" == true ]]; then
+  printf '%s\n' "${AUTH_REQUIRED[@]}" "${AUTH_OPTIONAL[@]}" >> "$WORK_DIR/managed-keys"
+else
+  # Keep #18's SMTP template settings while dropping unrelated Auth overrides.
+  printf '%s\n' "${AUTH_REQUIRED[@]}" "${AUTH_OPTIONAL[@]}" \
+    | awk '$0 !~ /^SPRING_MAIL_/' >> "$WORK_DIR/managed-keys"
+fi
+# An explicit SSM policy replaces its old direct-binding alias, avoiding two values
+# for the same Spring property. Unchanged #18 aliases remain in email-only mode.
+while read -r key alias; do
+  if jq -e --arg name "$PREFIX/$key" 'any(.[]; .Name == $name)' \
+      "$WORK_DIR/parameters.json" >/dev/null; then
+    printf '%s\n' "$alias" >> "$WORK_DIR/managed-keys"
+  fi
+done <<'ALIASES'
+EMAIL_VERIFICATION_MINIMUM_SEND_INTERVAL_SECONDS AUTH_EMAILVERIFICATION_MINIMUMSENDINTERVALSECONDS
+EMAIL_VERIFICATION_MAX_SENDS_PER_HOUR AUTH_EMAILVERIFICATION_MAXSENDSPERHOUR
+EMAIL_VERIFICATION_MAX_SENDS_PER_DAY AUTH_EMAILVERIFICATION_MAXSENDSPERDAY
+EMAIL_VERIFICATION_PASSWORD_RESET_CODE_TTL_SECONDS AUTH_EMAILVERIFICATION_PASSWORDRESETCODETTLSECONDS
+ALIASES
 awk 'NR == FNR { managed[$0]=1; next }
   { split($0, parts, "="); if (!(parts[1] in managed)) print }' \
   "$WORK_DIR/managed-keys" "$TEMPLATE" > "$WORK_DIR/server.env"
