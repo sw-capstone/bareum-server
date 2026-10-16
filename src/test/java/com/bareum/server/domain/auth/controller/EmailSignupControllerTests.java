@@ -130,7 +130,7 @@ class EmailSignupControllerTests {
                                 AuthErrorCode.EMAIL_VERIFICATION_TOKEN_EXPIRED, AuthErrorCode.INVALID_SIGNUP_PASSWORD)
                         .map(e -> Arguments.of(new AuthException(e), e.getHttpStatus().value(), e.getCode())),
                 Stream.of(TermErrorCode.INVALID_CONSENT_REQUEST, TermErrorCode.REQUIRED_TERM_NOT_AGREED,
-                                TermErrorCode.SIGNUP_TERMS_NOT_CONFIGURED)
+                                TermErrorCode.SIGNUP_TERMS_INVALID)
                         .map(e -> Arguments.of(new TermException(e), e.getHttpStatus().value(), e.getCode())));
     }
 

@@ -43,10 +43,6 @@ import java.util.concurrent.*;
         properties = {
             "auth.login.allowed-origins=https://web.example.invalid",
             "auth.google.client-ids=test-client",
-            "auth.signup-terms.versions.AGE_OVER_14=google-signup-test-v1",
-            "auth.signup-terms.versions.TERMS_OF_SERVICE=google-signup-test-v1",
-            "auth.signup-terms.versions.PRIVACY_POLICY=google-signup-test-v1",
-            "auth.signup-terms.versions.MARKETING_CONSENT=google-signup-test-v1",
             "auth.email-verification.hash-secret=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
         })
 class GoogleSignupIntegrationTests {
@@ -149,6 +145,19 @@ class GoogleSignupIntegrationTests {
 
     private GoogleSignupRequest input() {
         return new GoogleSignupRequest(proof, agreements);
+    }
+
+    @Test
+    void signupRecordsDatabaseVersionsWithoutSeparateTermVersionConfiguration() {
+        jdbc.update("UPDATE term SET version = 'google-catalog-v2' WHERE code = 'TERMS_OF_SERVICE'");
+        var result = service.signup(input());
+        long memberId = sessions.authenticate(result.accessToken()).orElseThrow().memberId();
+        assertEquals("google-catalog-v2", jdbc.queryForObject(
+                "SELECT t.version FROM member_term mt JOIN term t ON t.id = mt.term_id WHERE mt.member_id = ? AND t.code = 'TERMS_OF_SERVICE'",
+                String.class, memberId));
+        assertEquals(4, jdbc.queryForObject("SELECT count(*) FROM member_term WHERE member_id = ?",
+                Integer.class, memberId));
+        assertNotNull(consumed());
     }
 
     private Object consumed() {
@@ -390,18 +399,18 @@ class GoogleSignupIntegrationTests {
             strings = {
                 "absent",
                 "null-field",
-                "version",
+                "blank-version",
                 "required-flag",
                 "duplicate-version",
                 "missing-term"
             })
-    void invalidOrUnconfiguredTermsCannotPartiallyCreateAccount(String mode) {
+    void invalidAgreementsOrCorruptTermDataCannotPartiallyCreateAccount(String mode) {
         switch (mode) {
             case "absent" -> agreements = null;
             case "null-field" -> agreements = new SignupAgreementsRequest(true, true, true, null);
-            case "version" ->
+            case "blank-version" ->
                     jdbc.update(
-                            "UPDATE term SET version='not-approved' WHERE id=?",
+                            "UPDATE term SET version='' WHERE id=?",
                             termIds.getFirst());
             case "required-flag" ->
                     jdbc.update("UPDATE term SET is_required=false WHERE id=?", termIds.getFirst());
