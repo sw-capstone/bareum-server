@@ -1,11 +1,13 @@
 package com.bareum.server.domain.term.entity;
 
-import com.bareum.server.global.entity.BaseTimeEntity;
-
-import com.bareum.server.domain.term.exception.TermException;
-import com.bareum.server.domain.term.exception.TermErrorCode;
+import java.time.Instant;
+import java.util.Objects;
 
 import com.bareum.server.domain.member.entity.Member;
+import com.bareum.server.domain.term.exception.TermErrorCode;
+import com.bareum.server.domain.term.exception.TermException;
+import com.bareum.server.global.entity.BaseTimeEntity;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -15,8 +17,6 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
-import java.time.Instant;
-import java.util.Objects;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
@@ -88,12 +88,12 @@ public class MemberTerm extends BaseTimeEntity {
 		Instant respondedAt
 	) {
 		return MemberTerm.builder()
-			.member(member)
-			.term(term)
-			.agreedAt(agreedAt)
-			.withdrawnAt(withdrawnAt)
-			.isAgreed(isAgreed)
-			.respondedAt(respondedAt)
-			.build();
+				.member(member)
+				.term(term)
+				.agreedAt(agreedAt)
+				.withdrawnAt(withdrawnAt)
+				.isAgreed(isAgreed)
+				.respondedAt(respondedAt)
+				.build();
 	}
 }

@@ -1,10 +1,11 @@
 package com.bareum.server.global.exception.handler;
 
-import ch.qos.logback.classic.Level;
-import ch.qos.logback.classic.Logger;
-import ch.qos.logback.classic.spi.ILoggingEvent;
-import ch.qos.logback.core.read.ListAppender;
-import jakarta.validation.constraints.Min;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -19,11 +20,11 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
+import jakarta.validation.constraints.Min;
 
 class ServerExceptionHandlerTests {
 
@@ -36,7 +37,7 @@ class ServerExceptionHandlerTests {
 		mockMvc = MockMvcBuilders.standaloneSetup(new TestController())
 				.setControllerAdvice(new GlobalExceptionHandler())
 				.build();
-		logger = (Logger) LoggerFactory.getLogger(GlobalExceptionHandler.class);
+		logger = (Logger)LoggerFactory.getLogger(GlobalExceptionHandler.class);
 		appender = new ListAppender<>();
 		appender.start();
 		logger.addAppender(appender);
@@ -133,7 +134,10 @@ class ServerExceptionHandlerTests {
 		}
 	}
 
-	record TestResponse(Long id, String name) {
+	record TestResponse(
+		Long id,
+		String name
+	) {
 	}
 
 	static class BrokenResponse {

@@ -5,6 +5,7 @@ import com.bareum.server.domain.issue.enums.IssueScope;
 import com.bareum.server.domain.issue.exception.IssueErrorCode;
 import com.bareum.server.domain.issue.exception.IssueException;
 import com.bareum.server.global.entity.BaseTimeEntity;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -52,11 +53,11 @@ public class IssueGroup extends BaseTimeEntity {
 		if (scope == null || scope == IssueScope.DOCUMENT || targetId == null || targetId.isBlank()) {
 			throw new IssueException(IssueErrorCode.INVALID_GROUP_TARGET);
 		}
-        return new IssueGroup(analysis, targetId, scope);
+		return new IssueGroup(analysis, targetId, scope);
 	}
 
 	public static IssueGroup forDocument(ReportAnalysis analysis) {
-        return new IssueGroup(analysis, null, IssueScope.DOCUMENT);
+		return new IssueGroup(analysis, null, IssueScope.DOCUMENT);
 	}
 
 	public boolean isEditable() {

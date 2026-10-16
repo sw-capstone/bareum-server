@@ -1,7 +1,10 @@
 package com.bareum.server.domain.term.entity;
 
+import java.util.Objects;
+
 import com.bareum.server.domain.term.enums.TermCode;
 import com.bareum.server.global.entity.BaseTimeEntity;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -11,13 +14,15 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
-import java.util.Objects;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 @Entity
-@Table(name = "term", uniqueConstraints = @UniqueConstraint(columnNames = {"code", "version"}))
+@Table(name = "term",
+	uniqueConstraints = @UniqueConstraint(columnNames = {
+		"code", "version"
+	}))
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Term extends BaseTimeEntity {

@@ -1,11 +1,18 @@
 package com.bareum.server.domain.report.entity;
 
+import java.math.BigDecimal;
+import java.time.Instant;
+
+import org.hibernate.annotations.ColumnDefault;
+import org.hibernate.annotations.SQLRestriction;
+
 import com.bareum.server.domain.analysis.entity.ReportAnalysis;
 import com.bareum.server.domain.report.enums.ContentStatus;
 import com.bareum.server.domain.report.enums.ResultStatus;
 import com.bareum.server.domain.report.exception.ReportErrorCode;
 import com.bareum.server.domain.report.exception.ReportException;
 import com.bareum.server.global.entity.BaseTimeEntity;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -17,13 +24,9 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
-import java.math.BigDecimal;
-import java.time.Instant;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import org.hibernate.annotations.ColumnDefault;
-import org.hibernate.annotations.SQLRestriction;
 
 @Entity
 @Table(name = "report_result")
@@ -72,7 +75,7 @@ public class ReportResult extends BaseTimeEntity {
 	}
 
 	public static ReportResult request(ReportAnalysis analysis, ReportContent content) {
-        return new ReportResult(analysis, content);
+		return new ReportResult(analysis, content);
 	}
 
 	public void start() {
@@ -83,7 +86,7 @@ public class ReportResult extends BaseTimeEntity {
 	public void succeed(BigDecimal score, Instant completedAt) {
 		requireStatus(ResultStatus.PROCESSING);
 		if (score == null || score.signum() < 0 || score.precision() - score.scale() > 3
-			|| score.stripTrailingZeros().scale() > 2 || completedAt == null) {
+				|| score.stripTrailingZeros().scale() > 2 || completedAt == null) {
 			throw new ReportException(ReportErrorCode.INVALID_RESULT);
 		}
 		this.finalScore = score;
