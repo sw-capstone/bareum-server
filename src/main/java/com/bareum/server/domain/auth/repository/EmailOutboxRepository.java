@@ -57,6 +57,13 @@ public class EmailOutboxRepository {
                 verification.getCodeHash(), encrypted, keyId, ttl, timestamp(now), timestamp(now), timestamp(now));
     }
 
+    public boolean hasTerminalDelivery(EmailVerification verification) {
+        return Boolean.TRUE.equals(jdbc.queryForObject("""
+                SELECT EXISTS (SELECT 1 FROM email_verification_outbox
+                    WHERE verification_id=? AND code_hash=? AND state IN ('FAILED','CANCELLED'))
+                """, Boolean.class, verification.getId(), verification.getCodeHash()));
+    }
+
     public Optional<Job> claim(Instant now, EmailOutboxProperties policy) {
         // Expired leases are recoverable; a live lease is never reclaimed or erased.
         jdbc.update("""
@@ -118,7 +125,7 @@ public class EmailOutboxRepository {
     public Optional<EmailVerificationDeliveryResponse> status(UUID id, Instant now) {
         return jdbc.query("""
                 SELECT o.id,o.state,v.expires_at,
-                    (v.consumed_at IS NOT NULL OR v.verified_at IS NOT NULL OR
+                    (v.consumed_at IS NOT NULL OR v.verified_at IS NOT NULL OR v.code_hash <> o.code_hash OR
                      v.id <> (SELECT max(latest.id) FROM email_verification latest
                         WHERE upper(latest.email)=upper(o.email) AND latest.purpose=o.purpose)) AS invalid
                 FROM email_verification_outbox o JOIN email_verification v ON v.id=o.verification_id

@@ -117,6 +117,14 @@ public class EmailVerification extends BaseTimeEntity {
 		this.expiresAt = sentAt.plusSeconds(ttlSeconds);
 	}
 
+	/** Keep the request ID and failed attempts; pending codes cannot be confirmed. */
+	public void queueReplacement(String recipient, String newCodeHash, Instant queuedAt) {
+		this.email = Objects.requireNonNull(recipient, "recipient");
+		this.codeHash = Objects.requireNonNull(newCodeHash, "newCodeHash");
+		this.expiresAt = Objects.requireNonNull(queuedAt, "queuedAt");
+		this.lastSentAt = null;
+	}
+
 	public void recordFailedAttempt() {
 		this.attemptCount = Math.incrementExact(attemptCount);
 	}
