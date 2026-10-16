@@ -6,6 +6,7 @@ import com.bareum.server.domain.auth.enums.VerificationPurpose;
 import com.bareum.server.domain.auth.exception.AuthException;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.test.context.ConfigDataApplicationContextInitializer;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.core.env.SystemEnvironmentPropertySource;
 
@@ -67,5 +68,60 @@ class EmailVerificationPropertiesTests {
                 "auth.email-verification.password-reset-code-ttl-seconds=420"
         ).run(ctx -> assertEquals(420L, ctx.getBean(EmailVerificationProperties.class)
                 .codeTtlSeconds(VerificationPurpose.PASSWORD_RESET)));
+    }
+
+    @Test
+    void confirmationRequiresAttemptLimitAndKeepsSignupProofAtTenMinutes() {
+        context.run(ctx -> {
+            var properties = ctx.getBean(EmailVerificationProperties.class);
+            assertNull(properties.getMaxVerificationAttempts());
+            assertEquals(600L, properties.getSignupVerificationTtlSeconds());
+            assertNull(properties.getPasswordResetVerificationTtlSeconds());
+            assertThrows(AuthException.class,
+                    () -> properties.verificationTtlSeconds(VerificationPurpose.SIGNUP));
+        });
+        context.withPropertyValues("auth.email-verification.max-verification-attempts=3")
+                .run(ctx -> {
+                    var properties = ctx.getBean(EmailVerificationProperties.class);
+                    assertEquals(600L, properties.verificationTtlSeconds(VerificationPurpose.SIGNUP));
+                    assertThrows(AuthException.class,
+                            () -> properties.verificationTtlSeconds(VerificationPurpose.PASSWORD_RESET));
+                });
+    }
+
+    @Test
+    void confirmationRejectsNonPositiveLimitOrProofValidity() {
+        for (String setting : new String[]{
+                "auth.email-verification.max-verification-attempts=0",
+                "auth.email-verification.max-verification-attempts=-1",
+                "auth.email-verification.signup-verification-ttl-seconds=0"
+        }) {
+            context.withPropertyValues(setting).run(ctx -> assertThrows(AuthException.class,
+                    () -> ctx.getBean(EmailVerificationProperties.class)
+                            .verificationTtlSeconds(VerificationPurpose.SIGNUP)));
+        }
+        context.withPropertyValues(
+                "auth.email-verification.max-verification-attempts=3",
+                "auth.email-verification.password-reset-verification-ttl-seconds=0"
+        ).run(ctx -> assertThrows(AuthException.class,
+                () -> ctx.getBean(EmailVerificationProperties.class)
+                        .verificationTtlSeconds(VerificationPurpose.PASSWORD_RESET)));
+    }
+
+    @Test
+    void applicationYamlBindsConfirmationEnvironmentNamesWithoutChangingSendPolicy() {
+        context.withInitializer(new ConfigDataApplicationContextInitializer())
+                .withInitializer(ctx -> ctx.getEnvironment().getPropertySources().addFirst(
+                        new SystemEnvironmentPropertySource("confirmation-environment", Map.of(
+                                "EMAIL_VERIFICATION_MAX_VERIFICATION_ATTEMPTS", "3",
+                                "EMAIL_VERIFICATION_PASSWORD_RESET_VERIFICATION_TTL_SECONDS", "420"))))
+                .run(ctx -> {
+                    assertNull(ctx.getStartupFailure());
+                    var properties = ctx.getBean(EmailVerificationProperties.class);
+                    assertEquals(3, properties.getMaxVerificationAttempts());
+                    assertEquals(600L, properties.verificationTtlSeconds(VerificationPurpose.SIGNUP));
+                    assertEquals(420L, properties.verificationTtlSeconds(VerificationPurpose.PASSWORD_RESET));
+                    assertNull(properties.getMinimumSendIntervalSeconds());
+                });
     }
 }
