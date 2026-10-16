@@ -1,6 +1,8 @@
 package com.bareum.server.domain.auth.entity;
 
 import com.bareum.server.domain.auth.enums.VerificationPurpose;
+import com.bareum.server.domain.auth.exception.AuthErrorCode;
+import com.bareum.server.domain.auth.exception.AuthException;
 import com.bareum.server.global.entity.BaseTimeEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -127,6 +129,18 @@ public class EmailVerification extends BaseTimeEntity {
 
 	public void recordFailedAttempt() {
 		this.attemptCount = Math.incrementExact(attemptCount);
+	}
+
+	public void consume(Instant consumedAt) {
+		Objects.requireNonNull(consumedAt, "consumedAt");
+		if (this.consumedAt != null || verifiedAt == null || verificationTokenHash == null
+				|| verificationExpiresAt == null || lastSentAt == null) {
+			throw new AuthException(AuthErrorCode.EMAIL_VERIFICATION_INVALID);
+		}
+		if (!consumedAt.isBefore(verificationExpiresAt)) {
+			throw new AuthException(AuthErrorCode.EMAIL_VERIFICATION_TOKEN_EXPIRED);
+		}
+		this.consumedAt = consumedAt;
 	}
 
 	public void markVerified(String tokenHash, Instant verifiedAt, Instant tokenExpiresAt) {
