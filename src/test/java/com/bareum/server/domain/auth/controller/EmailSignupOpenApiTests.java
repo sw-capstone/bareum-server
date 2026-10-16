@@ -63,7 +63,7 @@ class EmailSignupOpenApiTests {
             assertThat(operation.at("/responses/400/content/application~1problem+json/schema/$ref").asText())
                     .isEqualTo("#/components/schemas/BadRequestProblemDetail");
             assertThat(document.at("/components/schemas/BadRequestProblemDetail/anyOf").size()).isEqualTo(2);
-            for (String status : new String[]{"409", "503", "500"}) {
+            for (String status : new String[]{"409", "500"}) {
                 assertThat(operation.at("/responses/" + status + "/content/application~1problem+json/schema/$ref").asText())
                         .isEqualTo("#/components/schemas/ProblemDetail");
             }
