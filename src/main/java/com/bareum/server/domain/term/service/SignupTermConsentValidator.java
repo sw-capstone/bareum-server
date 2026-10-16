@@ -41,8 +41,7 @@ public class SignupTermConsentValidator {
         for (TermCode code : TermCode.values()) {
             Term term = byCode.get(code);
             boolean required = code != TermCode.MARKETING_CONSENT;
-            if (term == null || term.isRequired() != required
-                    || term.getVersion() == null || term.getVersion().isBlank()) {
+            if (term == null || term.isRequired() != required) {
                 throw new TermException(TermErrorCode.SIGNUP_TERMS_INVALID);
             }
             boolean agreed = request.agreed(code);
