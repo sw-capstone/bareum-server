@@ -35,6 +35,8 @@ jobs:
       DB_URL: jdbc:postgresql://localhost:5432/bareum_ci
       DB_USERNAME: bareum_ci
       DB_PASSWORD: ci-only-password
+      # 테스트 전용 키이며 운영 키를 사용하지 않습니다.
+      EMAIL_VERIFICATION_HASH_SECRET: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
     steps:
       - name: Checkout source
         uses: actions/checkout@v7
@@ -69,6 +71,8 @@ jobs:
         run: bash .github/scripts/check-ci.sh
       - name: Test SSM deployment requests
         run: bash .github/tests/deploy-via-ssm-test.sh
+      - name: Test server environment generation
+        run: bash infra/tests/prepare-server-env-test.sh
       - name: Set up JDK 25
         uses: actions/setup-java@v6
         with:
