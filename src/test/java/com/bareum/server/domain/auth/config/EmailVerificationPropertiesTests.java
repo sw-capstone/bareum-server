@@ -93,8 +93,7 @@ class EmailVerificationPropertiesTests {
     void confirmationRejectsNonPositiveLimitOrProofValidity() {
         for (String setting : new String[]{
                 "auth.email-verification.max-verification-attempts=0",
-                "auth.email-verification.max-verification-attempts=-1",
-                "auth.email-verification.signup-verification-ttl-seconds=0"
+                "auth.email-verification.max-verification-attempts=-1"
         }) {
             context.withPropertyValues(setting).run(ctx -> assertThrows(AuthException.class,
                     () -> ctx.getBean(EmailVerificationProperties.class)
@@ -106,6 +105,21 @@ class EmailVerificationPropertiesTests {
         ).run(ctx -> assertThrows(AuthException.class,
                 () -> ctx.getBean(EmailVerificationProperties.class)
                         .verificationTtlSeconds(VerificationPurpose.PASSWORD_RESET)));
+    }
+
+    @Test
+    void confirmationRejectsZeroSignupProofValidityWithValidAttemptLimit() {
+        context.withPropertyValues(
+                "auth.email-verification.max-verification-attempts=3",
+                "auth.email-verification.signup-verification-ttl-seconds=0"
+        ).run(ctx -> {
+            assertNull(ctx.getStartupFailure());
+            var properties = ctx.getBean(EmailVerificationProperties.class);
+            assertEquals(3, properties.getMaxVerificationAttempts());
+            assertEquals(0L, properties.getSignupVerificationTtlSeconds());
+            assertThrows(AuthException.class,
+                    () -> properties.verificationTtlSeconds(VerificationPurpose.SIGNUP));
+        });
     }
 
     @Test
