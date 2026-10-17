@@ -116,4 +116,14 @@ public class EmailVerification extends BaseTimeEntity {
 		markSent(sentAt);
 		this.expiresAt = sentAt.plusSeconds(ttlSeconds);
 	}
+
+	public void recordFailedAttempt() {
+		this.attemptCount = Math.incrementExact(attemptCount);
+	}
+
+	public void markVerified(String tokenHash, Instant verifiedAt, Instant tokenExpiresAt) {
+		this.verificationTokenHash = Objects.requireNonNull(tokenHash, "tokenHash");
+		this.verifiedAt = Objects.requireNonNull(verifiedAt, "verifiedAt");
+		this.verificationExpiresAt = Objects.requireNonNull(tokenExpiresAt, "tokenExpiresAt");
+	}
 }
