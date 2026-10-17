@@ -12,7 +12,6 @@ import java.time.Clock;
 import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -26,8 +25,7 @@ public class EmailVerificationConfirmService {
     private final EmailVerificationTokenGenerator tokenGenerator;
     private final Clock emailVerificationClock;
 
-    @Transactional(isolation = Isolation.READ_COMMITTED,
-            noRollbackFor = EmailVerificationCodeMismatchException.class)
+    @Transactional(noRollbackFor = EmailVerificationCodeMismatchException.class)
     public EmailVerificationConfirmResponse confirm(EmailVerificationConfirmRequest request) {
         long ttl = properties.verificationTtlSeconds(request.purpose());
         requestLock.lockForEmail(request.email());
