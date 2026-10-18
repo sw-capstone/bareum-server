@@ -34,7 +34,7 @@ class EmailVerificationSendServiceTests {
     private final EmailOutboxRepository outbox = mock(EmailOutboxRepository.class);
     private final EmailOutboxCipher cipher = mock(EmailOutboxCipher.class);
     private final EmailVerificationMailSender sender = mock(EmailVerificationMailSender.class);
-    private EmailVerificationProperties policy = new EmailVerificationProperties(300,420L,60L,5,20);
+    private EmailVerificationProperties policy = new EmailVerificationProperties(300,420L,60L,5,20, null, 600, null);
     private EmailVerificationSendService service;
 
     @BeforeEach
@@ -70,7 +70,7 @@ class EmailVerificationSendServiceTests {
 
     @Test
     void missingPolicyStopsBeforeLockAndQueue() {
-        policy = new EmailVerificationProperties(300,null,null,5,20);
+        policy = new EmailVerificationProperties(300,null,null,5,20, null, 600, null);
         service = service();
         assertFailure(AuthErrorCode.EMAIL_VERIFICATION_NOT_CONFIGURED);
         verifyNoInteractions(lock,outbox,verifications,codes);

@@ -47,6 +47,8 @@ auth:
   email-verification:
     hash-secret: ${EMAIL_VERIFICATION_HASH_SECRET}
     mail-from: ${EMAIL_VERIFICATION_MAIL_FROM:}
+    max-verification-attempts: ${EMAIL_VERIFICATION_MAX_VERIFICATION_ATTEMPTS:}
+    password-reset-verification-ttl-seconds: ${EMAIL_VERIFICATION_PASSWORD_RESET_VERIFICATION_TTL_SECONDS:}
     outbox:
       encryption-key: ${EMAIL_VERIFICATION_OUTBOX_ENCRYPTION_KEY:}
       key-id: ${EMAIL_VERIFICATION_OUTBOX_KEY_ID:v1}

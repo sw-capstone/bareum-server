@@ -33,7 +33,7 @@ class EmailVerificationSendLimitCheckerTests {
     @BeforeEach
     void setUp() {
         EmailVerificationProperties properties =
-                new EmailVerificationProperties(300, null, 60L, 5, 20);
+                new EmailVerificationProperties(300, null, 60L, 5, 20, null, 600, null);
 
         checker = new EmailVerificationSendLimitChecker(
                 repository,
@@ -44,7 +44,7 @@ class EmailVerificationSendLimitCheckerTests {
     @Test
     void missingConfigurationRejectsBeforeDatabaseQueries() {
         EmailVerificationProperties emptyProperties =
-                new EmailVerificationProperties(300, null, null, null, null);
+                new EmailVerificationProperties(300, null, null, null, null, null, 600, null);
 
         EmailVerificationSendLimitChecker unconfiguredChecker =
                 new EmailVerificationSendLimitChecker(
