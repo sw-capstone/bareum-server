@@ -108,11 +108,13 @@ class AuthDeploymentEnvironmentBindingTests {
     @Test
     void exactOriginsAndGoogleClientIdsReachExistingAuthenticationConfiguration() {
         var variables = Map.<String, Object>of(
-                "LOGIN_ALLOWED_ORIGINS", "https://web.example.invalid,https://preview.example.invalid",
+                "LOGIN_ALLOWED_ORIGINS", "https://bareum.site,https://bareum-web-git-develop-numkites-projects.vercel.app",
                 "GOOGLE_CLIENT_IDS", "test-web.apps.googleusercontent.com",
                 "GOOGLE_SIGNUP_TTL_SECONDS", "300");
         var login = bind(variables, "auth.login", LoginProperties.class);
         assertEquals(2, login.allowedOrigins().size());
+        assertEquals(java.util.List.of("https://bareum.site",
+                "https://bareum-web-git-develop-numkites-projects.vercel.app"), login.allowedOrigins());
         assertEquals(900, login.accessTtlSeconds());
         assertEquals(28800, login.sessionTtlSeconds());
         var google = bind(variables, "auth.google", GoogleLoginProperties.class);

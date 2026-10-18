@@ -46,7 +46,7 @@ import java.util.concurrent.Executors;
 @SpringBootTest(
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = {
-            "auth.login.allowed-origins=https://web.example.invalid",
+            "auth.login.allowed-origins=https://web.example.invalid,https://bareum.site,https://bareum-web-git-develop-numkites-projects.vercel.app",
             "auth.login.max-requests-per-window=5",
             "auth.login.cookie-secure=true",
             "auth.login.cookie-same-site=None",
@@ -426,6 +426,26 @@ class EmailLoginIntegrationTests {
                 "https://web.example.invalid",
                 allowed.headers().firstValue("Access-Control-Allow-Origin").orElseThrow());
         assertTrue(allowed.headers().allValues("Set-Cookie").size() == 1);
+    }
+
+    @Test
+    void productionAndDevelopPreflightsAllowCredentialsOnlyForExactConfiguredOrigins() throws Exception {
+        for (String origin : List.of("https://bareum.site",
+                "https://bareum-web-git-develop-numkites-projects.vercel.app")) {
+            var response = request("OPTIONS", "/api/v1/auth/login/google", null,
+                    "Origin", origin, "Access-Control-Request-Method", "POST",
+                    "Access-Control-Request-Headers", "Content-Type,X-CSRF-TOKEN");
+            assertEquals(200, response.statusCode(), response.body());
+            assertEquals(origin, response.headers().firstValue("Access-Control-Allow-Origin").orElseThrow());
+            assertEquals("true", response.headers().firstValue("Access-Control-Allow-Credentials").orElseThrow());
+        }
+        for (String origin : List.of("http://bareum.site", "https://bareum.site.evil.invalid",
+                "https://unapproved-preview.vercel.app")) {
+            var response = request("OPTIONS", "/api/v1/auth/login/google", null,
+                    "Origin", origin, "Access-Control-Request-Method", "POST");
+            assertEquals(403, response.statusCode(), response.body());
+            assertTrue(response.headers().firstValue("Access-Control-Allow-Origin").isEmpty());
+        }
     }
 
     @Test

@@ -295,6 +295,15 @@ class PrepareServerEnvTests(unittest.TestCase):
         self.assertNotIn("SIGNUP_TERMS_", self.requests.read_text())
         self.assertNotIn("SIGNUP_TERMS_", self.output.read_text())
 
+    def test_confirmed_frontend_origins_are_generated_without_google_client_id(self):
+        origins = "https://bareum.site,https://bareum-web-git-develop-numkites-projects.vercel.app"
+        self.values["LOGIN_ALLOWED_ORIGINS"] = origins
+        result = self.run_generator()
+        self.assertEqual(0, result.returncode, result.stderr)
+        generated = dict(line.split("=", 1) for line in self.output.read_text().splitlines() if "=" in line)
+        self.assertEqual(origins, generated["LOGIN_ALLOWED_ORIGINS"])
+        self.assertNotIn("GOOGLE_CLIENT_IDS", generated)
+
     def test_google_and_reset_parameters_are_optional_but_validated_when_present(self):
         self.values.update({"GOOGLE_CLIENT_IDS": "test-web.apps.googleusercontent.com",
                             "GOOGLE_SIGNUP_TTL_SECONDS": "600",
