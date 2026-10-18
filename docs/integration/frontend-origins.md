@@ -49,6 +49,8 @@ GOOGLE_CLIENT_IDS=988423451549-o9piergh6fi1loveri3l2tf2ehvf2pb3.apps.googleuserc
 ## 준비 변경의 검증 결과
 
 - Client ID 발급 후 추가 확인: 모의 SSM 응답과 실제 환경 생성 스크립트에서 발급 ID·두 Origin의 값 보존을 확인했다. Google Client Secret은 조회하지 않는다. 실제 AWS·Google 로그인 검증은 포함하지 않았다.
-- `./gradlew check bootJar --no-daemon`: 전체 675개 테스트 통과, 실패·오류·건너뜀 0개 및 JAR 빌드 성공. 두 Origin의 실제 HTTP 사전 요청·credentials 허용과 미등록 주소 차단을 포함한다.
+- `./gradlew check bootJar --no-daemon`: 전체 692개 테스트 통과, 실패·오류·건너뜀 0개 및 JAR 빌드 성공. 두 Origin의 실제 HTTP 사전 요청·credentials 허용과 미등록 주소 차단을 포함한다.
 - 환경 생성 모의 검사 22개 중 21개 통과, Windows의 POSIX 권한 검사 1개 제외. 두 Origin의 값 보존과 Google Client ID 없이 환경 생성 성공을 검증했다.
 - 공개 프론트는 HTTP 200을 확인했다. 현재 공개 API 명세에는 Google 로그인·가입 경로가 없으며, 해당 경로의 두 Origin 사전 요청에는 CORS 허용 헤더가 없어 운영 적용 완료로 처리하지 않는다. 실제 Google 계정·AWS 설정 적용은 미검증이다.
+
+현재 리뷰·병합·회귀 검증 상태는 [Auth·Term 진행 현황](auth-term-progress.md)을 따른다.

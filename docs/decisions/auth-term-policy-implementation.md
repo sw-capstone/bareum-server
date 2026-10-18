@@ -51,7 +51,7 @@
 EMAIL_VERIFICATION_MAX_VERIFICATION_ATTEMPTS=5
 EMAIL_VERIFICATION_ATTEMPT_COOLDOWN_SECONDS=900
 EMAIL_VERIFICATION_PASSWORD_RESET_VERIFICATION_TTL_SECONDS=600
-LOGIN_ALLOWED_ORIGINS=https://bareum-web-git-develop-numkites-projects.vercel.app
+LOGIN_ALLOWED_ORIGINS=https://bareum.site,https://bareum-web-git-develop-numkites-projects.vercel.app
 ```
 
 코드 기본값은 실패 5회·대기 900초·재설정 증명 600초다. 명시적 잘못된 값은 차단한다. 제한 대기는 1~86400초 범위이며 Parameter Store의 동일 이름으로 선택 주입할 수 있다. 이번 설정은 #18의 메일 발송 전용 env v2를 덮어쓰지 않으며, 후속 인증 기능 배포 시 함께 준비한다. 비밀번호 찾기의 기존 MVP 제외 기준은 유지한다.
@@ -61,7 +61,7 @@ LOGIN_ALLOWED_ORIGINS=https://bareum-web-git-develop-numkites-projects.vercel.ap
 - 이번 개발 적용안은 Gmail·검증된 Workspace 계정만 신규 가입시킨다. 기존 Google 회원은 이메일 문자열 대신 검증된 `sub`로 식별한다.
 - Google이 현재 이메일 소유권을 보증하지 않는 제3자 이메일 신규 가입은 `AUTH-0028/403`으로 제한하고 지원 범위를 안내한다.
 - 제3자 이메일에 `email_verified=true`가 있다는 이유만으로 신규 계정을 생성하지 않는다. 추가 이메일 인증 화면·목적·증명 계약을 이번 변경에 추가하지 않는다.
-- 프론트 주소 확정 후 백엔드 담당 이서현이 바름용 Google 프로젝트·웹 Client ID를 생성해 프론트에 공유하고, 인프라와 서버 설정 적용을 연결한다. 주소는 확정됐으나 Client ID 생성·등록은 아직 미완료이며 별도 준비 후 진행한다. 실제 Google 인증 검증은 ID·승인 Origin·서버 설정을 준비한 뒤 진행하며 가짜 값으로 인증을 통과시키지 않는다.
+- Google 프로젝트 `bareum-512001`의 웹 Client ID 발급과 생성 화면의 두 승인 Origin 입력을 완료했다. [발급 ID·서버 등록 기준](../integration/frontend-origins.md)에 따라 프론트 SDK와 서버 설정을 맞춘다. 실제 AWS 등록·배포·Google 계정 검증은 남아 있다.
 - 재검토: 제3자 이메일 지원 요구가 생기면 별도 서비스 이메일 인증과 Google 가입 증명의 결합을 설계하고 프론트와 함께 연결한다.
 
 ## 검토 자료
@@ -71,10 +71,12 @@ LOGIN_ALLOWED_ORIGINS=https://bareum-web-git-develop-numkites-projects.vercel.ap
 
 ## 검증 및 적용 범위
 
-- 전체 서버 `./gradlew check bootJar --no-daemon`: 687개 테스트 통과, 실패·오류·건너뜀 0개 및 JAR 빌드 성공.
+- 전체 서버 `./gradlew check bootJar --no-daemon`: 692개 테스트 통과, 실패·오류·건너뜀 0개 및 JAR 빌드 성공.
 - 복구 통합 테스트 12개: 동시 오입력 제한, 대소문자·최초/재발송 우회 차단, 제한 종료 경계, 새 번호·완료 증명 교체, 기존 증명의 가입 차단, 접수 실패·DB 오류 롤백, 과거 데이터 복구와 증명 소비 후 차단을 확인했다.
 - 설정 기본값·재정의·잘못된 대기 시간과 migration·Hibernate 매핑을 검증했다. 메일은 모의 발송이며 실제 브라우저·외부 Google 계정 검증은 포함하지 않았다.
 - 배포 설정 모의 검사 22개 중 21개 통과, POSIX 심볼릭 링크 권한 검사 1개는 Linux CI 확인 대상이다. 실제 Parameter Store는 조회·변경하지 않았다.
 - 전체 인증 설정 비활성화 상태에서도 #18의 DB·메일 9개와 v2 템플릿을 유지한다. 전체 인증 모드에서 SSM으로 지정한 정책은 대응하는 기존 별칭을 생성 파일에서 제거해 서로 다른 값이 함께 남지 않도록 검증했다.
 - #18의 커밋과 env v2는 변경하지 않는다. 선행 인증·배포 정비 PR을 순차 병합한 뒤 이 변경을 최신 기준으로 반영·재검증한다.
-- 약관은 개발용 DB 데이터로 연동할 수 있으며 최종 원문·DB 버전 대응은 실제 사용자 적용 전 확인한다. 실제 Google Client ID, AWS 설정 적용과 프론트 연결은 준비·검증 대상이다. 미준비 외부 값을 임의로 생성하거나 배포 완료로 표시하지 않는다.
+- 약관은 개발용 DB 데이터로 연동할 수 있으며 최종 원문·DB 버전 대응은 실제 사용자 적용 전 확인한다. Google Client ID는 발급됐으며 AWS 설정 적용과 프론트 연결·실제 계정 검증은 남아 있다. 미준비 외부 값을 임의로 생성하거나 배포 완료로 표시하지 않는다.
+
+- #57의 저장 이메일 기준 검증·기본 격리 수준·독립 TTL 회귀 검증을 후속 복구 정책과 함께 대조했다. 최신 상태는 [진행 현황](../integration/auth-term-progress.md)을 따른다.
