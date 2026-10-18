@@ -26,6 +26,16 @@ Auth·Term의 서버 설정을 기존 개발 EC2 배포 경로에 연결한다. 
 - 값을 출력하지 않고, 권한을 제한한 임시 파일에서 검증한 뒤 `.env.server`를 권한 600으로 교체한다. AWS·JSON 오류의 원문은 배포 로그에 출력하지 않는다.
 - 허용한 파라미터 이름만 최대 10개씩 조회한다. 경로 아래의 모든 값을 읽지 않으며, 템플릿에 중복된 관리 대상 키는 제거한다. `raw` 환경 파일이므로 값의 `$`, 따옴표, `=`를 셸에서 실행하거나 치환하지 않는다. 개행·NUL·빈 값은 거부한다.
 
+## 확정된 프론트 Origin
+
+`/bareum/dev/server/LOGIN_ALLOWED_ORIGINS`의 String 값은 다음과 같다.
+
+```dotenv
+https://bareum.site,https://bareum-web-git-develop-numkites-projects.vercel.app
+```
+
+이 값은 서버 환경변수 `LOGIN_ALLOWED_ORIGINS`로 주입한다. Client ID는 아직 준비되지 않았으므로 Google 값을 생성하거나 가짜 ID로 채우지 않는다. 실제 SSM 등록·이미지 배포·브라우저 검증은 아직 별도 준비 대상이다. [프론트 도메인 연동 기준](../integration/frontend-origins.md)을 따른다.
+
 ## 파라미터 목록
 
 ### 배포 단계별 준비

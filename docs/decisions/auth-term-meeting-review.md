@@ -8,9 +8,9 @@
 - **팀 검토 질문:** 최종 원문·버전이 준비되었는가? 프론트 표시와 서버 데이터의 반영 담당자는 누구인가?
 
 ## 2. 개발 도메인·쿠키
-- **주소 확인:** 현재 프론트 후보는 `https://bareum-web-git-develop-numkites-projects.vercel.app`, API는 `https://api.bareum.site`다. Vercel 주소를 계속 사용할지 bareum.site의 프론트 도메인으로 전환할지 프론트·인프라와 확인한 뒤 허용 Origin을 확정한다. HttpOnly·Secure·SameSite=None 쿠키 기준은 유지한다.
+- **확정 주소:** 프론트 운영 `https://bareum.site`, develop 테스트 `https://bareum-web-git-develop-numkites-projects.vercel.app`을 모두 허용 대상으로 사용한다. API는 `https://api.bareum.site`다. CORS와 향후 Google 승인 원본에 두 프론트 주소를 정확히 등록한다. HttpOnly·Secure·SameSite=None 쿠키 기준은 유지하며 실제 설정 적용·브라우저 검증은 별도다.
 - **외부 검증:** 배포 설정 적용과 실제 브라우저의 쿠키 전달은 별도로 확인한다.
-- **팀 검토 질문:** 이 주소로 연동할 수 있는가? 타사 쿠키 차단 시 같은 사이트 도메인으로 전환할 것인가?
+- **남은 검증:** 확정한 두 주소의 실제 배포·CORS·쿠키 전달을 확인한다. develop Vercel에서 타사 쿠키가 차단되는 환경도 검증한다.
 
 ## 3. 이메일 인증·재발송·복구
 | 항목 | 개발 적용안 |
@@ -27,7 +27,7 @@
 
 ## 4. Google 지원 계정
 - **임시 적용안:** Gmail·검증된 Workspace 신규 가입만 허용한다. 제3자 이메일은 AUTH-0028/403으로 안내한다.
-- **생성 순서·담당:** 프론트 연동 주소 확정 후 백엔드 담당 이서현이 바름용 Google 프로젝트·웹 Client ID를 생성하고 프론트에 공유한다. 인프라 담당자와 서버의 `GOOGLE_CLIENT_IDS` 적용을 연결한다. 주소 확인 전에는 생성·등록을 진행하지 않는다.
+- **생성 순서·담당:** 프론트 연동 주소 확정 후 백엔드 담당 이서현이 바름용 Google 프로젝트·웹 Client ID를 생성하고 프론트에 공유한다. 인프라 담당자와 서버의 `GOOGLE_CLIENT_IDS` 적용을 연결한다. 두 프론트 주소는 확정됐으나 실제 Client ID 생성·Google 등록은 아직 미완료다. Client ID와 Google 설정은 별도 준비 후 진행한다.
 - **개발·검증 경계:** Client ID 준비 전에도 서버 로직·모의 검증과 프론트 코드 준비는 가능하다. 실제 Google 인증·브라우저 통합 검증은 Client ID·승인 Origin·서버 설정을 맞춘 뒤 진행한다.
 - **팀 검토 질문:** 이번 범위의 지원 제한을 유지할 것인가? 제3자 이메일 추가 인증이 필요하면 별도 화면·계약과 함께 확대할 것인가?
 

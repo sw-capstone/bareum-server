@@ -288,7 +288,7 @@ PASSWORD_RESET 목적의 발송 → 상태 조회 → 번호 확인 → PATCH `/
 | 항목 | 필요한 준비 | 누락 시 동작·확인 기준 |
 |---|---|---|
 | 서버 기동·DB | DB 접속 정보, Flyway 적용, `EMAIL_VERIFICATION_HASH_SECRET` | HMAC 키는 Base64 형식으로 최소 32바이트가 필요하다. 잘못된 키는 서버 기동을 막는다. `/health` 성공만으로 모든 인증 기능이 준비됐다고 판단하지 않는다. |
-| 브라우저 인증 | HTTPS 서버 주소, `LOGIN_ALLOWED_ORIGINS`, 쿠키·CSRF | CORS에 실제 프론트 Origin을 정확히 등록한다. 개발 적용안은 `https://bareum-web-git-develop-numkites-projects.vercel.app` 하나를 정확히 등록하는 것이다. 문서상의 선택이며 실제 배포 적용·브라우저 검증은 별도다. |
+| 브라우저 인증 | HTTPS 서버 주소, `LOGIN_ALLOWED_ORIGINS`, 쿠키·CSRF | CORS에 실제 프론트 Origin을 정확히 등록한다. 확정 대상은 `https://bareum.site`와 `https://bareum-web-git-develop-numkites-projects.vercel.app` 두 주소이며 쉼표 구분 목록으로 등록한다. 문서상의 선택이며 실제 배포 적용·브라우저 검증은 별도다. |
 | 메일 발송 | `spring.mail`의 제공자·인증·TLS 설정, 발신 주소, Outbox 암호화 키와 활성화 | `EMAIL_VERIFICATION_MAIL_FROM`과 Base64 형식의 32바이트 `EMAIL_VERIFICATION_OUTBOX_ENCRYPTION_KEY`가 필요하다. 키·발송 설정·제한 정책이 누락되면 발송을 차단한다. 운영 제공자·발신 계정은 별도 결정한다. |
 | 인증 제한 | 최소 발송 간격·시간당/일당 횟수·인증 실패 횟수 | `auth.email-verification.minimum-send-interval-seconds`, `max-sends-per-hour`, `max-sends-per-day`와 `max-verification-attempts`를 정한다. 발송 임시안은 60초·최근 1시간 5회·24시간 20회이며 팀 확인·환경 적용이 필요하다. 인증 실패는 기본 5회·15분 제한 후 새 번호로 재시작한다. 재발송 자체로는 초기화하지 않는다. |
 | 가입 약관 | 네 약관의 DB 데이터 | 네 boolean 응답을 DB의 약관 ID·버전과 연결한다. 필수 동의를 검증하며 별도 환경변수·버전 비교 503은 사용하지 않는다. |
@@ -339,7 +339,7 @@ Access 15분·최초 로그인부터 최대 8시간·메모리 보관·HttpOnly 
 | 운영 메일 서비스·발신 계정 | SMTP 설정 경로 구현·개발 Gmail 실제 수신 검증 완료. 운영 서비스·계정은 미정 | 운영 제공자·발신 주소·자격증명·TLS 설정 결정 및 적용 |
 | 사용자별 메일 발송·인증 제한 | 제한 검사·설정 누락 시 차단 구현. 발송 임시안 60초·최근 1시간 5회·24시간 20회 작성 | 임시안 검토·환경 적용. 인증 실패 5회·15분 대기·재인증 방식은 개발 적용안이며 Outbox 재시도와 별개 |
 | 약관 동의 | 네 boolean 검증·DB 버전 연결·이력 저장 | 개발용 네 항목 데이터를 준비하고 실제 사용자 적용 전 원문·DB 버전 대응 확인 |
-| 실제 허용 Origin·Google Client ID | Origin·Client ID 검증 경로 구현. 현재 Vercel 주소를 계속 사용할지는 확인 대상 | 프론트 주소 확정 후 백엔드 담당 이서현이 웹 Client ID 생성·공유, 인프라와 서버 설정 적용, 프론트 SDK·서버 Client ID 일치 |
+| 실제 허용 Origin·Google Client ID | Origin·Client ID 검증 경로 구현. 운영 bareum.site와 develop Vercel을 모두 사용하며 실제 등록·배포는 별도 | 확정된 두 주소를 기준으로 백엔드 담당 이서현이 웹 Client ID를 별도 생성·공유, 인프라와 서버 설정 적용, 프론트 SDK·서버 Client ID 일치 |
 | 비밀번호 찾기 배포·유효기간 | 재설정 코드와 개발 메일 검증 완료. MVP 제외 기준 유지 | 번호 300초 임시안의 팀 확인·환경 적용, 배포 포함 여부·완료 증명 유효기간 결정 |
 
 ### 프론트 처리 기준을 추가로 맞춰야 하는 항목
@@ -347,3 +347,5 @@ Access 15분·최초 로그인부터 최대 8시간·메모리 보관·HttpOnly 
 서버는 202 접수·발송 상태·SENT 남은 시간을 제공한다. 프론트 전달 기준은 1초 간격 조회, SENT의 expiresIn으로 타이머 시작, FAILED 시 “메일을 보내지 못했습니다. 다시 시도해주세요.” 표시다. PENDING 지연 안내와 1분 초과 실패 처리는 제외한다. 프론트 구현·실제 브라우저 검증과 최초 접수/인증/갱신 응답 유실 복구는 별도 확인한다. 이 기준은 서버 API 미구현이나 Outbox worker 기본값 변경을 의미하지 않는다.
 
 배포 설정의 임시 선택과 실제 값 준비·권한·키 교체 사항은 [배포 설정 준비](../guide/auth-term-deployment.md)의 마지막 절을 따른다.
+
+확정된 Origin 값·Google 준비 순서와 현재 미병합·미배포 범위는 [프론트 도메인 연동 기준](frontend-origins.md)을 따른다.
