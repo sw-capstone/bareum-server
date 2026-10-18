@@ -8,7 +8,7 @@
 | 프론트 develop 테스트 | `https://bareum-web-git-develop-numkites-projects.vercel.app` |
 | 백엔드 API | `https://api.bareum.site` |
 
-백엔드 CORS와 향후 Google 승인된 JavaScript 원본에는 두 프론트 Origin을 정확히 사용한다. 경로·후행 슬래시·와일드카드·임의 Preview 주소는 추가하지 않는다. API 호스트를 프론트 Origin 대신 등록하지 않는다.
+백엔드 CORS와 Google 승인된 JavaScript 원본에는 두 프론트 Origin을 정확히 사용한다. 경로·후행 슬래시·와일드카드·임의 Preview 주소는 추가하지 않는다. API 호스트를 프론트 Origin 대신 등록하지 않는다.
 
 ## 백엔드 설정
 
@@ -24,11 +24,18 @@ LOGIN_ALLOWED_ORIGINS=https://bareum.site,https://bareum-web-git-develop-numkite
 
 ## Google 준비와 반영 순서
 
-- 웹 Client ID 생성·Google Cloud 설정·`GOOGLE_CLIENT_IDS` 실제 값 등록은 아직 미완료다. 가짜 ID를 배포 설정에 넣지 않는다.
-- Client ID 준비 후 같은 ID를 프론트와 서버에 적용하고, 승인된 JavaScript 원본에 위 운영·develop 주소를 각각 등록한다. 이 문서는 Google Console 등록 완료 기록이 아니다.
+- Google Cloud 프로젝트 `bareum-512001`에서 웹 OAuth Client ID 발급을 완료했다. 클라이언트 생성 화면에는 위 운영·develop 두 주소를 승인된 JavaScript 원본으로 입력했다. 실제 Google 계정·브라우저 연동 검증은 아직 남아 있다.
+- 프론트 Google SDK의 Client ID와 서버 ID 토큰 검증의 `GOOGLE_CLIENT_IDS`에 아래 동일한 값을 사용한다.
+
+```dotenv
+GOOGLE_CLIENT_IDS=988423451549-o9piergh6fi1loveri3l2tf2ehvf2pb3.apps.googleusercontent.com
+```
+
+- 개발 서버 Parameter Store `/bareum/dev/server/GOOGLE_CLIENT_IDS`의 String 값으로 등록할 대상이다. 실제 AWS 등록·배포는 아직 완료하지 않았다. Client ID는 공개 식별자이며 현재 ID 토큰 검증 방식은 Client Secret을 사용하지 않는다.
+- 현재 프론트 JavaScript 콜백으로 ID 토큰을 받아 서버에 전달하는 계약이므로 별도 Google redirect URI를 요구하지 않는다. 전달 방식을 변경하면 redirect·state·nonce 계약을 다시 검토한다.
 - Google 로그인은 `POST /api/v1/auth/login/google`, 가입 완료는 `POST /api/v1/auth/signup/google` 계약이다.
 - 현재 Google 로그인 PR #40과 가입 완료 PR #41은 닫힌 미병합 상태다. 선행 인증 변경을 순차 반영하고 기존 PR을 업데이트·재오픈하는 방식으로 리뷰한다. 병합·개발 서버 배포 시점은 아직 확정하지 않았다.
-- Client ID 준비 전에도 API 계약·화면 분기·모의 검증을 진행할 수 있다. 실제 Google 계정 검증은 기능 병합·배포와 Google 설정을 완료한 뒤 수행한다.
+- 남은 순서는 프론트 SDK에 발급 ID 적용, 관련 기능의 순차 병합, 서버 설정 등록·배포, 운영·develop 주소의 실제 Google 기존 회원 로그인·신규 가입 검증이다. ID 발급만으로 서비스 연동 완료로 취급하지 않는다.
 
 ## 검증 기준
 
@@ -41,6 +48,7 @@ LOGIN_ALLOWED_ORIGINS=https://bareum.site,https://bareum-web-git-develop-numkite
 
 ## 준비 변경의 검증 결과
 
+- Client ID 발급 후 추가 확인: 모의 SSM 응답과 실제 환경 생성 스크립트에서 발급 ID·두 Origin의 값 보존을 확인했다. Google Client Secret은 조회하지 않는다. 실제 AWS·Google 로그인 검증은 포함하지 않았다.
 - `./gradlew check bootJar --no-daemon`: 전체 675개 테스트 통과, 실패·오류·건너뜀 0개 및 JAR 빌드 성공. 두 Origin의 실제 HTTP 사전 요청·credentials 허용과 미등록 주소 차단을 포함한다.
 - 환경 생성 모의 검사 22개 중 21개 통과, Windows의 POSIX 권한 검사 1개 제외. 두 Origin의 값 보존과 Google Client ID 없이 환경 생성 성공을 검증했다.
 - 공개 프론트는 HTTP 200을 확인했다. 현재 공개 API 명세에는 Google 로그인·가입 경로가 없으며, 해당 경로의 두 Origin 사전 요청에는 CORS 허용 헤더가 없어 운영 적용 완료로 처리하지 않는다. 실제 Google 계정·AWS 설정 적용은 미검증이다.
