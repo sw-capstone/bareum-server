@@ -71,7 +71,7 @@ Refresh Token은 본문에 포함하지 않고 bareum_refresh HttpOnly·Secure �
 | 쟁점 | 임시 구현 | 선택지·영향 | 재검토 조건 |
 |---|---|---|---|
 | Google 전달 방식 | ID Token JSON 요청과 기존 CSRF 쿠키·헤더 사용 | Google redirect/form POST 또는 서버 Authorization Code 방식은 callback·state·nonce·쿠키 계약을 별도로 맞춰야 한다. 현재 해당 방식은 지원하지 않음 | 프론트 Google SDK·인증 전달 방식 확정 전 |
-| 앱 설정 | GOOGLE_CLIENT_IDS의 명시된 Client ID만 허용. 누락 시 503으로 차단 | 운영·Preview 클라이언트를 구분할지 결정하고 Google Console의 승인 Origin과 서버 CORS를 함께 등록해야 함 | 운영·Preview 도메인 및 Google 프로젝트 결정 시 |
+| 앱 설정 | GOOGLE_CLIENT_IDS의 명시된 Client ID만 허용. 누락 시 503으로 차단 | 현재 운영·develop 두 Origin에 같은 웹 Client ID를 사용한다. 발급 값·서버 등록 대상은 프론트 도메인 연동 문서를 따른다. 실제 AWS 등록·배포는 별도 | 운영·개발 프로젝트 또는 Client ID 분리가 필요할 때 |
 | 가입용 증명 | 최대 10분, 해시 저장, 동일 sub의 최신 증명만 유지 | 기간 단축·연장이나 여러 동시 가입 화면을 허용하면 UX·증명 저장 기준 변경 필요 | AUTH-011·프론트 약관 흐름 연결 전 |
 | 신규 이메일 소유권 | email_verified=true와 함께 Gmail 또는 Workspace의 hd를 요구. 그 외 신규 이메일은 AUTH-0028로 차단 | Google은 제3자 메일의 현재 소유권까지 보장하지 않으므로 별도 이메일 인증 흐름을 연결하거나 신규 가입 허용 범위를 결정해야 함. 기존 회원은 검증된 sub로 로그인 가능 | 지원할 Google 계정 범위와 추가 인증 UX 결정 전 |
 | 제한·탈퇴 연결 | 기존 Google 인증 연결의 회원이 제한·탈퇴·연결 해제 상태이면 로그인 거부 | 탈퇴 Google 계정의 재가입은 기존 sub 연결을 재사용·해제·새 계정에 연결할지 별도 기준 필요. 다른 sub의 동일 이메일은 DELETED와 탈퇴 시각이 모두 있는 계정만 충돌 검사에서 제외 | 탈퇴·Google 재가입 정책 및 AUTH-011 구현 전 |
@@ -87,7 +87,7 @@ Refresh Token은 본문에 포함하지 않고 bareum_refresh HttpOnly·Secure �
 | GOOGLE_SIGNUP_TTL_SECONDS | 600 | 가입용 증명 유효기간. 1~600초 |
 | LOGIN_ALLOWED_ORIGINS | 비어 있음 | 기존 로그인 CORS 기준의 정확한 프론트 Origin |
 
-설정 예시는 [환경변수 예시](../../env/local/.env.example)에 포함한다. 프론트 주소 확정 후 백엔드 담당 이서현이 Google Console의 바름용 프로젝트·웹 Client ID를 생성하고 프론트에 공유한다. 해당 주소의 승인 Origin 등록과 인프라 담당자의 서버 GOOGLE_CLIENT_IDS 적용을 연결한다. 운영·develop Origin은 확정됐으며 Client ID 생성·Google 등록은 아직 미완료다. 실제 설정은 별도 준비 후 진행한다. Client ID 없이 서버 로직·모의 검증과 프론트 코드 준비는 가능하지만 실제 Google 연동 검증은 설정 후 진행한다. 이 설정만으로 Google 동의 화면이나 프론트 SDK가 구성되지는 않는다.
+설정 예시는 [환경변수 예시](../../env/local/.env.example)에 포함한다. 바름 Google 프로젝트의 웹 Client ID 발급과 두 프론트 Origin 입력을 완료했으며 [발급 ID·등록 기준](../integration/frontend-origins.md)을 따른다. 프론트 SDK와 서버 GOOGLE_CLIENT_IDS에 같은 ID를 적용한다. 실제 AWS 등록·배포·Google 계정 검증은 남아 있으며 ID 발급만으로 프론트 버튼 연결과 서비스 연동이 완료되지는 않는다.
 
 ## 검증과 남은 범위
 

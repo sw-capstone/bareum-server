@@ -34,7 +34,7 @@ Auth·Term의 서버 설정을 기존 개발 EC2 배포 경로에 연결한다. 
 https://bareum.site,https://bareum-web-git-develop-numkites-projects.vercel.app
 ```
 
-이 값은 서버 환경변수 `LOGIN_ALLOWED_ORIGINS`로 주입한다. Client ID는 아직 준비되지 않았으므로 Google 값을 생성하거나 가짜 ID로 채우지 않는다. 실제 SSM 등록·이미지 배포·브라우저 검증은 아직 별도 준비 대상이다. [프론트 도메인 연동 기준](../integration/frontend-origins.md)을 따른다.
+이 값은 서버 환경변수 `LOGIN_ALLOWED_ORIGINS`로 주입한다. Google 웹 Client ID는 발급됐으며 [프론트 도메인 연동 기준](../integration/frontend-origins.md)의 실제 값을 `/bareum/dev/server/GOOGLE_CLIENT_IDS`에 String으로 등록한다. 프론트 SDK에도 동일한 ID를 사용한다. 실제 SSM 등록·이미지 배포·브라우저 검증은 아직 별도 준비 대상이다.
 
 ## 파라미터 목록
 
@@ -113,7 +113,7 @@ Access 15분·세션 최대 8시간, Secure·SameSite=None 쿠키, Outbox 재시
 | 운영 SMTP 제공자·발신 계정 | SMTP 인증·TLS·발신 주소 설정 경로 구현 | 운영 서비스·발신 계정 결정 및 자격증명 적용. 개발 Gmail 수신 검증을 운영 설정 완료로 취급하지 않음 |
 | 사용자별 메일 발송·인증 제한 | 발송 간격·시간당/일당 횟수·인증 실패 횟수 설정 및 누락 시 차단 구현 | 발송 임시안은 60초·최근 1시간 5회·24시간 20회. 팀 확인·환경 주입 필요. 인증 실패는 임시안 5회·15분 제한 후 새 번호로 재시작 |
 | 약관 동의 저장 | 필수 3개 검증·선택 응답 저장·DB 버전 연결 | 개발용 네 약관 데이터를 준비하고 실제 사용자 적용 전 원문·DB 버전 대응 확인 |
-| 허용 Origin·Google Client ID | 정확한 HTTPS Origin 제한·Client ID 검증 설정 경로 구현 | 미리보기 주소는 알려져 있으나 허용 대상 승인·환경 등록은 미확인. 실제 웹 Client ID와 Console 승인 Origin 준비 |
+| 허용 Origin·Google Client ID | 정확한 HTTPS Origin 제한·Client ID 검증 설정 경로 구현 | 운영·develop 주소 확정, 실제 웹 Client ID 발급·생성 화면의 두 승인 Origin 입력 완료. 프론트 SDK 적용·AWS 등록·배포·브라우저 검증 필요 |
 | 비밀번호 찾기 | 발송·인증·재설정 구현 및 개발 메일 검증 완료 | MVP 제외 기준 유지. 번호 임시안 300초의 팀 확인, 완료 증명은 600초 임시안이며 배포 포함 여부는 별도 결정 필요 |
 
 Access 15분·최대 세션 8시간은 합의된 구현 기준이며, 회원가입 인증번호 5분·인증 완료 후 가입 10분은 최신 정책 기준이다. 쿠키 SameSite·경로와 Outbox 재시도·대기 기본값은 임시 기준으로 이미 구현되어 있고, 위 실제 값 미지정 항목과 구분한다. Google 지원 계정 범위와 키 교체·실패 복구 기준은 기존 구현의 재검토 사항으로 남긴다.
