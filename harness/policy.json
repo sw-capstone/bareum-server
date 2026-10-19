@@ -49,6 +49,8 @@
       "## 결정 대기"
     ]
   },
-  "schema_examples": {},
+  "schema_examples": {
+    "packages/contracts/report-content/1.0.0/content.schema.json": "packages/contracts/report-content/1.0.0/examples/pdf.example.json"
+  },
   "autofix": {"enabled": false, "semantic_changes": false}
 }
