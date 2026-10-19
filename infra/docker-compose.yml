@@ -75,16 +75,6 @@ services:
     env_file:
       - path: ${AI_ENV_FILE:-./env/.env.ai}
         format: raw
-    environment:
-      BAREUM_AI_INTERRUPT_PREVIOUS_ON_STARTUP: "true"
-      BAREUM_AI_DATABASE_CA_FILE: /etc/ssl/certs/rds-ca.pem
-    volumes:
-      - type: bind
-        source: ${RDS_CA_FILE:?}
-        target: /etc/ssl/certs/rds-ca.pem
-        read_only: true
-        bind:
-          create_host_path: false
     healthcheck:
       test: ["CMD", "curl", "--fail", "--silent", "--show-error", "--max-time", "3", "--output", "/dev/null", "http://127.0.0.1:8000/health"]
       interval: 10s
