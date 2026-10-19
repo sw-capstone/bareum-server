@@ -1,0 +1,496 @@
+{
+  "schemaVersion": "1.0.0",
+  "offsetUnit": "UNICODE_CODE_POINT",
+  "sourceFormat": "PDF",
+  "pages": [
+    {
+      "number": 1,
+      "width": 595,
+      "height": 842,
+      "coordinateSystem": "UNROTATED_PDF_POINTS"
+    }
+  ],
+  "blocks": [
+    {
+      "id": "10000000-0000-4000-8000-000000000001",
+      "kind": "heading",
+      "parentId": null,
+      "sectionId": "10000000-0000-4000-8000-000000000003",
+      "text": "사업 추진 결과",
+      "sourceText": "사업 추진 결과",
+      "units": [
+        {
+          "id": "10000000-0000-4000-8000-000000000002",
+          "kind": "fragment",
+          "start": 0,
+          "end": 8,
+          "text": "사업 추진 결과"
+        }
+      ],
+      "sourceRefs": [
+        {
+          "parserBlockId": "parser_b001",
+          "location": {
+            "type": "pdf",
+            "page": 1,
+            "bbox": [
+              50,
+              40,
+              500,
+              70
+            ],
+            "precision": "block"
+          }
+        }
+      ],
+      "extraction": {
+        "excludedFromRetrieval": false,
+        "requiresVision": false
+      }
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000004",
+      "kind": "para",
+      "parentId": "10000000-0000-4000-8000-000000000001",
+      "sectionId": "10000000-0000-4000-8000-000000000003",
+      "text": "교육을 실시했다. 만족도 조사를 진행했다.",
+      "sourceText": "교육을 실시했다.\n만족도 조사를 진행했다.",
+      "units": [
+        {
+          "id": "10000000-0000-4000-8000-000000000005",
+          "kind": "sentence",
+          "start": 0,
+          "end": 9,
+          "text": "교육을 실시했다."
+        },
+        {
+          "id": "10000000-0000-4000-8000-000000000006",
+          "kind": "sentence",
+          "start": 10,
+          "end": 23,
+          "text": "만족도 조사를 진행했다."
+        }
+      ],
+      "sourceRefs": [
+        {
+          "parserBlockId": "parser_b002",
+          "location": {
+            "type": "pdf",
+            "page": 1,
+            "bbox": [
+              50,
+              80,
+              500,
+              130
+            ],
+            "precision": "block"
+          }
+        }
+      ],
+      "extraction": {
+        "excludedFromRetrieval": false,
+        "requiresVision": false
+      }
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000007",
+      "kind": "para",
+      "parentId": "10000000-0000-4000-8000-000000000001",
+      "sectionId": "10000000-0000-4000-8000-000000000003",
+      "text": "(단위: 천원)",
+      "sourceText": "(단위: 천원)",
+      "units": [
+        {
+          "id": "10000000-0000-4000-8000-000000000008",
+          "kind": "fragment",
+          "start": 0,
+          "end": 8,
+          "text": "(단위: 천원)"
+        }
+      ],
+      "sourceRefs": [
+        {
+          "parserBlockId": "parser_b003",
+          "location": {
+            "type": "pdf",
+            "page": 1,
+            "bbox": [
+              350,
+              140,
+              500,
+              160
+            ],
+            "precision": "block"
+          }
+        }
+      ],
+      "extraction": {
+        "excludedFromRetrieval": false,
+        "requiresVision": false
+      }
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000024",
+      "kind": "table",
+      "parentId": "10000000-0000-4000-8000-000000000001",
+      "sectionId": "10000000-0000-4000-8000-000000000003",
+      "sourceRefs": [
+        {
+          "parserBlockId": "parser_b004",
+          "location": {
+            "type": "pdf",
+            "page": 1,
+            "bbox": [
+              50,
+              180,
+              500,
+              270
+            ],
+            "precision": "block"
+          }
+        }
+      ],
+      "extraction": {
+        "excludedFromRetrieval": false,
+        "requiresVision": false
+      },
+      "rowCount": 3,
+      "columnCount": 3,
+      "structureStatus": "complete",
+      "cells": [
+        {
+          "id": "10000000-0000-4000-8000-000000000009",
+          "row": 0,
+          "column": 0,
+          "rowspan": 1,
+          "colspan": 1,
+          "text": "사업명",
+          "sourceText": "사업명",
+          "units": [
+            {
+              "id": "10000000-0000-4000-8000-000000000010",
+              "kind": "fragment",
+              "start": 0,
+              "end": 3,
+              "text": "사업명"
+            }
+          ],
+          "sourceRefs": [
+            {
+              "parserBlockId": "parser_b004",
+              "parserRow": 0,
+              "parserColumn": 0,
+              "location": {
+                "type": "pdf",
+                "page": 1,
+                "bbox": [
+                  50,
+                  180,
+                  220,
+                  210
+                ],
+                "precision": "cell"
+              }
+            }
+          ]
+        },
+        {
+          "id": "10000000-0000-4000-8000-000000000011",
+          "row": 0,
+          "column": 1,
+          "rowspan": 1,
+          "colspan": 1,
+          "text": "기간",
+          "sourceText": "기간",
+          "units": [
+            {
+              "id": "10000000-0000-4000-8000-000000000012",
+              "kind": "fragment",
+              "start": 0,
+              "end": 2,
+              "text": "기간"
+            }
+          ],
+          "sourceRefs": [
+            {
+              "parserBlockId": "parser_b004",
+              "parserRow": 0,
+              "parserColumn": 1,
+              "location": {
+                "type": "pdf",
+                "page": 1,
+                "bbox": [
+                  220,
+                  180,
+                  350,
+                  210
+                ],
+                "precision": "cell"
+              }
+            }
+          ]
+        },
+        {
+          "id": "10000000-0000-4000-8000-000000000013",
+          "row": 0,
+          "column": 2,
+          "rowspan": 1,
+          "colspan": 1,
+          "text": "집행액",
+          "sourceText": "집행액",
+          "units": [
+            {
+              "id": "10000000-0000-4000-8000-000000000014",
+              "kind": "fragment",
+              "start": 0,
+              "end": 3,
+              "text": "집행액"
+            }
+          ],
+          "sourceRefs": [
+            {
+              "parserBlockId": "parser_b004",
+              "parserRow": 0,
+              "parserColumn": 2,
+              "location": {
+                "type": "pdf",
+                "page": 1,
+                "bbox": [
+                  350,
+                  180,
+                  500,
+                  210
+                ],
+                "precision": "cell"
+              }
+            }
+          ]
+        },
+        {
+          "id": "10000000-0000-4000-8000-000000000015",
+          "row": 1,
+          "column": 0,
+          "rowspan": 2,
+          "colspan": 1,
+          "text": "주민교육",
+          "sourceText": "주민교육",
+          "units": [
+            {
+              "id": "10000000-0000-4000-8000-000000000016",
+              "kind": "fragment",
+              "start": 0,
+              "end": 4,
+              "text": "주민교육"
+            }
+          ],
+          "sourceRefs": [
+            {
+              "parserBlockId": "parser_b004",
+              "parserRow": 1,
+              "parserColumn": 0,
+              "location": {
+                "type": "pdf",
+                "page": 1,
+                "bbox": [
+                  50,
+                  210,
+                  220,
+                  270
+                ],
+                "precision": "cell"
+              }
+            }
+          ]
+        },
+        {
+          "id": "10000000-0000-4000-8000-000000000017",
+          "row": 1,
+          "column": 1,
+          "rowspan": 1,
+          "colspan": 1,
+          "text": "상반기",
+          "sourceText": "상반기",
+          "units": [
+            {
+              "id": "10000000-0000-4000-8000-000000000018",
+              "kind": "fragment",
+              "start": 0,
+              "end": 3,
+              "text": "상반기"
+            }
+          ],
+          "sourceRefs": [
+            {
+              "parserBlockId": "parser_b004",
+              "parserRow": 1,
+              "parserColumn": 1,
+              "location": {
+                "type": "pdf",
+                "page": 1,
+                "bbox": [
+                  220,
+                  210,
+                  350,
+                  240
+                ],
+                "precision": "cell"
+              }
+            }
+          ]
+        },
+        {
+          "id": "10000000-0000-4000-8000-000000000019",
+          "row": 1,
+          "column": 2,
+          "rowspan": 1,
+          "colspan": 1,
+          "text": "45,000",
+          "sourceText": "45,000",
+          "units": [
+            {
+              "id": "10000000-0000-4000-8000-000000000020",
+              "kind": "fragment",
+              "start": 0,
+              "end": 6,
+              "text": "45,000"
+            }
+          ],
+          "sourceRefs": [
+            {
+              "parserBlockId": "parser_b004",
+              "parserRow": 1,
+              "parserColumn": 2,
+              "location": {
+                "type": "pdf",
+                "page": 1,
+                "bbox": [
+                  350,
+                  210,
+                  500,
+                  240
+                ],
+                "precision": "cell"
+              }
+            }
+          ]
+        },
+        {
+          "id": "10000000-0000-4000-8000-000000000021",
+          "row": 2,
+          "column": 1,
+          "rowspan": 1,
+          "colspan": 1,
+          "text": "하반기",
+          "sourceText": "하반기",
+          "units": [
+            {
+              "id": "10000000-0000-4000-8000-000000000022",
+              "kind": "fragment",
+              "start": 0,
+              "end": 3,
+              "text": "하반기"
+            }
+          ],
+          "sourceRefs": [
+            {
+              "parserBlockId": "parser_b004",
+              "parserRow": 2,
+              "parserColumn": 1,
+              "location": {
+                "type": "pdf",
+                "page": 1,
+                "bbox": [
+                  220,
+                  240,
+                  350,
+                  270
+                ],
+                "precision": "cell"
+              }
+            }
+          ]
+        },
+        {
+          "id": "10000000-0000-4000-8000-000000000023",
+          "row": 2,
+          "column": 2,
+          "rowspan": 1,
+          "colspan": 1,
+          "text": "",
+          "sourceText": "",
+          "units": [],
+          "sourceRefs": [
+            {
+              "parserBlockId": "parser_b004",
+              "parserRow": 2,
+              "parserColumn": 2,
+              "location": {
+                "type": "pdf",
+                "page": 1,
+                "bbox": [
+                  350,
+                  240,
+                  500,
+                  270
+                ],
+                "precision": "cell"
+              }
+            }
+          ]
+        }
+      ],
+      "unresolvedSlots": [],
+      "headerRelations": {
+        "status": "resolved",
+        "items": [
+          {
+            "cellId": "10000000-0000-4000-8000-000000000015",
+            "headerCellIds": [
+              "10000000-0000-4000-8000-000000000009"
+            ]
+          },
+          {
+            "cellId": "10000000-0000-4000-8000-000000000017",
+            "headerCellIds": [
+              "10000000-0000-4000-8000-000000000011"
+            ]
+          },
+          {
+            "cellId": "10000000-0000-4000-8000-000000000019",
+            "headerCellIds": [
+              "10000000-0000-4000-8000-000000000013"
+            ]
+          },
+          {
+            "cellId": "10000000-0000-4000-8000-000000000021",
+            "headerCellIds": [
+              "10000000-0000-4000-8000-000000000011"
+            ]
+          },
+          {
+            "cellId": "10000000-0000-4000-8000-000000000023",
+            "headerCellIds": [
+              "10000000-0000-4000-8000-000000000013"
+            ]
+          }
+        ]
+      },
+      "unitNoteRefs": [
+        {
+          "type": "block",
+          "id": "10000000-0000-4000-8000-000000000007",
+          "start": 0,
+          "end": 8
+        }
+      ]
+    }
+  ],
+  "sections": [
+    {
+      "id": "10000000-0000-4000-8000-000000000003",
+      "headingBlockId": "10000000-0000-4000-8000-000000000001",
+      "parentSectionId": null
+    }
+  ],
+  "warnings": []
+}
