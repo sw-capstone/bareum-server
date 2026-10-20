@@ -35,7 +35,6 @@ class ReportContentContractTest(unittest.TestCase):
             ("wrong offset unit", '"UNICODE_CODE_POINT"', '"UTF16_CODE_UNIT"'),
             ("missing units", '"units":', '"sentences":'),
             ("invalid UUID", '"id": "10000000-0000-4000-8000-000000000001"', '"id": "parser_b001"'),
-            ("invalid unit kind", '"kind": "sentence"', '"kind": "paragraph"'),
             ("negative start", '"start": 0', '"start": -1'),
             ("fractional offset", '"start": 0', '"start": 0.5'),
             ("zero span", '"rowspan": 2', '"rowspan": 0'),
@@ -58,6 +57,23 @@ class ReportContentContractTest(unittest.TestCase):
                 # When / Then
                 with self.assertRaises(SchemaValidationError):
                     validate(json.loads(changed), schema)
+
+    def test_unit_kinds_are_rejected_in_blocks_and_cells(self) -> None:
+        # Given
+        schema = json.loads(SCHEMA.read_text(encoding="utf-8"))
+        original = (EXAMPLES / "pdf.example.json").read_text(encoding="utf-8")
+        validate(json.loads(original), schema)
+        for owner_index, kind in (
+            (0, "sentence"), (0, "fragment"),
+            (1, "sentence"), (1, "fragment"),
+        ):
+            with self.subTest(owner_index=owner_index, kind=kind):
+                example = json.loads(original)
+                owners = (example["blocks"][1], example["blocks"][3]["cells"][0])
+                owners[owner_index]["units"][0]["kind"] = kind
+                # When / Then
+                with self.assertRaises(SchemaValidationError):
+                    validate(example, schema)
 
     def test_cell_source_requires_original_parser_coordinates(self) -> None:
         # Given
