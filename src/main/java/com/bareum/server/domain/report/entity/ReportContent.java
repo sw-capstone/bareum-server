@@ -6,6 +6,8 @@ import org.hibernate.annotations.ColumnDefault;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
+import com.bareum.server.domain.report.body.BodyValidator;
+import com.bareum.server.domain.report.body.ReportBody;
 import com.bareum.server.domain.report.enums.ContentStatus;
 import com.bareum.server.domain.report.exception.ReportErrorCode;
 import com.bareum.server.domain.report.exception.ReportException;
@@ -25,13 +27,14 @@ import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import tools.jackson.databind.JsonNode;
 
 @Entity
 @Table(name = "report_content")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class ReportContent extends BaseTimeEntity {
+
+	private static final BodyValidator BODY_VALIDATOR = new BodyValidator();
 
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -42,9 +45,10 @@ public class ReportContent extends BaseTimeEntity {
 	@JoinColumn(name = "report_id", nullable = false)
 	private Report report;
 
+	// TODO(#53): 본문 조회와 편집 저장 성능을 측정하고, 결과에 따라 저장 단위와 갱신 방식을 재검토한다.
 	@JdbcTypeCode(SqlTypes.JSON)
 	@Column(name = "content", nullable = false, columnDefinition = "jsonb")
-	private JsonNode content;
+	private ReportBody content;
 
 	@Enumerated(EnumType.STRING)
 	@Column(name = "status", nullable = false, length = 30)
@@ -63,24 +67,18 @@ public class ReportContent extends BaseTimeEntity {
 	@JoinColumn(name = "base_content_id", nullable = true)
 	private ReportContent baseContent;
 
-	private ReportContent(Report report, JsonNode content) {
+	private ReportContent(Report report, ReportBody content) {
 		Objects.requireNonNull(report, "report");
-		if (content == null || content.isNull()) {
-			throw new ReportException(ReportErrorCode.INVALID_CONTENT);
-		}
+		BODY_VALIDATOR.validate(content);
 		this.report = report;
-		this.content = content.deepCopy();
+		this.content = content;
 		this.status = ContentStatus.DRAFT;
 		this.isCurrent = false;
 		this.revision = 1L;
 	}
 
-	public static ReportContent create(Report report, JsonNode content) {
+	public static ReportContent create(Report report, ReportBody content) {
 		return new ReportContent(report, content);
-	}
-
-	public JsonNode getContent() {
-		return content == null ? null : content.deepCopy();
 	}
 
 	public static ReportContent draftFrom(ReportContent baseline) {
@@ -93,14 +91,13 @@ public class ReportContent extends BaseTimeEntity {
 		return draft;
 	}
 
-	public void replaceContent(JsonNode replacement) {
+	public void replaceContent(ReportBody replacement) {
 		if (status != ContentStatus.DRAFT) {
 			throw new ReportException(ReportErrorCode.FROZEN_CONTENT_CANNOT_BE_EDITED);
 		}
-		if (replacement == null || replacement.isNull()) {
-			throw new ReportException(ReportErrorCode.INVALID_CONTENT);
-		}
-		content = replacement.deepCopy();
+
+		BODY_VALIDATOR.validate(replacement);
+		content = replacement;
 		revision++;
 	}
 
