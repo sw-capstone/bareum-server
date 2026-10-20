@@ -54,7 +54,8 @@
 ## 6. JSONB
 
 - 구조가 미정인 JSONB 컬럼은 `JsonNode`로 매핑한다. 계약이 정해진 공통 본문은 `ReportBody`로 매핑한다.
-- DB 타입과 JSON 변환 설정을 함께 지정하고, 공통 본문의 생성과 교체 시 `BodyValidator`로 검증한다.
+- DB 타입과 JSON 변환 설정을 함께 지정한다. 공통 본문은 `ValidatedReportBody.from()`에서 검증하며, `BodyAssembler`도 검증된 객체를 반환한다.
+- `ReportContent`의 생성과 교체는 `ValidatedReportBody`만 받는다. 확정본에서 초안을 만들 때는 기존 불변 본문을 재검증 없이 공유한다.
 - 상세 구조는 파서·AI 계약에 맞춰 구체화한다. 이미 정한 NULL 허용 여부와 배열 등의 조건은 유지한다.
 - 보호가 필요한 JSON은 내부의 변경 가능한 객체를 그대로 노출하지 않고, 변경 메서드를 통해 수정한다.
 - FROZEN 본문과 편집 본문은 불변 `ReportBody`를 공유할 수 있으며, 편집 시 새 객체로 교체한다. 변경 가능한 JSON 객체는 복사한다.

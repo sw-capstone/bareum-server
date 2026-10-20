@@ -11,7 +11,7 @@ import java.util.Map;
 
 import com.bareum.server.domain.report.body.BodyAssembler;
 import com.bareum.server.domain.report.body.BodyInput;
-import com.bareum.server.domain.report.body.ReportBody;
+import com.bareum.server.domain.report.body.ValidatedReportBody;
 import com.bareum.server.domain.report.enums.SourceFormat;
 import com.bareum.server.domain.report.exception.ReportErrorCode;
 import com.bareum.server.domain.report.exception.ReportException;
@@ -37,7 +37,7 @@ public final class PdfBodyConverter {
 	private final BodyAssembler assembler;
 
 	// PDF 파서 응답을 공통 본문으로 변환
-	public ReportBody convertParsed(String json) {
+	public ValidatedReportBody convertParsed(String json) {
 		try {
 			PdfExtraction parsed = mapper.readValue(json, PdfExtraction.class);
 			if (parsed == null) {

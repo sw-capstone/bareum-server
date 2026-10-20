@@ -22,13 +22,12 @@ import lombok.RequiredArgsConstructor;
 public final class BodyAssembler {
 	private final TextSegmenter textSegmenter;
 	private final Supplier<UUID> ids; // 호출할 때 UUID 제공하는 함수
-	private final BodyValidator validator = new BodyValidator();
 
 	public BodyAssembler(TextSegmenter textSegmenter) { this(textSegmenter, UUID::randomUUID); }
 
 	// 전체 조립 담당
 	// TODO(#53): 접수 서비스에서 본문 구성과 본문 및 파싱 이력의 DB 저장 흐름을 연결한다.
-	public ReportBody assemble(BodyInput input) {
+	public ValidatedReportBody assemble(BodyInput input) {
 		// 입력 키와 서비스 UUID를 연결
 		Map<String, UUID> mapped = new HashMap<>();
 		for (BlockInput block : input.blocks()) {
@@ -97,8 +96,7 @@ public final class BodyAssembler {
 				.toList();
 		ReportBody body = new ReportBody("1.0.0", "UNICODE_CODE_POINT", input.sourceFormat(),
 				input.pages(), blocks, sections, warnings);
-		validator.validate(body);
-		return body;
+		return ValidatedReportBody.from(body);
 	}
 
 	// TextSegmenter로 텍스트를 분리하고, 경계가 불확실하면 해당 블록이나 셀을 대상으로 경고 추가
