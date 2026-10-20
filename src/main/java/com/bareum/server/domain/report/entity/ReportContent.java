@@ -6,8 +6,8 @@ import org.hibernate.annotations.ColumnDefault;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
-import com.bareum.server.domain.report.body.BodyValidator;
 import com.bareum.server.domain.report.body.ReportBody;
+import com.bareum.server.domain.report.body.ValidatedReportBody;
 import com.bareum.server.domain.report.enums.ContentStatus;
 import com.bareum.server.domain.report.exception.ReportErrorCode;
 import com.bareum.server.domain.report.exception.ReportException;
@@ -33,8 +33,6 @@ import lombok.NoArgsConstructor;
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class ReportContent extends BaseTimeEntity {
-
-	private static final BodyValidator BODY_VALIDATOR = new BodyValidator();
 
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -69,7 +67,6 @@ public class ReportContent extends BaseTimeEntity {
 
 	private ReportContent(Report report, ReportBody content) {
 		Objects.requireNonNull(report, "report");
-		BODY_VALIDATOR.validate(content);
 		this.report = report;
 		this.content = content;
 		this.status = ContentStatus.DRAFT;
@@ -77,8 +74,8 @@ public class ReportContent extends BaseTimeEntity {
 		this.revision = 1L;
 	}
 
-	public static ReportContent create(Report report, ReportBody content) {
-		return new ReportContent(report, content);
+	public static ReportContent create(Report report, ValidatedReportBody content) {
+		return new ReportContent(report, requireBody(content));
 	}
 
 	public static ReportContent draftFrom(ReportContent baseline) {
@@ -86,19 +83,24 @@ public class ReportContent extends BaseTimeEntity {
 		if (baseline.getStatus() != ContentStatus.FROZEN) {
 			throw new ReportException(ReportErrorCode.BASE_CONTENT_NOT_FROZEN);
 		}
-		ReportContent draft = create(baseline.getReport(), baseline.getContent());
+		ReportContent draft = new ReportContent(baseline.getReport(), baseline.getContent());
 		draft.baseContent = baseline;
 		return draft;
 	}
 
-	public void replaceContent(ReportBody replacement) {
+	public void replaceContent(ValidatedReportBody replacement) {
 		if (status != ContentStatus.DRAFT) {
 			throw new ReportException(ReportErrorCode.FROZEN_CONTENT_CANNOT_BE_EDITED);
 		}
-
-		BODY_VALIDATOR.validate(replacement);
-		content = replacement;
+		content = requireBody(replacement);
 		revision++;
+	}
+
+	private static ReportBody requireBody(ValidatedReportBody validated) {
+		if (validated == null) {
+			throw new ReportException(ReportErrorCode.INVALID_CONTENT);
+		}
+		return validated.getBody();
 	}
 
 	public void freeze() {

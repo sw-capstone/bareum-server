@@ -38,7 +38,8 @@ class PdfBodyConverterTests {
 
 	@Test
 	void convertsParserBlocksSectionsCellsSourcesAndWarnings() throws Exception {
-		var body = converter.convertParsed(BodyFixtures.parsed("1.2.0"));
+		ValidatedReportBody validated = converter.convertParsed(BodyFixtures.parsed("1.2.0"));
+		var body = validated.getBody();
 		assertEquals(SourceFormat.PDF, body.sourceFormat());
 		assertEquals("UNROTATED_PDF_POINTS", body.pages().getFirst().coordinateSystem());
 		var paragraph = (TextBlock)body.blocks().get(1);
@@ -68,7 +69,7 @@ class PdfBodyConverterTests {
 	private ReportBody changed(Consumer<ObjectNode> mutate) throws Exception {
 		ObjectNode parsed = (ObjectNode)mapper.readTree(BodyFixtures.parsed("1.2.0"));
 		mutate.accept(parsed);
-		return converter.convertParsed(parsed.toString());
+		return converter.convertParsed(parsed.toString()).getBody();
 	}
 
 	private static ObjectNode table(ObjectNode parsed) {
@@ -203,8 +204,8 @@ class PdfBodyConverterTests {
 	@Test
 	void reparsingCreatesNewServiceIds() throws Exception {
 		String source = BodyFixtures.parsed("1.2.0");
-		var first = converter.convertParsed(source);
-		var second = converter.convertParsed(source);
+		var first = converter.convertParsed(source).getBody();
+		var second = converter.convertParsed(source).getBody();
 		assertNotEquals(first.blocks().getFirst().id(), second.blocks().getFirst().id());
 		assertEquals(first.blocks().getFirst().sourceRefs(), second.blocks().getFirst().sourceRefs());
 	}

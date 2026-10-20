@@ -10,6 +10,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
+import com.bareum.server.domain.member.entity.Member;
+import com.bareum.server.domain.report.entity.Report;
+import com.bareum.server.domain.report.entity.ReportContent;
+import com.bareum.server.domain.report.enums.ReportType;
 import com.bareum.server.domain.report.enums.SourceFormat;
 import com.bareum.server.domain.report.exception.ReportErrorCode;
 import com.bareum.server.domain.report.exception.ReportException;
@@ -35,7 +39,11 @@ class BodyAssemblerTests {
 				"complete", cells, List.of(), "resolved", List.of(), List.of());
 		var input = new BodyInput(SourceFormat.TEXT, List.of(), List.of(heading, text, table),
 				List.of(new SectionInput("s", "h", null)), List.of());
-		var body = assembler.assemble(input);
+		ValidatedReportBody validated = assembler.assemble(input);
+		var body = validated.getBody();
+		Report report = Report.createFromText(Member.createLocal("body@example.invalid", "tester", "hash"),
+				ReportType.PLAN, "title");
+		assertSame(body, ReportContent.create(report, validated).getContent());
 		var paragraph = (TextBlock)body.blocks().get(1);
 		assertEquals(List.of("교육 완료.", "조사 예정."), paragraph.units().stream().map(Unit::text).toList());
 		assertEquals(List.of(0, 8), paragraph.units().stream().map(Unit::start).toList());
@@ -53,8 +61,8 @@ class BodyAssemblerTests {
 		String text = "교육을 실시했다 만족도 조사를 진행했다";
 		var input = new BodyInput(SourceFormat.TEXT, List.of(),
 				List.of(new TextInput("a", "para", null, null, text, text, List.of(), null)), List.of(), List.of());
-		var first = assembler.assemble(input);
-		var second = assembler.assemble(input);
+		var first = assembler.assemble(input).getBody();
+		var second = assembler.assemble(input).getBody();
 		var block = (TextBlock)first.blocks().getFirst();
 		assertEquals(text, block.text());
 		assertEquals(text, block.units().getFirst().text());
@@ -65,7 +73,8 @@ class BodyAssemblerTests {
 
 	@Test
 	void bodyCollectionsAreImmutable() {
-		var body = assembler.assemble(new BodyInput(SourceFormat.TEXT, List.of(), List.of(), List.of(), List.of()));
+		var body = assembler.assemble(new BodyInput(SourceFormat.TEXT, List.of(), List.of(), List.of(), List.of()))
+				.getBody();
 		assertThrows(UnsupportedOperationException.class, () -> body.blocks().clear());
 	}
 
@@ -77,7 +86,7 @@ class BodyAssemblerTests {
 		var table = new TableInput("t", "table", null, null, List.of(), null, 1, 1,
 				"complete", List.of(cell), List.of(), "resolved", List.of(), List.of());
 		var body = assembler.assemble(new BodyInput(SourceFormat.TEXT, List.of(),
-				List.of(paragraph, table), List.of(), List.of()));
+				List.of(paragraph, table), List.of(), List.of())).getBody();
 		var block = (TextBlock)body.blocks().getFirst();
 		var assembledCell = ((TableBlock)body.blocks().getLast()).cells().getFirst();
 		assertEquals(List.of(text), block.units().stream().map(Unit::text).toList());

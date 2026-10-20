@@ -37,7 +37,7 @@ class ReportBodyConfigTests {
 			var input = new BodyInput(SourceFormat.TEXT, List.of(), List.of(
 					new BodyInput.TextInput("p", "para", null, null, text, text, List.of(), null)), List.of(),
 					List.of());
-			var body = application.getBean(BodyAssembler.class).assemble(input);
+			var body = application.getBean(BodyAssembler.class).assemble(input).getBody();
 			assertEquals(text, ((ReportBody.TextBlock)body.blocks().getFirst()).units().getFirst().text());
 			assertEquals("BOUNDARY_UNCERTAIN", body.warnings().getFirst().code());
 		});

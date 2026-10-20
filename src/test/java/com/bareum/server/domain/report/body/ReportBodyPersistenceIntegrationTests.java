@@ -38,7 +38,7 @@ class ReportBodyPersistenceIntegrationTests {
 	@ValueSource(strings = {"pdf", "direct-input", "partial-table"})
 	void storesAndReloadsContractBodiesWithoutLosingFields(String name) throws Exception {
 		ReportBody expected = codec.read(BodyFixtures.contract("1.0.0", name));
-		ReportContent content = ReportContent.create(persistReport(), expected);
+		ReportContent content = ReportContent.create(persistReport(), ValidatedReportBody.from(expected));
 		entityManager.persist(content);
 		entityManager.flush();
 		Long id = content.getId();
@@ -77,7 +77,7 @@ class ReportBodyPersistenceIntegrationTests {
 				List.of(), List.of(new TextBlock(UUID.randomUUID(), "para", null, null, text, text,
 						List.of(new Unit(UUID.randomUUID(), start, end,
 								text.substring(2, text.length() - 2))), List.of(), null)), List.of(), List.of());
-		ReportContent content = ReportContent.create(persistReport(), expected);
+		ReportContent content = ReportContent.create(persistReport(), ValidatedReportBody.from(expected));
 		entityManager.persist(content);
 		entityManager.flush();
 		Long id = content.getId();
@@ -92,7 +92,7 @@ class ReportBodyPersistenceIntegrationTests {
 	@Test
 	void replacesDraftWithoutChangingFrozenBaseline() throws Exception {
 		ReportBody original = codec.read(BodyFixtures.contract("1.0.0", "direct-input"));
-		ReportContent baseline = ReportContent.create(persistReport(), original);
+		ReportContent baseline = ReportContent.create(persistReport(), ValidatedReportBody.from(original));
 		baseline.freeze();
 		entityManager.persist(baseline);
 		ReportContent draft = ReportContent.draftFrom(baseline);
@@ -103,7 +103,7 @@ class ReportBodyPersistenceIntegrationTests {
 		entityManager.clear();
 
 		ReportBody replacement = codec.read(BodyFixtures.contract("1.0.0", "partial-table"));
-		entityManager.find(ReportContent.class, draftId).replaceContent(replacement);
+		entityManager.find(ReportContent.class, draftId).replaceContent(ValidatedReportBody.from(replacement));
 		entityManager.flush();
 		entityManager.clear();
 
