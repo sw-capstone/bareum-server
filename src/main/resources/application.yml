@@ -53,3 +53,7 @@ auth:
       encryption-key: ${EMAIL_VERIFICATION_OUTBOX_ENCRYPTION_KEY:}
       key-id: ${EMAIL_VERIFICATION_OUTBOX_KEY_ID:v1}
       enabled: ${EMAIL_VERIFICATION_OUTBOX_ENABLED:true}
+
+report:
+  segmentation:
+    model-path: ${KIWI_MODEL_PATH:build/kiwi/models/cong/base}
