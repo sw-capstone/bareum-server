@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/sw-capstone/bareum-server/raw/develop/packages/contracts/pdf-parsing/1.0.0/request.schema.json",
+  "$defs": {
+    "AttemptIdentifier": {
+      "exclusiveMinimum": 0,
+      "maximum": 9223372036854775807,
+      "type": "integer"
+    },
+    "PdfSource": {
+      "additionalProperties": false,
+      "description": "원본 식별 정보와 갱신 가능한 다운로드 자격을 함께 받는다.",
+      "properties": {
+        "objectKey": {
+          "minLength": 1,
+          "title": "Objectkey",
+          "type": "string"
+        },
+        "originalFilename": {
+          "minLength": 1,
+          "title": "Originalfilename",
+          "type": "string"
+        },
+        "sizeBytes": {
+          "exclusiveMinimum": 0,
+          "title": "Sizebytes",
+          "type": "integer"
+        },
+        "sha256": {
+          "pattern": "^[a-fA-F0-9]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "downloadUrl": {
+          "format": "uri",
+          "title": "Downloadurl",
+          "type": "string",
+          "writeOnly": true,
+          "pattern": "^https://"
+        },
+        "urlExpiresAt": {
+          "format": "date-time",
+          "title": "Urlexpiresat",
+          "type": "string"
+        }
+      },
+      "required": [
+        "objectKey",
+        "originalFilename",
+        "sizeBytes",
+        "sha256",
+        "downloadUrl",
+        "urlExpiresAt"
+      ],
+      "title": "PdfSource",
+      "type": "object"
+    },
+    "ReportIdentifier": {
+      "exclusiveMinimum": 0,
+      "maximum": 9223372036854775807,
+      "type": "integer"
+    }
+  },
+  "additionalProperties": false,
+  "description": "파일 제한과 파서 설정은 요청자가 지정할 수 없다.",
+  "properties": {
+    "reportId": {
+      "$ref": "#/$defs/ReportIdentifier"
+    },
+    "parseAttemptId": {
+      "$ref": "#/$defs/AttemptIdentifier"
+    },
+    "source": {
+      "$ref": "#/$defs/PdfSource"
+    }
+  },
+  "required": [
+    "reportId",
+    "parseAttemptId",
+    "source"
+  ],
+  "title": "PdfParseRequest",
+  "type": "object",
+  "$comment": "AI #27 내부 PDF 파싱 API의 전송 계약. parsed는 추출 스키마 1.2.0이며 서비스 공통 본문과 구분한다. 식별자 일치·시각 순서·원본 해시·HTTP 상태와 오류 행동의 대응은 Java 호출 경계에서 검사한다."
+}
