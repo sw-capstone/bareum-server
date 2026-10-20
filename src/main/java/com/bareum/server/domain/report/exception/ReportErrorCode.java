@@ -24,7 +24,8 @@ public enum ReportErrorCode implements BaseErrorCode {
 	INVALID_SOURCE_DELETION(HttpStatus.CONFLICT, "REPORT-0011", "원본 파일 삭제 정보를 기록할 수 없습니다."),
 	RESULT_CONTENT_NOT_FROZEN(HttpStatus.CONFLICT, "REPORT-0012", "결과 리포트는 고정된 본문으로 생성해야 합니다."),
 	INVALID_RESULT_STATE(HttpStatus.CONFLICT, "REPORT-0013", "현재 결과 리포트 상태에서는 처리할 수 없습니다."),
-	INVALID_RESULT(HttpStatus.INTERNAL_SERVER_ERROR, "REPORT-0014", "결과 리포트의 점수 또는 처리 시각이 올바르지 않습니다.");
+	INVALID_RESULT(HttpStatus.INTERNAL_SERVER_ERROR, "REPORT-0014", "결과 리포트의 점수 또는 처리 시각이 올바르지 않습니다."),
+	TEXT_SEGMENTATION_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "REPORT-0026", "보고서 본문의 문장 분리 결과를 처리할 수 없습니다.");
 
 	private final HttpStatus httpStatus;
 	private final String code;
