@@ -14,11 +14,13 @@ import tools.jackson.databind.json.JsonMapper;
  */
 public final class BodyJson {
 	private final JsonMapper mapper = JsonMapper.builder()
-			.enable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES)
+			.enable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES,
+					DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES)
 			.disable(DeserializationFeature.ACCEPT_FLOAT_AS_INT)
 			.disable(MapperFeature.ALLOW_COERCION_OF_SCALARS)
 			.build();
 	private final BodyValidator validator = new BodyValidator();
+
 	// JSON 문자열을 본문 객체로 변환
 	public ReportBody read(String json) {
 		try {

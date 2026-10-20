@@ -24,6 +24,7 @@ public final class TextSegmenter {
 	private final Supplier<UUID> ids;
 
 	public TextSegmenter(Kiwi kiwi) { this(kiwi, UUID::randomUUID); }
+
 	// 결과를 묶는 내부 레코드
 	public record Result(
 		List<Unit> units,
@@ -33,6 +34,7 @@ public final class TextSegmenter {
 			units = List.copyOf(units);
 		}
 	}
+
 	// 전체 처리 실행. 외부에서 이 메서드 호출
 	public Result split(String text) {
 		if (text == null) {
@@ -84,16 +86,19 @@ public final class TextSegmenter {
 			throw new ReportException(ReportErrorCode.TEXT_SEGMENTATION_FAILED);
 		}
 	}
+
 	// 검사 위치가 문자의 중간인지 확인. Java에서는 일부 이모지를 두 개의 char로 표현하므로, 그 사이를 자르지 않도록 한다.
 	private static boolean codePointBoundary(String text, int position) {
 		return position == 0 || position == text.length()
 				|| !Character.isHighSurrogate(text.charAt(position - 1))
 				|| !Character.isLowSurrogate(text.charAt(position));
 	}
+
 	// 구간이 비어 있거나 공백뿐인지 확인. 띄어쓰기뿐 아니라 탭, 줄바꿈 등도 확인.
 	private static boolean blank(String text, int start, int end) {
 		return text.substring(start, end).codePoints().allMatch(BodyTextChecks::space);
 	}
+
 	// 종결 문장부호 확인
 	private static boolean hasEndingPunctuation(String text, int end) {
 		while (end > 0) {
@@ -106,6 +111,7 @@ public final class TextSegmenter {
 		}
 		return false;
 	}
+
 	// 닫히지 않은 기호 확인
 	private static boolean hasUnclosedDelimiter(String text) {
 		Deque<Character> closing = new ArrayDeque<>();

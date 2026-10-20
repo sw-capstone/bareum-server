@@ -117,6 +117,7 @@ public final class BodyValidator {
 			}
 		}
 	}
+
 	// 단위 표기 대상의 종류 확인
 	private static BodyTargetType ownerType(String type) {
 		if (!present(type)) {
@@ -128,6 +129,7 @@ public final class BodyValidator {
 			default -> throw new ReportException(ReportErrorCode.INVALID_CONTENT);
 		};
 	}
+
 	// 원본 춡처와 PDF 좌표 검사
 	private static void sources(List<SourceRef> refs, Map<Integer, Page> pages, boolean cell) {
 		for (SourceRef ref : refs) {
@@ -157,8 +159,10 @@ public final class BodyValidator {
 			}
 		}
 	}
+
 	// 빈 값 확인
 	private static boolean present(String value) { return value != null && !value.isBlank(); }
+
 	// 부모 관계의 순환 검사
 	private static void cycles(Map<UUID, UUID> parents) {
 		Set<UUID> finished = new HashSet<>();
