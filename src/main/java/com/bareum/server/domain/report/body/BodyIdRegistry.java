@@ -16,15 +16,13 @@ import com.bareum.server.domain.report.exception.ReportException;
  */
 final class BodyIdRegistry {
 	final Map<UUID, BodyTargetType> types = new HashMap<>();
-	final Map<UUID, Block> blocks = new HashMap<>();
-	final Map<UUID, Section> sections = new HashMap<>();
+	// TODO: Unit 반복 조회가 필요해지면 소속 블록과 셀 위치도 찾는 구조로 확장을 검토한다.
 	final Map<UUID, String> texts = new HashMap<>();
 
 	// 본문 요소의 ID를 등록하고 블록 종류와 텍스트를 검증한다.
 	BodyIdRegistry(ReportBody body) {
 		for (Block block : body.blocks()) {
 			add(block.id(), BodyTargetType.BLOCK);
-			blocks.put(block.id(), block);
 			if (block.kind() == null || block.kind().isBlank()) {
 				throw new ReportException(ReportErrorCode.INVALID_CONTENT);
 			}
@@ -48,7 +46,6 @@ final class BodyIdRegistry {
 		}
 		for (Section section : body.sections()) {
 			add(section.id(), BodyTargetType.SECTION);
-			sections.put(section.id(), section);
 		}
 	}
 	// 텍스트를 검증하고 소속 텍스트와 내부 단위의 ID를 등록
