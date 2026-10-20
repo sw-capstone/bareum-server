@@ -1,11 +1,18 @@
 package com.bareum.server.domain.report.entity;
 
-import com.bareum.server.domain.report.exception.ReportException;
-import com.bareum.server.domain.report.exception.ReportErrorCode;
+import java.time.Instant;
+import java.util.Objects;
+
+import org.hibernate.annotations.ColumnDefault;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import com.bareum.server.domain.report.enums.ExtractionQuality;
 import com.bareum.server.domain.report.enums.ParseStatus;
+import com.bareum.server.domain.report.exception.ReportErrorCode;
+import com.bareum.server.domain.report.exception.ReportException;
 import com.bareum.server.global.entity.BaseTimeEntity;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -18,15 +25,9 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
-import java.time.Instant;
-import java.util.Objects;
 import lombok.AccessLevel;
-import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import org.hibernate.annotations.ColumnDefault;
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.node.JsonNodeFactory;
 
@@ -95,7 +96,12 @@ public class ReportParseAttempt extends BaseTimeEntity {
 		processStatus = ParseStatus.PROCESSING;
 	}
 
-	public void complete(ReportContent producedContent, ExtractionQuality quality, JsonNode warnings, Instant completedAt) {
+	public void complete(
+		ReportContent producedContent,
+		ExtractionQuality quality,
+		JsonNode warnings,
+		Instant completedAt
+	) {
 		requireProcessing();
 		Objects.requireNonNull(producedContent, "producedContent");
 		Objects.requireNonNull(quality, "quality");

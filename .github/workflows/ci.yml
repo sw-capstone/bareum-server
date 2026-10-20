@@ -35,15 +35,44 @@ jobs:
       DB_URL: jdbc:postgresql://localhost:5432/bareum_ci
       DB_USERNAME: bareum_ci
       DB_PASSWORD: ci-only-password
+      # 테스트 전용 키이며 운영 키를 사용하지 않습니다.
+      EMAIL_VERIFICATION_HASH_SECRET: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
     steps:
       - name: Checkout source
         uses: actions/checkout@v7
         with:
           persist-credentials: false
+          fetch-depth: 2
+      - name: Select infrastructure integration tests
+        id: infra-tests
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          run_infra=true
+          changed_files="$RUNNER_TEMP/infra-changed-files"
+          if [[ "$EVENT_NAME" == pull_request ]]; then
+            if [[ "$PR_BASE_SHA" =~ ^[a-f0-9]{40}$ ]] && git diff --no-renames --name-only -z "$PR_BASE_SHA" HEAD -- > "$changed_files"; then
+              run_infra=false
+              while IFS= read -r -d '' file; do
+                case "$file" in
+                  infra/*|.github/workflows/*|.github/scripts/*|.github/tests/*|Dockerfile|.dockerignore)
+                    run_infra=true
+                    break
+                    ;;
+                esac
+              done < "$changed_files"
+            else
+              echo 'Unable to determine changed files; running all infrastructure tests.'
+            fi
+          fi
+          printf 'run=%s\n' "$run_infra" >> "$GITHUB_OUTPUT"
       - name: Validate workflow and shell syntax
         run: bash .github/scripts/check-ci.sh
       - name: Test SSM deployment requests
         run: bash .github/tests/deploy-via-ssm-test.sh
+      - name: Test server environment generation
+        run: bash infra/tests/prepare-server-env-test.sh
       - name: Set up JDK 25
         uses: actions/setup-java@v6
         with:
@@ -52,6 +81,16 @@ jobs:
           cache: gradle
       - name: Test deployment and rollback
         run: bash infra/tests/deploy-test.sh
+      - name: Test infrastructure release preparation
+        run: bash infra/tests/prepare-infra-release-test.sh
+      - name: Test candidate Compose and Nginx configuration
+        if: steps.infra-tests.outputs.run == 'true'
+        env:
+          TEST_REAL_VALIDATION: "1"
+        run: bash infra/tests/prepare-infra-release-test.sh
+      - name: Test infrastructure release application
+        if: steps.infra-tests.outputs.run == 'true'
+        run: bash infra/tests/apply-infra-release-integration-test.sh
       - name: Validate and build boot JAR
         run: ./gradlew --no-daemon check bootJar
       - name: Set up Docker Buildx

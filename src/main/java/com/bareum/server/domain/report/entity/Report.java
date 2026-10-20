@@ -1,12 +1,17 @@
 package com.bareum.server.domain.report.entity;
 
-import com.bareum.server.domain.report.exception.ReportException;
-import com.bareum.server.domain.report.exception.ReportErrorCode;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.Objects;
+
 import com.bareum.server.domain.member.entity.Member;
 import com.bareum.server.domain.report.enums.FileFormat;
 import com.bareum.server.domain.report.enums.InputMethod;
 import com.bareum.server.domain.report.enums.ReportType;
+import com.bareum.server.domain.report.exception.ReportErrorCode;
+import com.bareum.server.domain.report.exception.ReportException;
 import com.bareum.server.global.entity.BaseTimeEntity;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -18,9 +23,6 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
-import java.util.Objects;
-import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
@@ -107,29 +109,30 @@ public class Report extends BaseTimeEntity {
 		Instant uploadedAt
 	) {
 		if (fileFormat == null || sourceObjectKey == null || sourceObjectKey.isBlank()
-			|| originalFilename == null || originalFilename.isBlank() || fileSizeBytes <= 0 || uploadedAt == null) {
+				|| originalFilename == null
+				|| originalFilename.isBlank() || fileSizeBytes <= 0 || uploadedAt == null) {
 			throw new ReportException(ReportErrorCode.FILE_METADATA_REQUIRED);
 		}
 		return Report.builder()
-			.member(member)
-			.reportType(reportType)
-			.title(originalFilename)
-			.fileFormat(fileFormat)
-			.inputMethod(InputMethod.FILE)
-			.sourceObjectKey(sourceObjectKey)
-			.originalFilename(originalFilename)
-			.fileSizeBytes(fileSizeBytes)
-			.sourceExpiresAt(uploadedAt.plus(30, ChronoUnit.DAYS))
-			.build();
+				.member(member)
+				.reportType(reportType)
+				.title(originalFilename)
+				.fileFormat(fileFormat)
+				.inputMethod(InputMethod.FILE)
+				.sourceObjectKey(sourceObjectKey)
+				.originalFilename(originalFilename)
+				.fileSizeBytes(fileSizeBytes)
+				.sourceExpiresAt(uploadedAt.plus(30, ChronoUnit.DAYS))
+				.build();
 	}
 
 	public static Report createFromText(Member member, ReportType reportType, String title) {
 		return Report.builder()
-			.member(member)
-			.reportType(reportType)
-			.title(title)
-			.inputMethod(InputMethod.TEXT)
-			.build();
+				.member(member)
+				.reportType(reportType)
+				.title(title)
+				.inputMethod(InputMethod.TEXT)
+				.build();
 	}
 
 	public void markSourceDeleted(Instant deletedAt) {
