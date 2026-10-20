@@ -76,7 +76,9 @@ class ReportBodyPersistenceIntegrationTests {
 		ReportBody expected = new ReportBody("1.0.0", "UNICODE_CODE_POINT", SourceFormat.TEXT,
 				List.of(), List.of(new TextBlock(UUID.randomUUID(), "para", null, null, text, text,
 						List.of(new Unit(UUID.randomUUID(), start, end,
-								text.substring(2, text.length() - 2))), List.of(), null)), List.of(), List.of());
+								text.substring(2, text.length() - 2))),
+						List.of(), null)),
+				List.of(), List.of());
 		ReportContent content = ReportContent.create(persistReport(), ValidatedReportBody.from(expected));
 		entityManager.persist(content);
 		entityManager.flush();

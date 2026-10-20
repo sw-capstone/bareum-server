@@ -103,7 +103,8 @@ class EntityInvariantTests {
 		return new ReportBody("1.0.0", "UNICODE_CODE_POINT", SourceFormat.TEXT, List.of(),
 				List.of(new TextBlock(UUID.randomUUID(), "para", null, null, text, text,
 						List.of(new Unit(UUID.randomUUID(), 0, text.codePointCount(0, text.length()), text)),
-						List.of(), null)), List.of(), List.of());
+						List.of(), null)),
+				List.of(), List.of());
 	}
 
 	private String text(ReportContent content) {

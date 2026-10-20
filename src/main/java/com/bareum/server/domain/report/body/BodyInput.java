@@ -3,6 +3,7 @@ package com.bareum.server.domain.report.body;
 import static com.bareum.server.domain.report.body.ReportBody.*;
 
 import java.util.List;
+
 import com.bareum.server.domain.report.enums.SourceFormat;
 
 /**

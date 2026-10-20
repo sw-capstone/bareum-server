@@ -48,6 +48,7 @@ final class BodyIdRegistry {
 			add(section.id(), BodyTargetType.SECTION);
 		}
 	}
+
 	// 텍스트를 검증하고 소속 텍스트와 내부 단위의 ID를 등록
 	private void text(UUID id, String text, String sourceText, List<Unit> units) {
 		BodyTextChecks.validate(text, sourceText, units);
@@ -56,12 +57,14 @@ final class BodyIdRegistry {
 			add(unit.id(), BodyTargetType.UNIT);
 		}
 	}
+
 	// ID의 누락 및 중복을 검사하고 대상 종류를 등록
 	private void add(UUID id, BodyTargetType type) {
 		if (id == null || types.putIfAbsent(id, type) != null) {
 			throw new ReportException(ReportErrorCode.INVALID_CONTENT);
 		}
 	}
+
 	// 참조 ID가 존재하고 기대한 대상 종류와 일치하는지 검사
 	void reference(UUID id, BodyTargetType type) {
 		if (id == null || types.get(id) != type) {

@@ -10,6 +10,7 @@ import java.util.UUID;
 
 import com.bareum.server.domain.report.exception.ReportErrorCode;
 import com.bareum.server.domain.report.exception.ReportException;
+
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
 
@@ -26,13 +27,16 @@ final class BodyTableChecks {
 	) {
 		// 영역이 끝나는 경계 계산
 		long bottom() { return (long)row + rowspan; }
+
 		long right() { return (long)column + colspan; }
+
 		// 두 영역이 표에서 같은 칸을 차지하는지 확인. 병합 셀이 다른 셀의 영역을 침범하는지 검사할 때 활용한다.
 		boolean overlaps(Region other) {
 			return row < other.bottom() && other.row < bottom()
 					&& column < other.right() && other.column < right();
 		}
 	}
+
 	// 표 전체 검사
 	static void validate(TableBlock table) {
 		if (table.rowCount() <= 0 || table.columnCount() <= 0 || table.structureStatus() == null
