@@ -45,6 +45,15 @@ class EmailVerificationSendOpenApiTests {
 			assertThat(apiDocs.statusCode()).isEqualTo(200);
 
 			JsonNode document = mapper.readTree(apiDocs.body());
+			for (String operationPath : new String[] {
+				"/paths/~1api~1v1~1auth~1email-verification/post",
+				"/paths/~1api~1v1~1auth~1email-verification~1deliveries~1{requestId}/get",
+				"/paths/~1api~1v1~1auth~1email-verification~1code/post",
+				"/paths/~1api~1v1~1auth~1email-verification~1resend/post"
+			}) {
+				assertThat(document.at(operationPath).isMissingNode()).isFalse();
+			}
+
 			JsonNode operation = document.at("/paths/~1api~1v1~1auth~1email-verification/post");
 			assertThat(operation.isMissingNode()).isFalse();
 			assertThat(operation.at("/requestBody/required").asBoolean()).isTrue();
@@ -113,9 +122,18 @@ class EmailVerificationSendOpenApiTests {
 
 	@Configuration(proxyBeanMethods = false)
 	@EnableAutoConfiguration(exclude = DataSourceAutoConfiguration.class)
-	@Import({OpenApiConfig.class, EmailVerificationSendController.class, EmailVerificationDeliveryController.class,
+	@Import({OpenApiConfig.class, EmailVerificationController.class,
 		GlobalExceptionHandler.class})
 	static class DocumentationApplication {
+		@Bean
+		com.bareum.server.domain.auth.service.EmailVerificationConfirmService confirmService() {
+			return mock(com.bareum.server.domain.auth.service.EmailVerificationConfirmService.class);
+		}
+
+		@Bean
+		com.bareum.server.domain.auth.service.EmailVerificationResendService resendService() {
+			return mock(com.bareum.server.domain.auth.service.EmailVerificationResendService.class);
+		}
 
 		@Bean
 		com.bareum.server.domain.auth.service.EmailVerificationDeliveryService deliveryService() {
