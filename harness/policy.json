@@ -49,6 +49,11 @@
       "## 결정 대기"
     ]
   },
-  "schema_examples": {},
+  "schema_examples": {
+    "packages/contracts/report-content/1.0.0/content.schema.json": "packages/contracts/report-content/1.0.0/examples/pdf.example.json",
+    "packages/contracts/pdf-parsing/1.0.0/request.schema.json": "packages/contracts/pdf-parsing/1.0.0/examples/request.example.json",
+    "packages/contracts/pdf-parsing/1.0.0/success.schema.json": "packages/contracts/pdf-parsing/1.0.0/examples/success.example.json",
+    "packages/contracts/pdf-parsing/1.0.0/failure.schema.json": "packages/contracts/pdf-parsing/1.0.0/examples/failure.example.json"
+  },
   "autofix": {"enabled": false, "semantic_changes": false}
 }

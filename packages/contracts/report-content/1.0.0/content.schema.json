@@ -1,0 +1,706 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/sw-capstone/bareum-server/raw/develop/packages/contracts/report-content/1.0.0/content.schema.json",
+  "title": "공통 본문 1.0.0",
+  "description": "Spring이 구성해 content JSONB에 저장하고 AI 분석에 전달하는 공통 본문. PDF 파서 출력과 별도 계약이다. 직접 입력 예제는 공통 본문 산출물이며 #52의 접수 요청·에디터 형식을 정의하지 않는다.",
+  "$comment": "서버 #51의 공통 본문 계약. 입력 형식과 관계없이 동일한 본문 구조를 사용하며, 블록·셀·텍스트 단위의 소속과 원본 출처를 보존한다. contentId·revision·status·baseContentId는 본문 관리 컬럼에 속한다. requestId는 분석 요청 봉투에 속한다. 이 스키마는 구조를 검사하며 UUID 발급·전역 ID 유일성·참조 존재/종류/순환·단위 순서/범위/부분 문자열 일치·셀 겹침/표 경계/슬롯 완전성·PDF 페이지 존재/좌표 유효성은 후속 본문 검증기가 검사해야 한다. format 검증을 활성화해야 UUID를 검증할 수 있다.",
+  "type": "object",
+  "properties": {
+    "schemaVersion": {
+      "const": "1.0.0",
+      "description": "공통 본문 계약 버전. DRAFT의 revision 및 PDF 파서 schema_version과 구분한다."
+    },
+    "offsetUnit": {
+      "const": "UNICODE_CODE_POINT"
+    },
+    "sourceFormat": {
+      "enum": [
+        "PDF",
+        "TEXT"
+      ],
+      "description": "초기 공통 본문의 입력 출처. TEXT는 직접 입력에서 구성한 본문이며 에디터·접수 API 형식을 뜻하지 않는다. 후속 형식은 해당 계약 버전에서 추가한다."
+    },
+    "pages": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/page"
+      }
+    },
+    "blocks": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/block"
+      },
+      "description": "배열 순서가 문서의 읽기 순서다. 내부 UUID의 정렬 순서로 해석하지 않는다."
+    },
+    "sections": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/section"
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/warning"
+      }
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "offsetUnit",
+    "sourceFormat",
+    "pages",
+    "blocks",
+    "sections",
+    "warnings"
+  ],
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "sourceFormat": {
+            "const": "TEXT"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "pages": {
+            "maxItems": 0
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "sourceFormat": {
+            "const": "PDF"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "pages": {
+            "minItems": 1
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "uuid": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Spring이 발급하는 본문 내부 UUID. 파서 ID는 sourceRefs에 별도로 보존한다."
+    },
+    "nullableUuid": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/uuid"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "page": {
+      "type": "object",
+      "properties": {
+        "number": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "width": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "height": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "coordinateSystem": {
+          "type": "string",
+          "minLength": 1,
+          "description": "bbox의 좌표 원점·방향·단위·회전 해석을 명시하는 식별자. 예제의 UNROTATED_PDF_POINTS는 회전 전 페이지의 왼쪽 위 원점, 오른쪽 x+, 아래쪽 y+, PDF point 단위다."
+        }
+      },
+      "required": [
+        "number",
+        "width",
+        "height",
+        "coordinateSystem"
+      ],
+      "additionalProperties": false
+    },
+    "range": {
+      "type": "object",
+      "properties": {
+        "start": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "소속 블록 또는 셀의 text 기준 코드 포인트 시작 위치. 포함한다."
+        },
+        "end": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "소속 text 기준 코드 포인트 끝 위치. 포함하지 않는다. start < end와 text 길이 이내 여부는 후속 검증 대상이다."
+        }
+      },
+      "required": [
+        "start",
+        "end"
+      ]
+    },
+    "unit": {
+      "description": "문장과 독립 항목을 종류 구분 없이 같은 텍스트 단위로 표현한다. 분리 중 소속 text는 변경하지 않는다. 종결 문장부호는 포함하고 앞뒤 공백은 제외한다. 검사 적용 여부는 원문과 소속 구조, 문맥을 바탕으로 검사별로 판단한다.",
+      "allOf": [
+        {
+          "$ref": "#/$defs/range"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/uuid"
+            },
+            "text": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^\\S(?:[\\s\\S]*\\S)?$",
+              "description": "소속 text의 [start,end) 코드 포인트 범위를 자른 결과와 같아야 한다."
+            }
+          },
+          "required": [
+            "id",
+            "text"
+          ]
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "textOwner": {
+      "type": "object",
+      "properties": {
+        "text": {
+          "type": "string",
+          "description": "문장 분리·분석·범위 계산의 기준 문자열. 분리 단계에서 공백이나 표기를 자동 교정하지 않는다."
+        },
+        "sourceText": {
+          "type": "string",
+          "description": "정리 전 추출 문자열. text의 범위를 그대로 적용하지 않는다. 직접 입력 샘플은 동일 문자열을 사용할 수 있다."
+        },
+        "units": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/unit"
+          }
+        }
+      },
+      "required": [
+        "text",
+        "sourceText",
+        "units"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "text": {
+                "const": ""
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "units": {
+                "maxItems": 0
+              }
+            }
+          }
+        }
+      ]
+    },
+    "extraction": {
+      "type": "object",
+      "properties": {
+        "excludedFromRetrieval": {
+          "type": "boolean"
+        },
+        "requiresVision": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "excludedFromRetrieval",
+        "requiresVision"
+      ],
+      "additionalProperties": false,
+      "description": "기존 파서의 추출 정보다. 실제 검사 제외 여부는 AI 규칙이 판단한다. 파서가 없는 직접 입력에는 생략할 수 있다."
+    },
+    "pdfLocation": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "pdf"
+        },
+        "page": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "bbox": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 4,
+          "maxItems": 4,
+          "description": "[x0,y0,x1,y1]. pages의 coordinateSystem을 따른다. 정리 텍스트 오프셋과 별개다."
+        },
+        "precision": {
+          "enum": [
+            "block",
+            "cell"
+          ],
+          "description": "연결된 원본 영역의 정밀도. block은 문장·문자의 정확한 영역을 뜻하지 않는다. 셀 고유 좌표를 확보한 경우 cell로 표현한다."
+        }
+      },
+      "required": [
+        "type",
+        "page",
+        "bbox",
+        "precision"
+      ],
+      "additionalProperties": false
+    },
+    "sourceRef": {
+      "type": "object",
+      "properties": {
+        "parserBlockId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "parserRow": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "parserColumn": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "location": {
+          "$ref": "#/$defs/pdfLocation"
+        }
+      },
+      "required": [
+        "parserBlockId"
+      ],
+      "additionalProperties": false,
+      "dependentRequired": {
+        "parserRow": [
+          "parserColumn"
+        ],
+        "parserColumn": [
+          "parserRow"
+        ]
+      },
+      "description": "추출 출처 한 조각. 셀 출처에는 파서 표 블록 ID와 0부터 시작하는 원래 행·열을 함께 보존한다. location은 파서가 제공할 때 기록한다. 여러 조각은 배열로 보존한다."
+    },
+    "blockBase": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/uuid"
+        },
+        "kind": {
+          "type": "string",
+          "minLength": 1
+        },
+        "parentId": {
+          "$ref": "#/$defs/nullableUuid"
+        },
+        "sectionId": {
+          "$ref": "#/$defs/nullableUuid"
+        },
+        "sourceRefs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/sourceRef"
+          }
+        },
+        "extraction": {
+          "$ref": "#/$defs/extraction"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "parentId",
+        "sectionId",
+        "sourceRefs"
+      ]
+    },
+    "textBlock": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/blockBase"
+        },
+        {
+          "$ref": "#/$defs/textOwner"
+        },
+        {
+          "properties": {
+            "kind": {
+              "not": {
+                "const": "table"
+              }
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false,
+      "description": "문단·제목·개조식 등 텍스트 블록. kind는 para·heading 등 입력에서 확인된 종류를 유지한다. 머리글·단위 표기도 별도 텍스트로 보존할 수 있다."
+    },
+    "slot": {
+      "type": "object",
+      "properties": {
+        "row": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "column": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "row",
+        "column"
+      ],
+      "additionalProperties": false,
+      "description": "복원이 불확실한 표 위치. 실제 빈 셀로 만들어 채우지 않는다."
+    },
+    "cell": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/textOwner"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/uuid"
+            },
+            "row": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "column": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "rowspan": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "colspan": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "sourceRefs": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/sourceRef",
+                "required": [
+                  "parserRow",
+                  "parserColumn"
+                ]
+              }
+            },
+            "extraction": {
+              "$ref": "#/$defs/extraction"
+            }
+          },
+          "required": [
+            "id",
+            "row",
+            "column",
+            "rowspan",
+            "colspan",
+            "sourceRefs"
+          ]
+        }
+      ],
+      "unevaluatedProperties": false,
+      "description": "실제 셀 하나. 병합은 왼쪽 위 위치와 rowspan·colspan으로 표현하고 덮인 자리에 셀을 복제하지 않는다. 실제 빈 셀은 text/sourceText가 빈 문자열이고 units가 빈 배열이다."
+    },
+    "headerRelation": {
+      "type": "object",
+      "properties": {
+        "cellId": {
+          "$ref": "#/$defs/uuid"
+        },
+        "headerCellIds": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/uuid"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "cellId",
+        "headerCellIds"
+      ],
+      "additionalProperties": false,
+      "description": "값 셀과 확인된 머리글 셀의 연결. 모두 같은 표의 실제 셀을 참조한다."
+    },
+    "headerRelations": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "enum": [
+            "unresolved",
+            "resolved"
+          ]
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/headerRelation"
+          }
+        }
+      },
+      "required": [
+        "status",
+        "items"
+      ],
+      "additionalProperties": false,
+      "description": "unresolved는 관계 미확인(확인된 일부 연결은 보존 가능), resolved는 확인 완료다. resolved와 빈 items는 확인했지만 관계 없음이다. 첫 행을 자동으로 머리글로 지정하지 않는다."
+    },
+    "unitNoteRef": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/range"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "enum": [
+                "block",
+                "cell"
+              ]
+            },
+            "id": {
+              "$ref": "#/$defs/uuid"
+            }
+          },
+          "required": [
+            "type",
+            "id"
+          ]
+        }
+      ],
+      "unevaluatedProperties": false,
+      "description": "단위: 천원 같은 표기의 소속 블록/셀 ID와 해당 text의 코드 포인트 범위. 단위 문자열을 중복된 기준 데이터로 저장하지 않는다."
+    },
+    "tableBlock": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/blockBase"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "table"
+            },
+            "rowCount": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "columnCount": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "structureStatus": {
+              "enum": [
+                "complete",
+                "partial",
+                "unresolved"
+              ],
+              "description": "complete는 전체 격자 복원, partial은 일부 위치 미확인, unresolved는 전체 구조를 확정하지 못한 상태다. 실행 성공 및 COMPLETE/PARTIAL 추출 품질과 구분한다."
+            },
+            "cells": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/cell"
+              },
+              "description": "유일한 기준 셀 목록. 행 우선 순서로 저장하며 별도의 수정 가능한 rows 텍스트 행렬을 두지 않는다."
+            },
+            "unresolvedSlots": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/slot"
+              },
+              "uniqueItems": true
+            },
+            "headerRelations": {
+              "$ref": "#/$defs/headerRelations"
+            },
+            "unitNoteRefs": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/unitNoteRef"
+              }
+            }
+          },
+          "required": [
+            "kind",
+            "rowCount",
+            "columnCount",
+            "structureStatus",
+            "cells",
+            "unresolvedSlots",
+            "headerRelations",
+            "unitNoteRefs"
+          ]
+        }
+      ],
+      "unevaluatedProperties": false,
+      "if": {
+        "properties": {
+          "structureStatus": {
+            "const": "complete"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "unresolvedSlots": {
+            "maxItems": 0
+          }
+        }
+      },
+      "description": "표 텍스트 전체를 일반 문단으로 펼치거나 표 자체에 units를 저장하지 않는다. 표 앞뒤 설명과 섹션은 blocks 순서·parentId·sectionId로 연결한다."
+    },
+    "block": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/textBlock"
+        },
+        {
+          "$ref": "#/$defs/tableBlock"
+        }
+      ]
+    },
+    "section": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/uuid"
+        },
+        "headingBlockId": {
+          "$ref": "#/$defs/uuid"
+        },
+        "parentSectionId": {
+          "$ref": "#/$defs/nullableUuid"
+        }
+      },
+      "required": [
+        "id",
+        "headingBlockId",
+        "parentSectionId"
+      ],
+      "additionalProperties": false,
+      "description": "제목 텍스트는 제목 블록에 저장한다. 제목·상위 섹션 참조 존재와 순환은 후속 검증 대상이다."
+    },
+    "warningTarget": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "document"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "page"
+            },
+            "page": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "required": [
+            "type",
+            "page"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "enum": [
+                "block",
+                "cell",
+                "unit",
+                "section"
+              ]
+            },
+            "id": {
+              "$ref": "#/$defs/uuid"
+            }
+          },
+          "required": [
+            "type",
+            "id"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "warning": {
+      "type": "object",
+      "properties": {
+        "stage": {
+          "type": "string",
+          "minLength": 1,
+          "description": "extraction·composition·segmentation 등 경고 발생 단계."
+        },
+        "code": {
+          "type": "string",
+          "minLength": 1,
+          "description": "발생 단계의 경고 코드. 새로운 경고도 보존할 수 있도록 목록을 닫지 않는다."
+        },
+        "target": {
+          "$ref": "#/$defs/warningTarget"
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "stage",
+        "code",
+        "target",
+        "message"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

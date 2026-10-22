@@ -1,0 +1,176 @@
+{
+  "schemaVersion": "1.0.0",
+  "offsetUnit": "UNICODE_CODE_POINT",
+  "sourceFormat": "PDF",
+  "pages": [
+    {
+      "number": 1,
+      "width": 595,
+      "height": 842,
+      "coordinateSystem": "UNROTATED_PDF_POINTS"
+    }
+  ],
+  "blocks": [
+    {
+      "id": "10000000-0000-4000-8000-000000000042",
+      "kind": "table",
+      "parentId": null,
+      "sectionId": null,
+      "sourceRefs": [
+        {
+          "parserBlockId": "parser_partial",
+          "location": {
+            "type": "pdf",
+            "page": 1,
+            "bbox": [
+              50,
+              100,
+              500,
+              180
+            ],
+            "precision": "block"
+          }
+        }
+      ],
+      "extraction": {
+        "excludedFromRetrieval": false,
+        "requiresVision": true
+      },
+      "rowCount": 2,
+      "columnCount": 2,
+      "structureStatus": "partial",
+      "cells": [
+        {
+          "id": "10000000-0000-4000-8000-000000000043",
+          "row": 0,
+          "column": 0,
+          "rowspan": 1,
+          "colspan": 1,
+          "text": "추진 내용",
+          "sourceText": "추진 내용",
+          "units": [
+            {
+              "id": "10000000-0000-4000-8000-000000000044",
+              "start": 0,
+              "end": 5,
+              "text": "추진 내용"
+            }
+          ],
+          "sourceRefs": [
+            {
+              "parserBlockId": "parser_partial",
+              "parserRow": 0,
+              "parserColumn": 0,
+              "location": {
+                "type": "pdf",
+                "page": 1,
+                "bbox": [
+                  50,
+                  100,
+                  275,
+                  140
+                ],
+                "precision": "cell"
+              }
+            }
+          ]
+        },
+        {
+          "id": "10000000-0000-4000-8000-000000000045",
+          "row": 0,
+          "column": 1,
+          "rowspan": 1,
+          "colspan": 1,
+          "text": "",
+          "sourceText": "",
+          "units": [],
+          "sourceRefs": [
+            {
+              "parserBlockId": "parser_partial",
+              "parserRow": 0,
+              "parserColumn": 1,
+              "location": {
+                "type": "pdf",
+                "page": 1,
+                "bbox": [
+                  275,
+                  100,
+                  500,
+                  140
+                ],
+                "precision": "cell"
+              }
+            }
+          ]
+        },
+        {
+          "id": "10000000-0000-4000-8000-000000000040",
+          "row": 1,
+          "column": 1,
+          "rowspan": 1,
+          "colspan": 1,
+          "text": "교육을 실시했다 만족도 조사를 진행했다",
+          "sourceText": "교육을 실시했다 만족도 조사를 진행했다",
+          "units": [
+            {
+              "id": "10000000-0000-4000-8000-000000000041",
+              "start": 0,
+              "end": 21,
+              "text": "교육을 실시했다 만족도 조사를 진행했다"
+            }
+          ],
+          "sourceRefs": [
+            {
+              "parserBlockId": "parser_partial",
+              "parserRow": 1,
+              "parserColumn": 1,
+              "location": {
+                "type": "pdf",
+                "page": 1,
+                "bbox": [
+                  50,
+                  100,
+                  500,
+                  180
+                ],
+                "precision": "block"
+              }
+            }
+          ]
+        }
+      ],
+      "unresolvedSlots": [
+        {
+          "row": 1,
+          "column": 0
+        }
+      ],
+      "headerRelations": {
+        "status": "unresolved",
+        "items": []
+      },
+      "unitNoteRefs": []
+    }
+  ],
+  "sections": [],
+  "warnings": [
+    {
+      "stage": "extraction",
+      "code": "TABLE_STRUCTURE_UNCERTAIN",
+      "target": {
+        "type": "block",
+        "id": "10000000-0000-4000-8000-000000000042"
+      },
+      "message": "일부 셀의 복원 근거가 부족해 해당 위치를 미확인으로 보존했습니다."
+    },
+    {
+      "stage": "segmentation",
+      "code": "BOUNDARY_UNCERTAIN",
+      "target": {
+        "type": "cell",
+        "id": "10000000-0000-4000-8000-000000000040"
+      },
+      "message": "문장 경계가 불명확해 하나의 텍스트 단위로 유지했습니다."
+    }
+  ]
+}
