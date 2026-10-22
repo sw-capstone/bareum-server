@@ -145,10 +145,25 @@ class EmailVerificationResendOpenApiTests {
 	@EnableAutoConfiguration(exclude = DataSourceAutoConfiguration.class)
 	@Import({
 		OpenApiConfig.class,
-		EmailVerificationResendController.class,
+		EmailVerificationController.class,
 		GlobalExceptionHandler.class
 	})
 	static class DocumentationApplication {
+		@Bean
+		com.bareum.server.domain.auth.service.EmailVerificationSendService sendService() {
+			return mock(com.bareum.server.domain.auth.service.EmailVerificationSendService.class);
+		}
+
+		@Bean
+		com.bareum.server.domain.auth.service.EmailVerificationDeliveryService deliveryService() {
+			return mock(com.bareum.server.domain.auth.service.EmailVerificationDeliveryService.class);
+		}
+
+		@Bean
+		com.bareum.server.domain.auth.service.EmailVerificationConfirmService confirmService() {
+			return mock(com.bareum.server.domain.auth.service.EmailVerificationConfirmService.class);
+		}
+
 		@Bean
 		EmailVerificationResendService emailVerificationResendService() {
 			EmailVerificationResendService service = mock(EmailVerificationResendService.class);

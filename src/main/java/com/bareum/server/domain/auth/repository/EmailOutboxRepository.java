@@ -3,9 +3,9 @@ package com.bareum.server.domain.auth.repository;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -15,8 +15,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.bareum.server.domain.auth.config.EmailOutboxProperties;
 import com.bareum.server.domain.auth.config.EmailVerificationProperties;
-import com.bareum.server.domain.auth.dto.response.EmailVerificationDeliveryResponse;
 import com.bareum.server.domain.auth.entity.EmailVerification;
+import com.bareum.server.domain.auth.enums.EmailOutboxState;
 import com.bareum.server.domain.auth.enums.VerificationPurpose;
 import com.bareum.server.domain.auth.exception.AuthErrorCode;
 import com.bareum.server.domain.auth.exception.AuthException;
@@ -27,14 +27,18 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 @Transactional(propagation = Propagation.MANDATORY)
 public class EmailOutboxRepository {
+	private static final Set<EmailOutboxState> ACTIVE_STATES =
+			Set.of(EmailOutboxState.QUEUED, EmailOutboxState.SENDING, EmailOutboxState.RETRY);
+	private static final Set<EmailOutboxState> TERMINAL_STATES =
+			Set.of(EmailOutboxState.FAILED, EmailOutboxState.CANCELLED);
 	private final JdbcTemplate jdbc;
+	private final EmailOutboxQueryRepository queries;
+	private final EmailVerificationSendLogRepository sendLogs;
 
 	public void checkCanQueue(String email, Instant now, EmailVerificationProperties policy) {
-		Boolean blocked = jdbc.queryForObject("""
-				SELECT EXISTS (SELECT 1 FROM email_verification_outbox WHERE upper(email) = upper(?)
-				    AND (state IN ('QUEUED','SENDING','RETRY') OR queued_at > ?))
-				""", Boolean.class, email, timestamp(now.minusSeconds(policy.getMinimumSendIntervalSeconds())));
-		if (Boolean.TRUE.equals(blocked)
+		boolean blocked = queries.hasPendingOrRecentDelivery(email, ACTIVE_STATES,
+				now.minusSeconds(policy.getMinimumSendIntervalSeconds()));
+		if (blocked
 				|| reservedAndSent(email, now.minusSeconds(3600)) >= policy.getMaxSendsPerHour()
 				|| reservedAndSent(email, now.minusSeconds(86400)) >= policy.getMaxSendsPerDay()) {
 			throw new AuthException(AuthErrorCode.EMAIL_SEND_LIMIT_EXCEEDED);
@@ -42,12 +46,9 @@ public class EmailOutboxRepository {
 	}
 
 	private long reservedAndSent(String email, Instant since) {
-		return jdbc.queryForObject("""
-				SELECT (SELECT count(*) FROM email_verification_outbox
-				    WHERE upper(email) = upper(?) AND queued_at >= ? AND state <> 'SENT')
-				  + (SELECT count(*) FROM email_verification_send_log
-				    WHERE upper(email) = upper(?) AND sent_at >= ?)
-				""", Long.class, email, timestamp(since), email, timestamp(since));
+		return queries.countByEmailIgnoreCaseAndQueuedAtGreaterThanEqualAndStateNot(email, since,
+				EmailOutboxState.SENT)
+				+ sendLogs.countByEmailIgnoreCaseAndSentAtGreaterThanEqual(email, since);
 	}
 
 	public void enqueue(
@@ -67,10 +68,8 @@ public class EmailOutboxRepository {
 	}
 
 	public boolean hasTerminalDelivery(EmailVerification verification) {
-		return Boolean.TRUE.equals(jdbc.queryForObject("""
-				SELECT EXISTS (SELECT 1 FROM email_verification_outbox
-				    WHERE verification_id=? AND code_hash=? AND state IN ('FAILED','CANCELLED'))
-				""", Boolean.class, verification.getId(), verification.getCodeHash()));
+		return queries.existsByVerification_IdAndCodeHashAndStateIn(verification.getId(),
+				verification.getCodeHash(), TERMINAL_STATES);
 	}
 
 	public Optional<Job> claim(Instant now, EmailOutboxProperties policy) {
@@ -133,32 +132,6 @@ public class EmailOutboxRepository {
 				INSERT INTO email_verification_send_log (email,purpose,sent_at,outbox_id)
 				    VALUES (?,?,?,?)
 				""", job.email(), job.purpose().name(), timestamp(acceptedAt), job.id());
-	}
-
-	public Optional<EmailVerificationDeliveryResponse> status(UUID id, Instant now) {
-		return jdbc.query("""
-				SELECT o.id,o.state,v.expires_at,
-				    (v.consumed_at IS NOT NULL OR v.verified_at IS NOT NULL OR v.code_hash <> o.code_hash OR
-				     v.id <> (SELECT max(latest.id) FROM email_verification latest
-				        WHERE upper(latest.email)=upper(o.email) AND latest.purpose=o.purpose)) AS invalid
-				FROM email_verification_outbox o JOIN email_verification v ON v.id=o.verification_id
-				WHERE o.id=?
-				""", (rs, row) -> {
-			String state = rs.getString("state");
-			String publicState = switch (state) {
-				case "SENT" -> rs.getBoolean("invalid") ? "CANCELLED" : "SENT";
-				case "FAILED", "CANCELLED" -> state;
-				default -> "PENDING";
-			};
-			long remaining = 0;
-			if ("SENT".equals(publicState)) {
-				Duration duration = Duration.between(now, rs.getTimestamp("expires_at").toInstant());
-				if (duration.isPositive()) {
-					remaining = duration.getSeconds() + (duration.getNano() > 0 ? 1 : 0);
-				}
-			}
-			return new EmailVerificationDeliveryResponse(id, publicState, remaining);
-		}, id).stream().findFirst();
 	}
 
 	private Job map(ResultSet rs, int row) throws SQLException {

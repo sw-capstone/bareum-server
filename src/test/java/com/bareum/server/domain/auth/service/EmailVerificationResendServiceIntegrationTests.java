@@ -18,6 +18,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -460,6 +461,80 @@ class EmailVerificationResendServiceIntegrationTests {
 		assertTrue(worker.runOnce());
 		assertEquals("CANCELLED", delivery.status(first.requestId()).orElseThrow().status());
 		assertEquals("SENT", delivery.status(result.requestId()).orElseThrow().status());
+	}
+
+	@ParameterizedTest
+	@EnumSource(VerificationPurpose.class)
+	void repeatedHistoricalCodeCannotReviveEarlierDeliveryIds(VerificationPurpose purpose) {
+		if (purpose == VerificationPurpose.PASSWORD_RESET) {
+			members.saveAndFlush(Member.createLocal(email, "test", "password-hash"));
+		}
+		var request = new EmailVerificationRequest(email, purpose);
+		when(generator.generate()).thenReturn(OLD);
+		var first = initial.send(request);
+		assertTrue(worker.runOnce());
+		String firstHash = latest(purpose).getCodeHash();
+
+		time.set(NOW.plusSeconds(60));
+		when(generator.generate()).thenReturn(NEW);
+		var second = service.resend(request);
+		assertTrue(worker.runOnce());
+		assertEquals("CANCELLED", delivery.status(first.requestId()).orElseThrow().status());
+
+		time.set(NOW.plusSeconds(120));
+		when(generator.generate()).thenReturn(OLD);
+		var third = service.resend(request);
+		assertNotEquals(first.requestId(), third.requestId());
+		assertEquals(firstHash, latest(purpose).getCodeHash());
+		for (var earlier : java.util.List.of(first, second)) {
+			var status = delivery.status(earlier.requestId()).orElseThrow();
+			assertEquals("CANCELLED", status.status());
+			assertEquals(0, status.expiresIn());
+		}
+		assertEquals("PENDING", delivery.status(third.requestId()).orElseThrow().status());
+		assertTrue(worker.runOnce());
+		for (var earlier : java.util.List.of(first, second)) {
+			var status = delivery.status(earlier.requestId()).orElseThrow();
+			assertEquals("CANCELLED", status.status());
+			assertEquals(0, status.expiresIn());
+		}
+		var current = delivery.status(third.requestId()).orElseThrow();
+		assertEquals("SENT", current.status());
+		assertEquals(purpose == VerificationPurpose.SIGNUP ? 300 : 420, current.expiresIn());
+	}
+
+	@Test
+	void ambiguousDeliveryOrderCannotExposeEitherTimer() {
+		when(generator.generate()).thenReturn(OLD);
+		var first = initial.send(request());
+		assertTrue(worker.runOnce());
+		time.set(NOW.plusSeconds(60));
+		when(generator.generate()).thenReturn(NEW);
+		var second = service.resend(request());
+		assertTrue(worker.runOnce());
+		// Accepted requests are strictly separated by the positive minimum interval.
+		// A manually corrupted timestamp must not make an older delivery current.
+		jdbc.update("UPDATE email_verification_outbox SET queued_at=? WHERE id=?",
+				Timestamp.from(NOW), second.requestId());
+		for (var deliveryId : java.util.List.of(first.requestId(), second.requestId())) {
+			var status = delivery.status(deliveryId).orElseThrow();
+			assertEquals("CANCELLED", status.status());
+			assertEquals(0, status.expiresIn());
+		}
+	}
+
+	@Test
+	void projectionSeesJdbcStateChangeWithinTheSameTransaction() {
+		existing(VerificationPurpose.SIGNUP, email);
+		var queued = service.resend(request());
+		new TransactionTemplate(manager).executeWithoutResult(transaction -> {
+			assertEquals("PENDING", delivery.status(queued.requestId()).orElseThrow().status());
+			jdbc.update("UPDATE email_verification_outbox SET state='FAILED', encrypted_code=NULL WHERE id=?",
+					queued.requestId());
+			var updated = delivery.status(queued.requestId()).orElseThrow();
+			assertEquals("FAILED", updated.status());
+			assertEquals(0, updated.expiresIn());
+		});
 	}
 
 	@Test

@@ -43,7 +43,11 @@ class EmailVerificationSendControllerTests {
 
 	@BeforeEach
 	void setUp() {
-		mockMvc = MockMvcBuilders.standaloneSetup(new EmailVerificationSendController(service))
+		mockMvc = MockMvcBuilders
+				.standaloneSetup(new EmailVerificationController(service,
+						mock(com.bareum.server.domain.auth.service.EmailVerificationDeliveryService.class),
+						mock(com.bareum.server.domain.auth.service.EmailVerificationConfirmService.class),
+						mock(com.bareum.server.domain.auth.service.EmailVerificationResendService.class)))
 				.setControllerAdvice(new GlobalExceptionHandler())
 				.build();
 	}
