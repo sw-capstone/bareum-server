@@ -11,9 +11,33 @@ cat > "$WORK/bin/aws" <<'MOCK'
 #!/usr/bin/env bash
 set -euo pipefail
 [[ "$1" == ssm && "$2" == get-parameters ]]
-printf '%s\n' "$@" > "$CASE_ROOT/aws-args"
+printf '%s\n' "$@" >> "$CASE_ROOT/aws-args"
+printf 'call\n' >> "$CASE_ROOT/aws-calls"
 [[ "$MODE" != aws-fail ]] || exit 1
-cat "$CASE_ROOT/response.json"
+names=()
+collect=false
+for arg in "$@"; do
+  case "$arg" in
+    --names) collect=true ;;
+    --*) collect=false ;;
+    *) if [[ "$collect" == true ]]; then names+=("$arg"); fi ;;
+  esac
+done
+(( ${#names[@]} > 0 && ${#names[@]} <= 10 ))
+if [[ $(wc -l < "$CASE_ROOT/aws-calls") -gt 1 ]]; then
+  [[ "$MODE" != late-aws-fail ]] || exit 1
+  if [[ "$MODE" == late-malformed-response ]]; then printf 'invalid-json'; exit 0; fi
+fi
+jq -n --slurpfile response "$CASE_ROOT/response.json" --args '
+  $response[0] |
+  $ARGS.positional as $names |
+  .Parameters |= map(select(.Name as $name | $names | index($name))) |
+  if env.MODE == "unexpected" then
+    .Parameters += [{Name: "/bareum/dev/server/UNKNOWN", Value: "unexpected", Type: "String"}]
+  elif env.MODE == "cross-batch-response" then
+    .Parameters[0].Name = "/bareum/dev/server/DB_URL"
+  else . end
+' "${names[@]}"
 MOCK
 chmod +x "$WORK/bin/aws"
 
@@ -29,7 +53,9 @@ jq -n --arg prefix "$PREFIX" '
       {Name: "SPRING_MAIL_PASSWORD", Value: "fixture-secret-mail-$dollar#hash=equals\"quote\\slash", Type: "SecureString"},
       {Name: "SPRING_MAIL_HOST", Value: "smtp.fixture.invalid", Type: "String"},
       {Name: "SPRING_MAIL_USERNAME", Value: "sender@fixture.invalid", Type: "String"},
-      {Name: "EMAIL_VERIFICATION_MAIL_FROM", Value: "sender@fixture.invalid", Type: "String"}
+      {Name: "EMAIL_VERIFICATION_MAIL_FROM", Value: "sender@fixture.invalid", Type: "String"},
+      {Name: "EMAIL_VERIFICATION_MAX_VERIFICATION_ATTEMPTS", Value: "5", Type: "String"},
+      {Name: "EMAIL_VERIFICATION_PASSWORD_RESET_VERIFICATION_TTL_SECONDS", Value: "600", Type: "String"}
     ] | map(.Name = ($prefix + "/" + .Name)))
   }
 ' > "$WORK/baseline.json"
@@ -67,10 +93,13 @@ expect_failure() {
 }
 
 expect_success() {
-  [[ "$RESULT" == 0 ]]
+  if [[ "$RESULT" != 0 ]]; then
+    cat "$CASE_ROOT/output" >&2
+    return 1
+  fi
   local generated="$CASE_ROOT/infra/env/.env.server" mode
   mode=$(stat -c %a "$generated" 2>/dev/null || stat -f %Lp "$generated")
-  [[ "$mode" == 600 ]]
+  [[ "$mode" == 600 ]] || { printf 'FAIL: expected mode 600, got %s\n' "$mode" >&2; return 1; }
   jq -r '.Parameters[] | (.Name | split("/") | last) + "=" + .Value' \
     "$CASE_ROOT/response.json" > "$CASE_ROOT/expected.env"
   while IFS= read -r entry; do grep -Fxq -- "$entry" "$generated"; done < "$CASE_ROOT/expected.env"
@@ -97,6 +126,8 @@ jq -r '.Parameters[].Name' "$WORK/baseline.json" | sort > "$CASE_ROOT/expected-n
 cmp "$CASE_ROOT/expected-names" "$CASE_ROOT/requested-names"
 grep -Fxq -- '--with-decryption' "$CASE_ROOT/aws-args"
 grep -Fxq -- 'ap-northeast-2' "$CASE_ROOT/aws-args"
+[[ $(wc -l < "$CASE_ROOT/aws-calls") == 2 ]]
+printf 'PASS: eleven parameters fetched in two batches of at most ten\n'
 
 setup_case stale-template
 jq -r '.Parameters[] | (.Name | split("/") | last) + "=stale-template-value"' \
@@ -145,6 +176,41 @@ for scenario in empty whitespace newline carriage-return nul non-string short-hm
     invalid-parameters) filter='.InvalidParameters = ["/bareum/dev/server/UNKNOWN"]' ;;
   esac
   jq "$filter" "$WORK/baseline.json" > "$CASE_ROOT/response.json"
+  run_case
+  expect_failure
+done
+
+
+for key in EMAIL_VERIFICATION_MAX_VERIFICATION_ATTEMPTS EMAIL_VERIFICATION_PASSWORD_RESET_VERIFICATION_TTL_SECONDS; do
+  for value in 0 -1 1.5 1e2 abc 99999999999999999999; do
+    setup_case "invalid-$key-$value"
+    jq --arg name "$PREFIX/$key" --arg value "$value" \
+      '(.Parameters[] | select(.Name == $name)).Value = $value' \
+      "$WORK/baseline.json" > "$CASE_ROOT/response.json"
+    run_case
+    expect_failure
+  done
+  setup_case "secure-policy-$key"
+  jq --arg name "$PREFIX/$key" '(.Parameters[] | select(.Name == $name)).Type = "SecureString"' \
+    "$WORK/baseline.json" > "$CASE_ROOT/response.json"
+  run_case
+  expect_failure
+done
+
+setup_case integer-overflow
+jq '(.Parameters[] | select(.Name | endswith("/EMAIL_VERIFICATION_MAX_VERIFICATION_ATTEMPTS"))).Value = "2147483648"' \
+  "$WORK/baseline.json" > "$CASE_ROOT/response.json"
+run_case
+expect_failure
+
+setup_case long-overflow
+jq '(.Parameters[] | select(.Name | endswith("/EMAIL_VERIFICATION_PASSWORD_RESET_VERIFICATION_TTL_SECONDS"))).Value = "9223372036854775808"' \
+  "$WORK/baseline.json" > "$CASE_ROOT/response.json"
+run_case
+expect_failure
+
+for scenario in late-aws-fail late-malformed-response cross-batch-response; do
+  setup_case "$scenario"
   run_case
   expect_failure
 done
