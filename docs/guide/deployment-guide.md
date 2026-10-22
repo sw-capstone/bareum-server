@@ -42,7 +42,7 @@ develop에 병합
 | 배포 연결 | GitHub 변수 `EC2_INSTANCE_ID`, `AWS_ROLE_ARN`으로 대상 EC2와 OIDC 역할을 지정한다. Actions는 SSM 명령 전송·결과 조회 권한을 사용한다. |
 | 이미지·파일 접근 | EC2는 GHCR 이미지 읽기 인증과 GitHub 원본 파일·AWS 접근, Docker·배포 파일 접근 권한을 사용한다. |
 | 배포 환경변수 | `/opt/bareum/infra/env/.env.deploy`에 이미지와 경로를 관리한다. `SERVER_ENV_FILE=./env/.env.server`를 사용하며, 형식은 [예시 파일](../../infra/env/.env.deploy.example)을 참고한다. |
-| 앱 환경변수 | Parameter Store의 `/bareum/dev/server/` 아래 DB·이메일 설정 9개와 템플릿의 일반 설정을 합쳐 `.env.server`를 생성한다. 필수 파라미터와 검증 기준은 아래 표를 따른다. |
+| 앱 환경변수 | Parameter Store의 `/bareum/dev/server/` 아래 DB·이메일 설정 11개와 템플릿의 일반 설정을 합쳐 `.env.server`를 생성한다. 필수 파라미터와 검증 기준은 아래 표를 따른다. |
 | HTTPS 인증서 | `/etc/letsencrypt/live/api.bareum.site/`에 인증서·개인 키를 보관하고, `/var/www/certbot`을 도메인 인증 경로로 사용한다. |
 | RDS 인증서 | `.env.deploy`의 `RDS_CA_FILE`이 EC2의 CA 파일 경로를 지정한다. |
 
@@ -52,7 +52,7 @@ develop에 병합
 
 ### Parameter Store와 템플릿의 관리 범위
 
-아래 9개 파라미터를 `ap-northeast-2` 리전의 `/bareum/dev/server/` 아래에 등록한다. 예를 들어 SMTP 비밀번호의 전체 경로는 `/bareum/dev/server/SPRING_MAIL_PASSWORD`다. 실제 값은 저장소·PR·로그에 남기지 않는다.
+아래 11개 파라미터를 `ap-northeast-2` 리전의 `/bareum/dev/server/` 아래에 등록한다. 예를 들어 SMTP 비밀번호의 전체 경로는 `/bareum/dev/server/SPRING_MAIL_PASSWORD`다. 실제 값은 저장소·PR·로그에 남기지 않는다.
 
 | 파라미터 이름 | 유형 | 용도·검증 기준 |
 | --- | --- | --- |
@@ -65,10 +65,16 @@ develop에 병합
 | `SPRING_MAIL_HOST` | `String` | 담당자가 확정한 SMTP 호스트 |
 | `SPRING_MAIL_USERNAME` | `String` | SMTP 인증 계정 |
 | `EMAIL_VERIFICATION_MAIL_FROM` | `String` | 제공자에서 승인한 발신 주소 |
+| `EMAIL_VERIFICATION_MAX_VERIFICATION_ATTEMPTS` | `String` | 인증번호 확인 실패 횟수 한도. 양의 정수이며 Java Integer 범위. 개발 적용값 5 |
+| `EMAIL_VERIFICATION_PASSWORD_RESET_VERIFICATION_TTL_SECONDS` | `String` | 재설정 완료 증명 유효기간(초). 양의 정수이며 Java Long 범위. 개발 적용값 600 |
 
-EC2 역할이 위 9개 경로에 `ssm:GetParameters`를 수행하고 `SecureString`을 복호화할 수 있어야 한다. 고객 관리형 KMS 키를 사용한다면 해당 키의 `kms:Decrypt` 권한과 키 정책도 확인한다. Actions의 배포 역할과 EC2에서 파라미터를 조회하는 역할을 구분한다.
+EC2 역할이 위 11개 경로에 `ssm:GetParameters`를 수행하고 `SecureString`을 복호화할 수 있어야 한다. 고객 관리형 KMS 키를 사용한다면 해당 키의 `kms:Decrypt` 권한과 키 정책도 확인한다. Actions의 배포 역할과 EC2에서 파라미터를 조회하는 역할을 구분한다.
 
-스크립트는 파라미터 누락·중복·공백만 있는 값·개행·널 문자, 비밀값 4개의 `SecureString` 여부, 두 키의 Base64 형식과 바이트 길이를 검사한다. 검증 실패 시 기존 `.env.server`를 유지하고 배포를 중단한다. 성공 시에만 권한 `600`으로 교체하며 임시 파일은 정리한다. 생성되는 파일은 Compose의 `format: raw`로 전달하므로 값에 따옴표를 덧붙이지 않는다.
+신규 두 확인 정책값은 Parameter Store에서 관리하며 템플릿에 중복 정의하지 않는다. 조회 목록은 총 11개이므로 요청당 최대 10개씩 나누고, 각 배치의 누락·중복·예상하지 않은 이름을 검사한다. 배치 하나라도 실패하면 기존 환경 파일을 유지한다.
+
+develop 병합은 자동 배포를 시작하므로 신규 두 String 등록과 EC2 조회 권한 확인을 병합 전에 완료해야 한다. 기존 SecureString의 복호화 권한도 유지한다. 문서·모의 테스트·CI 통과만으로 실제 AWS 등록이나 배포 적용을 완료 처리하지 않는다.
+
+스크립트는 파라미터 누락·중복·공백만 있는 값·개행·널 문자, 비밀값 4개의 `SecureString` 여부, 두 키의 Base64 형식과 바이트 길이, 확인 정책 두 값의 String 유형·양의 정수·Java 숫자 범위를 검사한다. 검증 실패 시 기존 `.env.server`를 유지하고 배포를 중단한다. 성공 시에만 권한 `600`으로 교체하며 임시 파일은 정리한다. 생성되는 파일은 Compose의 `format: raw`로 전달하므로 값에 따옴표를 덧붙이지 않는다.
 
 [`.env.server.template`](../../infra/env/.env.server.template)은 다음 일반 설정을 관리한다. SMTP 제공자·계정의 실제 값과 비밀키는 템플릿에 넣지 않는다.
 
