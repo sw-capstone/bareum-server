@@ -1,6 +1,14 @@
 package com.bareum.server.global.config;
 
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
 import com.bareum.server.global.exception.code.CommonErrorCode;
+
 import io.swagger.v3.oas.models.Components;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.examples.Example;
@@ -12,11 +20,6 @@ import io.swagger.v3.oas.models.media.ObjectSchema;
 import io.swagger.v3.oas.models.media.Schema;
 import io.swagger.v3.oas.models.media.StringSchema;
 import io.swagger.v3.oas.models.servers.Server;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
 
 /**
  * API 문서 정보와 공통 실패 응답의 구조 및 예시를 정의하는 설정 클래스
@@ -30,7 +33,8 @@ public class OpenApiConfig {
 	@Bean
 	public OpenAPI bareumOpenApi() {
 		return new OpenAPI()
-				.info(new Info().title("Bareum API").version("0.0.1")
+				.info(new Info().title("Bareum API")
+						.version("0.0.1")
 						.description("바름 API 문서"))
 				.servers(List.of(new Server().url("/").description("현재 접속 서버")))
 				.components(new Components()
@@ -42,7 +46,8 @@ public class OpenApiConfig {
 						.addSchemas("ValidationErrorDetail", validationErrorSchema())
 						.addExamples("InternalServerError", problemExample(CommonErrorCode.INTERNAL_SERVER_ERROR))
 						.addExamples("InvalidRequestBody", problemExample(CommonErrorCode.INVALID_REQUEST_BODY))
-						.addExamples("MissingRequestParameter", problemExample(CommonErrorCode.MISSING_REQUEST_PARAMETER))
+						.addExamples("MissingRequestParameter",
+								problemExample(CommonErrorCode.MISSING_REQUEST_PARAMETER))
 						.addExamples("ValidationFailed", validationExample()));
 	}
 
@@ -66,8 +71,9 @@ public class OpenApiConfig {
 	 */
 	private ObjectSchema validationProblemSchema() {
 		ObjectSchema schema = problemSchema();
-		schema.addProperty("errors", new ArraySchema()
-				.items(new Schema<>().$ref("#/components/schemas/ValidationErrorDetail")));
+		schema.addProperty("errors",
+				new ArraySchema()
+						.items(new Schema<>().$ref("#/components/schemas/ValidationErrorDetail")));
 		schema.addRequiredItem("errors");
 		return schema;
 	}
@@ -95,7 +101,8 @@ public class OpenApiConfig {
 				"title", errorCode.getHttpStatus().getReasonPhrase(),
 				"status", errorCode.getHttpStatus().value(),
 				"detail", errorCode.getMessage(),
-				"instance", "/api/example",
+				"instance",
+				"/api/example",
 				"code", errorCode.getCode()));
 	}
 
@@ -109,8 +116,10 @@ public class OpenApiConfig {
 				"title", errorCode.getHttpStatus().getReasonPhrase(),
 				"status", errorCode.getHttpStatus().value(),
 				"detail", errorCode.getMessage(),
-				"instance", "/api/example",
+				"instance",
+				"/api/example",
 				"code", errorCode.getCode(),
-				"errors", List.of(Map.of("field", "name", "message", "이름을 입력해주세요."))));
+				"errors",
+				List.of(Map.of("field", "name", "message", "이름을 입력해주세요."))));
 	}
 }

@@ -1,9 +1,9 @@
 package com.bareum.server.global.exception.code;
 
+import org.springframework.http.HttpStatus;
 
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 
 @Getter
 @RequiredArgsConstructor

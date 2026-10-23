@@ -2,11 +2,12 @@ package com.bareum.server.global.entity;
 
 import java.time.Instant;
 
+import org.hibernate.annotations.ColumnDefault;
+import org.springframework.data.annotation.LastModifiedDate;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.MappedSuperclass;
 import lombok.Getter;
-import org.hibernate.annotations.ColumnDefault;
-import org.springframework.data.annotation.LastModifiedDate;
 
 @Getter
 @MappedSuperclass
