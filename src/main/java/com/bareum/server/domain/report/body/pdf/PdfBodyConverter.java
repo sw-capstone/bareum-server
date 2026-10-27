@@ -64,7 +64,7 @@ public final class PdfBodyConverter {
 				} else {
 					blocks.add(new TextInput(block.id(), block.kind(), block.parentId(), block.sectionId(),
 							block.text(), block.sourceText(), refs,
-							new Extraction(block.excludedFromRetrieval(), block.requiresVision())));
+							new Extraction(block.excludedFromRetrieval(), block.requiresVision()), block.lineCount()));
 				}
 			}
 			List<WarningInput> warnings = new ArrayList<>();

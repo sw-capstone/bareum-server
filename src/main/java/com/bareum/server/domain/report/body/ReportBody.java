@@ -55,6 +55,8 @@ public record ReportBody(
 		List<SourceRef> sourceRefs();
 
 		Extraction extraction();
+
+		Integer lineCount();
 	}
 
 	// 제목이나 문단의 텍스트 데이터 구조
@@ -67,7 +69,8 @@ public record ReportBody(
 		@JsonProperty(required = true) String sourceText,
 		@JsonProperty(required = true) List<Unit> units,
 		@JsonProperty(required = true) List<SourceRef> sourceRefs,
-		@JsonInclude(JsonInclude.Include.NON_NULL) Extraction extraction
+		@JsonInclude(JsonInclude.Include.NON_NULL) Extraction extraction,
+		@JsonInclude(JsonInclude.Include.NON_NULL) Integer lineCount
 	) implements Block {
 		public TextBlock {
 			units = List.copyOf(units);
@@ -89,7 +92,8 @@ public record ReportBody(
 		@JsonProperty(required = true) List<Cell> cells,
 		@JsonProperty(required = true) List<Slot> unresolvedSlots,
 		@JsonProperty(required = true) HeaderRelations headerRelations,
-		@JsonProperty(required = true) List<UnitNoteRef> unitNoteRefs
+		@JsonProperty(required = true) List<UnitNoteRef> unitNoteRefs,
+		@JsonInclude(JsonInclude.Include.NON_NULL) Integer lineCount
 	) implements Block {
 		public TableBlock {
 			sourceRefs = List.copyOf(sourceRefs);

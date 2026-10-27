@@ -318,6 +318,11 @@
           "type": "string",
           "minLength": 1
         },
+        "lineCount": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "파서가 제공한 원본 블록의 줄 수. 알 수 없는 직접 입력과 기존 본문에서는 생략한다. 문장 수나 표의 행 수로 다시 계산하지 않는다."
+        },
         "parentId": {
           "$ref": "#/$defs/nullableUuid"
         },

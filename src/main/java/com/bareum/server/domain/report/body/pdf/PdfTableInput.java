@@ -72,7 +72,8 @@ final class PdfTableInput {
 		}
 		return new TableInput(block.id(), "table", block.parentId(), block.sectionId(), refs,
 				new Extraction(block.excludedFromRetrieval(), block.requiresVision()), rows, columns,
-				unresolved.isEmpty() ? "complete" : "partial", cells, unresolved, "unresolved", List.of(), List.of());
+				unresolved.isEmpty() ? "complete" : "partial", cells, unresolved, "unresolved", List.of(), List.of(),
+				block.lineCount());
 	}
 
 	// 셀을 구분할 임시 키 생성

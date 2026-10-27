@@ -35,7 +35,7 @@ class ReportBodyConfigTests {
 			assertNotNull(application.getBean(PdfBodyConverter.class));
 			String text = "교육을 실시했다 만족도 조사를 진행했다";
 			var input = new BodyInput(SourceFormat.TEXT, List.of(), List.of(
-					new BodyInput.TextInput("p", "para", null, null, text, text, List.of(), null)), List.of(),
+					new BodyInput.TextInput("p", "para", null, null, text, text, List.of(), null, null)), List.of(),
 					List.of());
 			var body = application.getBean(BodyAssembler.class).assemble(input).getBody();
 			assertEquals(text, ((ReportBody.TextBlock)body.blocks().getFirst()).units().getFirst().text());

@@ -30,13 +30,13 @@ class BodyAssemblerTests {
 
 	@Test
 	void structuredInputAssemblesParagraphsAndCellsUsingOnePipeline() {
-		var heading = new TextInput("h", "heading", null, "s", "추진 계획", "추진 계획", List.of(), null);
-		var text = new TextInput("p", "para", "h", "s", "교육 완료.  조사 예정.", "교육 완료.  조사 예정.", List.of(), null);
+		var heading = new TextInput("h", "heading", null, "s", "추진 계획", "추진 계획", List.of(), null, null);
+		var text = new TextInput("p", "para", "h", "s", "교육 완료.  조사 예정.", "교육 완료.  조사 예정.", List.of(), null, null);
 		var cells = List.of(
 				new CellInput("date", 0, 0, 1, 1, "2026. 10. 17.", "2026. 10. 17.", List.of(), null),
 				new CellInput("amount", 0, 1, 1, 1, "1,000,000원", "1,000,000원", List.of(), null));
 		var table = new TableInput("t", "table", "h", "s", List.of(), null, 1, 2,
-				"complete", cells, List.of(), "resolved", List.of(), List.of());
+				"complete", cells, List.of(), "resolved", List.of(), List.of(), null);
 		var input = new BodyInput(SourceFormat.TEXT, List.of(), List.of(heading, text, table),
 				List.of(new SectionInput("s", "h", null)), List.of());
 		ValidatedReportBody validated = assembler.assemble(input);
@@ -53,6 +53,11 @@ class BodyAssemblerTests {
 		assertEquals(List.of("2026. 10. 17.", "1,000,000원"),
 				assembledTable.cells().stream().map(cell -> cell.units().getFirst().text()).toList());
 		assertTrue(body.pages().isEmpty());
+		var json = new BodyJson().tree(body);
+		for (int index = 0; index < body.blocks().size(); index++) {
+			assertNull(body.blocks().get(index).lineCount());
+			assertFalse(json.get("blocks").get(index).has("lineCount"));
+		}
 		assertDoesNotThrow(() -> new BodyJson().tree(body));
 	}
 
@@ -60,7 +65,8 @@ class BodyAssemblerTests {
 	void reassemblingInputGeneratesNewIdsAndPreservesUncertainText() {
 		String text = "교육을 실시했다 만족도 조사를 진행했다";
 		var input = new BodyInput(SourceFormat.TEXT, List.of(),
-				List.of(new TextInput("a", "para", null, null, text, text, List.of(), null)), List.of(), List.of());
+				List.of(new TextInput("a", "para", null, null, text, text, List.of(), null, null)), List.of(),
+				List.of());
 		var first = assembler.assemble(input).getBody();
 		var second = assembler.assemble(input).getBody();
 		var block = (TextBlock)first.blocks().getFirst();
@@ -81,10 +87,10 @@ class BodyAssemblerTests {
 	@Test
 	void uncertainParagraphsAndCellsKeepTheirTextAndHaveSeparateWarningTargets() {
 		String text = "교육을 실시했다  만족도 조사를 진행했다";
-		var paragraph = new TextInput("p", "para", null, null, text, text, List.of(), null);
+		var paragraph = new TextInput("p", "para", null, null, text, text, List.of(), null, null);
 		var cell = new CellInput("c", 0, 0, 1, 1, text, text, List.of(), null);
 		var table = new TableInput("t", "table", null, null, List.of(), null, 1, 1,
-				"complete", List.of(cell), List.of(), "resolved", List.of(), List.of());
+				"complete", List.of(cell), List.of(), "resolved", List.of(), List.of(), null);
 		var body = assembler.assemble(new BodyInput(SourceFormat.TEXT, List.of(),
 				List.of(paragraph, table), List.of(), List.of())).getBody();
 		var block = (TextBlock)body.blocks().getFirst();

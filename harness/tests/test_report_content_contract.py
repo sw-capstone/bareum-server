@@ -116,6 +116,44 @@ class ReportContentContractTest(unittest.TestCase):
         with self.assertRaises(SchemaValidationError):
             validate(json.loads(example), schema)
 
+    def test_block_line_counts_accept_non_negative_integers(self) -> None:
+        # Given
+        schema = json.loads(SCHEMA.read_text(encoding="utf-8"))
+        original = (EXAMPLES / "pdf.example.json").read_text(encoding="utf-8")
+        for block_index in (1, 3):
+            for line_count in (0, 7):
+                with self.subTest(block_index=block_index, line_count=line_count):
+                    example = json.loads(original)
+                    example["blocks"][block_index]["lineCount"] = line_count
+                    # When / Then
+                    validate(example, schema)
+
+    def test_block_line_counts_reject_invalid_values(self) -> None:
+        # Given
+        schema = json.loads(SCHEMA.read_text(encoding="utf-8"))
+        original = (EXAMPLES / "pdf.example.json").read_text(encoding="utf-8")
+        for block_index in (1, 3):
+            for line_count in (-1, 1.5, "2", True, None):
+                with self.subTest(block_index=block_index, line_count=line_count):
+                    example = json.loads(original)
+                    example["blocks"][block_index]["lineCount"] = line_count
+                    # When / Then
+                    with self.assertRaises(SchemaValidationError):
+                        validate(example, schema)
+
+    def test_existing_bodies_may_omit_block_line_counts(self) -> None:
+        # Given
+        schema = json.loads(SCHEMA.read_text(encoding="utf-8"))
+        for name in ("pdf", "direct-input", "partial-table"):
+            with self.subTest(example=name):
+                example = json.loads(
+                    (EXAMPLES / f"{name}.example.json").read_text(encoding="utf-8")
+                )
+                for block in example["blocks"]:
+                    block.pop("lineCount", None)
+                # When / Then
+                validate(example, schema)
+
     def test_unknown_warning_codes_remain_valid(self) -> None:
         # Given
         schema = json.loads(SCHEMA.read_text(encoding="utf-8"))

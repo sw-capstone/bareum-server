@@ -60,7 +60,7 @@ public final class BodyAssembler {
 			switch (block) {
 				case TextInput text -> blocks.add(new TextBlock(id, text.kind(), parent, section,
 						text.text(), text.sourceText(), units(text.text(), new Target("block", id, null), warnings),
-						text.sourceRefs(), text.extraction()));
+						text.sourceRefs(), text.extraction(), text.lineCount()));
 				case TableInput table -> {
 					List<Cell> cells = table.cells().stream().map(cell -> {
 						UUID cellId = resolve(mapped, cell.key());
@@ -84,7 +84,8 @@ public final class BodyAssembler {
 					// 완성된 표 블록 추가
 					blocks.add(new TableBlock(id, table.kind(), parent, section, table.sourceRefs(),
 							table.extraction(), table.rowCount(), table.columnCount(), table.structureStatus(),
-							cells, table.unresolvedSlots(), new HeaderRelations(table.headerStatus(), headers), notes));
+							cells, table.unresolvedSlots(), new HeaderRelations(table.headerStatus(), headers), notes,
+							table.lineCount()));
 				}
 			}
 		}

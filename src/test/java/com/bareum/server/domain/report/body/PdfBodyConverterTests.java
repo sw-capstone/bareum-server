@@ -66,6 +66,33 @@ class PdfBodyConverterTests {
 		assertDoesNotThrow(() -> new BodyJson().tree(body));
 	}
 
+	@ParameterizedTest
+	@CsvSource({"1, 7", "3, 3", "1, 0", "3, 0"})
+	void preservesParserLineCountsInSerializedTextAndTableBlocks(int blockIndex, int lineCount) throws Exception {
+		var body = changed(parsed -> ((ObjectNode)parsed.get("blocks").get(blockIndex))
+				.put("line_count", lineCount));
+		var codec = new BodyJson();
+		var json = codec.tree(body);
+		assertEquals(mapper.getNodeFactory().numberNode(lineCount),
+				json.get("blocks").get(blockIndex).get("lineCount"));
+		assertEquals(body, codec.read(json.toString()));
+	}
+
+	@ParameterizedTest
+	@ValueSource(ints = {1, 3})
+	void rejectsMissingNullAndInvalidParserLineCounts(int blockIndex) {
+		rejects(ReportErrorCode.INVALID_PARSE_RESPONSE_FORMAT,
+				parsed -> ((ObjectNode)parsed.get("blocks").get(blockIndex)).remove("line_count"));
+		rejects(ReportErrorCode.INVALID_PARSE_RESPONSE_FORMAT,
+				parsed -> ((ObjectNode)parsed.get("blocks").get(blockIndex)).putNull("line_count"));
+		rejects(ReportErrorCode.INVALID_PARSE_RESPONSE_FORMAT,
+				parsed -> ((ObjectNode)parsed.get("blocks").get(blockIndex)).put("line_count", "2"));
+		rejects(ReportErrorCode.INVALID_PARSE_RESPONSE_FORMAT,
+				parsed -> ((ObjectNode)parsed.get("blocks").get(blockIndex)).put("line_count", 1.5));
+		rejects(ReportErrorCode.INVALID_PARSED_CONTENT,
+				parsed -> ((ObjectNode)parsed.get("blocks").get(blockIndex)).put("line_count", -1));
+	}
+
 	private ReportBody changed(Consumer<ObjectNode> mutate) throws Exception {
 		ObjectNode parsed = (ObjectNode)mapper.readTree(BodyFixtures.parsed("1.2.0"));
 		mutate.accept(parsed);

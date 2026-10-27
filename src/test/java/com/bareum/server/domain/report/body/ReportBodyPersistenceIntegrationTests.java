@@ -23,6 +23,8 @@ import com.bareum.server.domain.report.enums.ReportType;
 import com.bareum.server.domain.report.enums.SourceFormat;
 
 import jakarta.persistence.EntityManager;
+import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 @SpringBootTest
 @Transactional
@@ -69,6 +71,26 @@ class ReportBodyPersistenceIntegrationTests {
 	}
 
 	@Test
+	void readsExistingPdfJsonRowsWithoutLineCounts() throws Exception {
+		var json = JsonMapper.builder().build().readTree(BodyFixtures.contract("1.0.0", "pdf"));
+		for (var block : json.get("blocks")) {
+			((ObjectNode)block).remove("lineCount");
+		}
+		Report report = persistReport();
+		entityManager.flush();
+		Long id = jdbc.queryForObject(
+				"INSERT INTO report_content (report_id, content) VALUES (?, CAST(? AS jsonb)) RETURNING id",
+				Long.class, report.getId(), json.toString());
+		entityManager.clear();
+
+		var body = entityManager.find(ReportContent.class, id).getContent();
+		for (var block : body.blocks()) {
+			assertNull(block.lineCount());
+		}
+		assertEquals(codec.read(json.toString()), body);
+	}
+
+	@Test
 	void preservesWhitespaceEmojiAndCodePointRanges() {
 		String text = "  교육  완료.\n가😀나\t조사 예정.  ";
 		int start = 2;
@@ -77,7 +99,7 @@ class ReportBodyPersistenceIntegrationTests {
 				List.of(), List.of(new TextBlock(UUID.randomUUID(), "para", null, null, text, text,
 						List.of(new Unit(UUID.randomUUID(), start, end,
 								text.substring(2, text.length() - 2))),
-						List.of(), null)),
+						List.of(), null, null)),
 				List.of(), List.of());
 		ReportContent content = ReportContent.create(persistReport(), ValidatedReportBody.from(expected));
 		entityManager.persist(content);

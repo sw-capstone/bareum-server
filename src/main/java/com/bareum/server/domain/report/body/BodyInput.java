@@ -31,6 +31,7 @@ public record BodyInput(
 		String sectionKey();
 		List<SourceRef> sourceRefs();
 		Extraction extraction();
+		Integer lineCount();
 	}
 
 	public record TextInput(
@@ -41,7 +42,8 @@ public record BodyInput(
 		String text,
 		String sourceText,
 		List<SourceRef> sourceRefs,
-		Extraction extraction
+		Extraction extraction,
+		Integer lineCount
 	) implements BlockInput {
 		public TextInput {
 			sourceRefs = List.copyOf(sourceRefs);
@@ -62,7 +64,8 @@ public record BodyInput(
 		List<Slot> unresolvedSlots,
 		String headerStatus,
 		List<HeaderInput> headers,
-		List<NoteInput> unitNotes
+		List<NoteInput> unitNotes,
+		Integer lineCount
 	) implements BlockInput {
 		public TableInput {
 			sourceRefs = List.copyOf(sourceRefs);

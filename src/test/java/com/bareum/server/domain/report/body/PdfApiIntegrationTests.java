@@ -87,6 +87,11 @@ class PdfApiIntegrationTests {
 		assertFalse(body.blocks().isEmpty());
 		assertDoesNotThrow(() -> new BodyJson().tree(body));
 		assertSources(parsed, body);
+		var json = new BodyJson().tree(body);
+		for (int index = 0; index < body.blocks().size(); index++) {
+			assertEquals(parsed.get("blocks").get(index).get("line_count"),
+					json.get("blocks").get(index).get("lineCount"));
+		}
 		if (sample.requireMergedCell()) {
 			assertTrue(body.blocks()
 					.stream()
@@ -109,6 +114,7 @@ class PdfApiIntegrationTests {
 		for (ReportBody.Block block : body.blocks()) {
 			JsonNode original = originals.get(block.sourceRefs().getFirst().parserBlockId());
 			assertNotNull(original);
+			assertEquals(original.get("line_count").intValue(), block.lineCount());
 			assertEquals(original.get("page").intValue(), block.sourceRefs().getFirst().location().page());
 			switch (block) {
 				case TextBlock text -> {

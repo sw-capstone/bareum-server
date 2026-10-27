@@ -37,6 +37,30 @@ class BodyValidatorTests {
 		assertEquals(ReportErrorCode.INVALID_CONTENT, error.getBaseErrorCode());
 	}
 
+	@ParameterizedTest
+	@ValueSource(ints = {1, 3})
+	void rejectsNegativeOrNonIntegerBlockLineCounts(int blockIndex) throws Exception {
+		rejects(body -> block(body, blockIndex).put("lineCount", -1));
+		rejects(body -> block(body, blockIndex).put("lineCount", 1.5));
+		rejects(body -> block(body, blockIndex).put("lineCount", "2"));
+	}
+
+	@ParameterizedTest
+	@ValueSource(strings = {"pdf", "direct-input", "partial-table"})
+	void bodiesWithoutLineCountsRemainReadableAndDoNotInventCounts(String name) throws Exception {
+		ObjectNode json = (ObjectNode)mapper.readTree(BodyFixtures.contract("1.0.0", name));
+		for (var block : json.get("blocks")) {
+			((ObjectNode)block).remove("lineCount");
+		}
+		var body = codec.read(json.toString());
+		for (var block : body.blocks()) {
+			assertNull(block.lineCount());
+		}
+		for (var block : codec.tree(body).get("blocks")) {
+			assertFalse(block.has("lineCount"));
+		}
+	}
+
 	private static ObjectNode block(ObjectNode body, int index) {
 		return (ObjectNode)body.get("blocks").get(index);
 	}

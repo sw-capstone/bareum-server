@@ -67,6 +67,7 @@ public record PdfExtraction(
 		@JsonProperty(required = true) String kind,
 		@JsonProperty(required = true) String text,
 		@JsonProperty(value = "source_text", required = true) String sourceText,
+		@JsonProperty(value = "line_count", required = true) int lineCount,
 		@JsonProperty(required = true) List<Double> bbox,
 		@JsonProperty("parent_id") String parentId,
 		@JsonProperty("section_id") String sectionId,

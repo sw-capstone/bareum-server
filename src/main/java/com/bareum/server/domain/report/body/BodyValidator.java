@@ -42,6 +42,9 @@ public final class BodyValidator {
 		BodyIdRegistry registry = new BodyIdRegistry(body);
 		Map<UUID, UUID> parents = new HashMap<>();
 		for (Block block : body.blocks()) {
+			if (block.lineCount() != null && block.lineCount() < 0) {
+				throw new ReportException(ReportErrorCode.INVALID_CONTENT);
+			}
 			if (block.parentId() != null) {
 				registry.reference(block.parentId(), BodyTargetType.BLOCK);
 			}
