@@ -1,10 +1,16 @@
 package com.bareum.server.domain.member.entity;
 
-import com.bareum.server.domain.member.exception.MemberException;
-import com.bareum.server.domain.member.exception.MemberErrorCode;
+import java.time.Instant;
+import java.util.Objects;
+
+import org.hibernate.annotations.ColumnDefault;
+
 import com.bareum.server.domain.member.enums.MemberStatus;
 import com.bareum.server.domain.member.enums.SignupMethod;
+import com.bareum.server.domain.member.exception.MemberErrorCode;
+import com.bareum.server.domain.member.exception.MemberException;
 import com.bareum.server.global.entity.BaseTimeEntity;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -13,12 +19,9 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
-import java.time.Instant;
-import java.util.Objects;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import org.hibernate.annotations.ColumnDefault;
 
 @Entity
 @Table(name = "member")

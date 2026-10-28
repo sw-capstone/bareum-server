@@ -1,9 +1,11 @@
+import com.diffplug.gradle.spotless.JavaExtension
 import org.springframework.boot.gradle.tasks.bundling.BootJar
 
 plugins {
 	java
 	id("org.springframework.boot") version "4.1.1"
 	id("io.spring.dependency-management") version "1.1.7"
+	id("com.diffplug.spotless") version "8.10.4"
 }
 
 group = "com.bareum"
@@ -20,6 +22,35 @@ repositories {
 	mavenCentral()
 }
 
+spotless {
+	lineEndings = com.diffplug.spotless.LineEnding.UNIX
+	java {
+		target("src/main/java/**/*.java")
+		targetExclude("**/generated/**", "**/build/**")
+		removeUnusedImports()
+		importOrder("\\#", "java", "javax", "org", "net", "com", "")
+		eclipse("4.41").configFile("config/formatter/naver-eclipse-formatter.xml")
+		trimTrailingWhitespace()
+		endWithNewline()
+	}
+	format("javaTest", JavaExtension::class.java) {
+		target("src/test/java/**/*.java")
+		targetExclude("**/generated/**", "**/build/**")
+		removeUnusedImports()
+		importOrder("\\#", "java", "javax", "org", "net", "com", "")
+		eclipse("4.41")
+			.configFile("config/formatter/naver-eclipse-formatter.xml")
+			.configProperties(
+				"""
+				org.eclipse.jdt.core.formatter.insert_new_line_after_opening_brace_in_array_initializer=do not insert
+				org.eclipse.jdt.core.formatter.insert_new_line_before_closing_brace_in_array_initializer=do not insert
+				""".trimIndent()
+			)
+		trimTrailingWhitespace()
+		endWithNewline()
+	}
+}
+
 dependencies {
 	compileOnly("org.projectlombok:lombok")
 	annotationProcessor("org.projectlombok:lombok")
@@ -27,7 +58,7 @@ dependencies {
 	implementation("org.springframework.boot:spring-boot-starter-data-jpa")
 	implementation("org.springframework.boot:spring-boot-starter-flyway")
 	runtimeOnly("org.flywaydb:flyway-database-postgresql")
-	runtimeOnly("org.postgresql:postgresql")
+	implementation("org.postgresql:postgresql")
 
 	implementation("org.springframework.boot:spring-boot-starter-validation")
 	implementation("org.springframework.boot:spring-boot-starter-webmvc")

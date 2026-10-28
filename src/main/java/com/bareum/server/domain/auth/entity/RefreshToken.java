@@ -1,7 +1,12 @@
 package com.bareum.server.domain.auth.entity;
 
+import java.time.Instant;
+import java.util.Objects;
+import java.util.UUID;
+
 import com.bareum.server.domain.member.entity.Member;
 import com.bareum.server.global.entity.BaseTimeEntity;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -11,9 +16,6 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
-import java.time.Instant;
-import java.util.Objects;
-import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -38,6 +40,9 @@ public class RefreshToken extends BaseTimeEntity {
 
 	@Column(name = "expires_at", nullable = false)
 	private Instant expiresAt;
+
+	@Column(name = "revoked_at")
+	private Instant revokedAt;
 
 	private RefreshToken(Member member, UUID jti, Instant expiresAt) {
 		Objects.requireNonNull(member, "member");

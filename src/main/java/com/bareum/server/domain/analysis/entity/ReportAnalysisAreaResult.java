@@ -1,9 +1,15 @@
 package com.bareum.server.domain.analysis.entity;
 
-import com.bareum.server.domain.analysis.exception.AnalysisException;
-import com.bareum.server.domain.analysis.exception.AnalysisErrorCode;
+import java.math.BigDecimal;
+import java.util.Objects;
+
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import com.bareum.server.domain.analysis.enums.AnalysisAreaCode;
+import com.bareum.server.domain.analysis.exception.AnalysisErrorCode;
+import com.bareum.server.domain.analysis.exception.AnalysisException;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -16,17 +22,16 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
-import java.math.BigDecimal;
-import java.util.Objects;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
 import tools.jackson.databind.JsonNode;
 
 @Entity
-@Table(name = "report_analysis_area_result", uniqueConstraints = @UniqueConstraint(columnNames = {"report_analysis_id", "area_code"}))
+@Table(name = "report_analysis_area_result",
+	uniqueConstraints = @UniqueConstraint(columnNames = {
+		"report_analysis_id", "area_code"
+	}))
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class ReportAnalysisAreaResult {

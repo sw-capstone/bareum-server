@@ -2,18 +2,19 @@ package com.bareum.server.domain.auth.service;
 
 import java.security.SecureRandom;
 import java.util.Locale;
+
 import org.springframework.stereotype.Component;
 
 @Component
 public class EmailVerificationCodeGenerator {
 
-    private final SecureRandom random = new SecureRandom();
+	private final SecureRandom random = new SecureRandom();
 
-    public String generate() {
-        return String.format(
-                Locale.ROOT,
-                "%06d",
-                random.nextInt(1_000_000)
-        );
-    }
+	public String generate() {
+		return String.format(
+				Locale.ROOT,
+				"%06d",
+				random.nextInt(1_000_000)
+		);
+	}
 }

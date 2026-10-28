@@ -6,4 +6,3 @@ public enum AnalysisAreaCode {
 	EXPRESSION,
 	CONSISTENCY
 }
-

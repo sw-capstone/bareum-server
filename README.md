@@ -13,7 +13,9 @@
 
 ## 서버 실행 환경
 
-GitHub develop의 초기 설정은 Java 25, Spring Boot 4.1.1, Gradle Wrapper 9.7.1을 사용한다. Java 25와 로컬 PostgreSQL 환경을 준비한 뒤 `./gradlew test`로 테스트하고 `./gradlew bootRun`으로 실행한다. Pull Request의 서버 CI는 현재 하네스 검사만 실행한다. Gradle 테스트의 CI 연결은 테스트용 DB와 접속 기준이 백엔드에서 확정된 뒤 진행한다.
+Java 25, Spring Boot 4.1.1, Gradle Wrapper 9.7.1을 사용한다. Java 25와 로컬 PostgreSQL 환경을 준비한 뒤 `./gradlew check`로 포맷·테스트를 검사하고 `./gradlew bootRun`으로 실행한다. Pull Request의 서버 CI는 PostgreSQL 18 테스트 DB를 준비해 `check bootJar`와 이미지 검사를 실행하며 하네스도 별도로 검사한다.
+
+Java 코드 포맷은 Spotless와 Eclipse 포맷터로 통일한다. `./gradlew spotlessCheck`로 검사하고 `./gradlew spotlessApply`로 자동 수정한다. 두 작업은 DB 없이 실행할 수 있다. 세부 규칙과 IntelliJ 사용 방법은 [Java 코드 포맷 안내](docs/guide/development-guide.md#java-코드-포맷)를 따른다.
 
 ## 저장소 구조
 

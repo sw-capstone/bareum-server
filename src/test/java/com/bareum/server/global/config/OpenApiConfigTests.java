@@ -6,6 +6,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
@@ -13,6 +14,7 @@ import org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration;
 import org.springframework.boot.web.server.servlet.context.ServletWebServerApplicationContext;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
+
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -23,7 +25,9 @@ class OpenApiConfigTests {
 		try (ServletWebServerApplicationContext context = start("local")) {
 			HttpResponse<String> response = get(context, "/v3/api-docs");
 			assertThat(response.statusCode()).isEqualTo(200);
-			JsonNode document = JsonMapper.builder().build().readTree(response.body());
+			JsonNode document = JsonMapper.builder()
+					.build()
+					.readTree(response.body());
 			assertThat(document.at("/info/title").asText()).isEqualTo("Bareum API");
 			assertThat(document.at("/servers/0/url").asText()).isEqualTo("/");
 			assertThat(document.at("/components/schemas/ProblemDetail/properties/code").isMissingNode()).isFalse();
@@ -48,7 +52,7 @@ class OpenApiConfigTests {
 	}
 
 	private ServletWebServerApplicationContext start(String profile) {
-		return (ServletWebServerApplicationContext) SpringApplication.run(DocumentationApplication.class,
+		return (ServletWebServerApplicationContext)SpringApplication.run(DocumentationApplication.class,
 				"--spring.profiles.active=" + profile, "--server.port=0");
 	}
 
