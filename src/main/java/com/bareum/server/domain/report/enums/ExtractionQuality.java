@@ -4,4 +4,3 @@ public enum ExtractionQuality {
 	COMPLETE,
 	PARTIAL
 }
-

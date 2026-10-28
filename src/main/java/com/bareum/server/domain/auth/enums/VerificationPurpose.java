@@ -4,4 +4,3 @@ public enum VerificationPurpose {
 	SIGNUP,
 	PASSWORD_RESET
 }
-

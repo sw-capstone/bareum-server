@@ -5,4 +5,3 @@ public enum MemberStatus {
 	SUSPENDED,
 	DELETED
 }
-

@@ -1,8 +1,13 @@
 package com.bareum.server.domain.member.entity;
 
-import com.bareum.server.global.entity.BaseTimeEntity;
+import java.time.Instant;
+import java.util.Objects;
+
+import org.hibernate.annotations.ColumnDefault;
 
 import com.bareum.server.domain.member.enums.OAuthProvider;
+import com.bareum.server.global.entity.BaseTimeEntity;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -15,16 +20,16 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
-import java.time.Instant;
-import java.util.Objects;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import org.hibernate.annotations.ColumnDefault;
 
 @Entity
-@Table(name = "member_auth", uniqueConstraints = @UniqueConstraint(columnNames = {"provider", "provider_user_id"}))
+@Table(name = "member_auth",
+	uniqueConstraints = @UniqueConstraint(columnNames = {
+		"provider", "provider_user_id"
+	}))
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class MemberAuth extends BaseTimeEntity {
@@ -81,11 +86,11 @@ public class MemberAuth extends BaseTimeEntity {
 		Instant linkedAt
 	) {
 		return MemberAuth.builder()
-			.member(member)
-			.provider(provider)
-			.providerUserId(providerUserId)
-			.providerEmail(providerEmail)
-			.linkedAt(linkedAt)
-			.build();
+				.member(member)
+				.provider(provider)
+				.providerUserId(providerUserId)
+				.providerEmail(providerEmail)
+				.linkedAt(linkedAt)
+				.build();
 	}
 }

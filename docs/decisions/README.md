@@ -11,9 +11,4 @@
 | [`DEC-RULE-001`](DEC-RULE-001-rule-catalog-authority.md) | 검토 필요 | 최신 규칙 카탈로그를 제품 규칙 공식 원천으로 지정하는 안 |
 | [`DEC-SEC-001`](DEC-SEC-001-secret-detection.md) | 결정 | Gitleaks 도입과 민감정보 검사 차단·경고 기준 |
 
-## 구현 협의 초안
-
-- [이메일 로그인·공통 인증](login-authentication-draft.md): AUTH-002 구현, 임시 설정과 프론트 연동 계약.
-
-- [로그인 토큰 갱신](token-renew-draft.md): AUTH-009·CSRF 연동, 토큰 교체·재사용·최대 만료 기준.
-- [이메일 인증 재발송 Outbox 전환](email-resend-outbox-draft.md)
+- [로그인 토큰 갱신 구현 및 협의 사항](token-renew-draft.md): AUTH-009 갱신·CSRF·재사용 차단과 적용 조건.

@@ -11,14 +11,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.bareum.server.domain.auth.dto.request.EmailVerificationRequest;
-import com.bareum.server.domain.auth.dto.response.EmailVerificationDeliveryResponse;
-import com.bareum.server.domain.auth.enums.VerificationPurpose;
-import com.bareum.server.domain.auth.exception.AuthErrorCode;
-import com.bareum.server.domain.auth.exception.AuthException;
-import com.bareum.server.domain.auth.service.EmailVerificationSendService;
-import com.bareum.server.global.exception.handler.GlobalExceptionHandler;
 import java.util.stream.Stream;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -31,113 +25,127 @@ import org.springframework.test.json.JsonCompareMode;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
+import com.bareum.server.domain.auth.dto.request.EmailVerificationRequest;
+import com.bareum.server.domain.auth.dto.response.EmailVerificationDeliveryResponse;
+import com.bareum.server.domain.auth.enums.VerificationPurpose;
+import com.bareum.server.domain.auth.exception.AuthErrorCode;
+import com.bareum.server.domain.auth.exception.AuthException;
+import com.bareum.server.domain.auth.service.EmailVerificationSendService;
+import com.bareum.server.global.exception.handler.GlobalExceptionHandler;
+
 class EmailVerificationSendControllerTests {
 
-    private static final String PATH = "/api/v1/auth/email-verification";
-    private static final String EMAIL = "user@example.com";
+	private static final String PATH = "/api/v1/auth/email-verification";
+	private static final String EMAIL = "user@example.com";
 
-    private final EmailVerificationSendService service = mock(EmailVerificationSendService.class);
-    private MockMvc mockMvc;
+	private final EmailVerificationSendService service = mock(EmailVerificationSendService.class);
+	private MockMvc mockMvc;
 
-    @BeforeEach
-    void setUp() {
-        mockMvc = MockMvcBuilders.standaloneSetup(new EmailVerificationSendController(service))
-                .setControllerAdvice(new GlobalExceptionHandler())
-                .build();
-    }
+	@BeforeEach
+	void setUp() {
+		mockMvc = MockMvcBuilders
+				.standaloneSetup(new EmailVerificationController(service,
+						mock(com.bareum.server.domain.auth.service.EmailVerificationDeliveryService.class),
+						mock(com.bareum.server.domain.auth.service.EmailVerificationConfirmService.class),
+						mock(com.bareum.server.domain.auth.service.EmailVerificationResendService.class)))
+				.setControllerAdvice(new GlobalExceptionHandler())
+				.build();
+	}
 
-    @ParameterizedTest
-    @EnumSource(VerificationPurpose.class)
-    void validRequestReturnsAcceptedPendingJob(VerificationPurpose purpose) throws Exception {
-        EmailVerificationRequest request = new EmailVerificationRequest(EMAIL, purpose);
-        when(service.send(request)).thenReturn(EmailVerificationDeliveryResponse.pending(java.util.UUID.fromString("00000000-0000-4000-8000-000000000001")));
+	@ParameterizedTest
+	@EnumSource(VerificationPurpose.class)
+	void validRequestReturnsAcceptedPendingJob(VerificationPurpose purpose) throws Exception {
+		EmailVerificationRequest request = new EmailVerificationRequest(EMAIL, purpose);
+		when(service.send(request)).thenReturn(EmailVerificationDeliveryResponse
+				.pending(java.util.UUID.fromString("00000000-0000-4000-8000-000000000001")));
 
-        mockMvc.perform(post(PATH).contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"email\":\"user@example.com\",\"purpose\":\"" + purpose.name() + "\"}"))
-                .andExpect(status().isAccepted())
-                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header().string("Cache-Control","no-store"))
-                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header().string("Location",
-                        PATH + "/deliveries/00000000-0000-4000-8000-000000000001"))
-                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
-                .andExpect(content().json("{\"requestId\":\"00000000-0000-4000-8000-000000000001\",\"status\":\"PENDING\",\"expiresIn\":0}", JsonCompareMode.STRICT));
+		mockMvc.perform(post(PATH).contentType(MediaType.APPLICATION_JSON)
+				.content("{\"email\":\"user@example.com\",\"purpose\":\"" + purpose.name() + "\"}"))
+				.andExpect(status().isAccepted())
+				.andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header()
+						.string("Cache-Control", "no-store"))
+				.andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header()
+						.string("Location",
+								PATH + "/deliveries/00000000-0000-4000-8000-000000000001"))
+				.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+				.andExpect(content().json(
+						"{\"requestId\":\"00000000-0000-4000-8000-000000000001\",\"status\":\"PENDING\",\"expiresIn\":0}",
+						JsonCompareMode.STRICT));
 
-        verify(service).send(request);
-    }
+		verify(service).send(request);
+	}
 
-    @ParameterizedTest
-    @MethodSource("invalidRequests")
-    void invalidFieldsAreRejectedBeforeCallingService(String body, String field) throws Exception {
-        mockMvc.perform(post(PATH).contentType(MediaType.APPLICATION_JSON).content(body))
-                .andExpect(status().isBadRequest())
-                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
-                .andExpect(jsonPath("$.code").value("COMMON-0002"))
-                .andExpect(jsonPath("$.instance").value(PATH))
-                .andExpect(jsonPath("$.errors[*].field", hasItem(field)))
-                .andExpect(jsonPath("$.errors[*].rejectedValue").doesNotExist());
+	@ParameterizedTest
+	@MethodSource("invalidRequests")
+	void invalidFieldsAreRejectedBeforeCallingService(String body, String field) throws Exception {
+		mockMvc.perform(post(PATH).contentType(MediaType.APPLICATION_JSON).content(body))
+				.andExpect(status().isBadRequest())
+				.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+				.andExpect(jsonPath("$.code").value("COMMON-0002"))
+				.andExpect(jsonPath("$.instance").value(PATH))
+				.andExpect(jsonPath("$.errors[*].field", hasItem(field)))
+				.andExpect(jsonPath("$.errors[*].rejectedValue").doesNotExist());
 
-        verifyNoInteractions(service);
-    }
+		verifyNoInteractions(service);
+	}
 
-    private static Stream<Arguments> invalidRequests() {
-        String longEmail = "a".repeat(64) + "@" + "b".repeat(63) + "."
-                + "c".repeat(63) + "." + "d".repeat(63);
-        return Stream.of(
-                Arguments.of("{\"purpose\":\"SIGNUP\"}", "email"),
-                Arguments.of("{\"email\":null,\"purpose\":\"SIGNUP\"}", "email"),
-                Arguments.of("{\"email\":\"\",\"purpose\":\"SIGNUP\"}", "email"),
-                Arguments.of("{\"email\":\"   \",\"purpose\":\"SIGNUP\"}", "email"),
-                Arguments.of("{\"email\":\"invalid-email\",\"purpose\":\"SIGNUP\"}", "email"),
-                Arguments.of("{\"email\":\"" + longEmail + "\",\"purpose\":\"SIGNUP\"}", "email"),
-                Arguments.of("{\"email\":\"user@example.com\"}", "purpose"),
-                Arguments.of("{\"email\":\"user@example.com\",\"purpose\":null}", "purpose")
-        );
-    }
+	private static Stream<Arguments> invalidRequests() {
+		String longEmail = "a".repeat(64) + "@" + "b".repeat(63) + "."
+				+ "c".repeat(63) + "." + "d".repeat(63);
+		return Stream.of(
+				Arguments.of("{\"purpose\":\"SIGNUP\"}", "email"),
+				Arguments.of("{\"email\":null,\"purpose\":\"SIGNUP\"}", "email"),
+				Arguments.of("{\"email\":\"\",\"purpose\":\"SIGNUP\"}", "email"),
+				Arguments.of("{\"email\":\"   \",\"purpose\":\"SIGNUP\"}", "email"),
+				Arguments.of("{\"email\":\"invalid-email\",\"purpose\":\"SIGNUP\"}", "email"),
+				Arguments.of("{\"email\":\"" + longEmail + "\",\"purpose\":\"SIGNUP\"}", "email"),
+				Arguments.of("{\"email\":\"user@example.com\"}", "purpose"),
+				Arguments.of("{\"email\":\"user@example.com\",\"purpose\":null}", "purpose")
+		);
+	}
 
-    @ParameterizedTest
-    @ValueSource(strings = {
-            "", "null", "{",
-            "{\"email\":\"user@example.com\",\"purpose\":\"UNKNOWN\"}"
-    })
-    void unreadableBodyUsesCommonProblemDetail(String body) throws Exception {
-        mockMvc.perform(post(PATH).contentType(MediaType.APPLICATION_JSON).content(body))
-                .andExpect(status().isBadRequest())
-                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
-                .andExpect(jsonPath("$.code").value("COMMON-0003"))
-                .andExpect(jsonPath("$.errors").doesNotExist());
+	@ParameterizedTest
+	@ValueSource(strings = {"", "null", "{", "{\"email\":\"user@example.com\",\"purpose\":\"UNKNOWN\"}"})
+	void unreadableBodyUsesCommonProblemDetail(String body) throws Exception {
+		mockMvc.perform(post(PATH).contentType(MediaType.APPLICATION_JSON).content(body))
+				.andExpect(status().isBadRequest())
+				.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+				.andExpect(jsonPath("$.code").value("COMMON-0003"))
+				.andExpect(jsonPath("$.errors").doesNotExist());
 
-        verifyNoInteractions(service);
-    }
+		verifyNoInteractions(service);
+	}
 
-    @ParameterizedTest
-    @EnumSource(AuthErrorCode.class)
-    void businessErrorsKeepExistingStatusAndCode(AuthErrorCode error) throws Exception {
-        EmailVerificationRequest request = new EmailVerificationRequest(EMAIL, VerificationPurpose.SIGNUP);
-        when(service.send(request)).thenThrow(new AuthException(error));
+	@ParameterizedTest
+	@EnumSource(AuthErrorCode.class)
+	void businessErrorsKeepExistingStatusAndCode(AuthErrorCode error) throws Exception {
+		EmailVerificationRequest request = new EmailVerificationRequest(EMAIL, VerificationPurpose.SIGNUP);
+		when(service.send(request)).thenThrow(new AuthException(error));
 
-        mockMvc.perform(post(PATH).contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"email\":\"user@example.com\",\"purpose\":\"SIGNUP\"}"))
-                .andExpect(status().is(error.getHttpStatus().value()))
-                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
-                .andExpect(jsonPath("$.status").value(error.getHttpStatus().value()))
-                .andExpect(jsonPath("$.code").value(error.getCode()))
-                .andExpect(jsonPath("$.detail").value(error.getMessage()))
-                .andExpect(jsonPath("$.instance").value(PATH))
-                .andExpect(jsonPath("$.errors").doesNotExist());
-    }
+		mockMvc.perform(post(PATH).contentType(MediaType.APPLICATION_JSON)
+				.content("{\"email\":\"user@example.com\",\"purpose\":\"SIGNUP\"}"))
+				.andExpect(status().is(error.getHttpStatus().value()))
+				.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+				.andExpect(jsonPath("$.status").value(error.getHttpStatus().value()))
+				.andExpect(jsonPath("$.code").value(error.getCode()))
+				.andExpect(jsonPath("$.detail").value(error.getMessage()))
+				.andExpect(jsonPath("$.instance").value(PATH))
+				.andExpect(jsonPath("$.errors").doesNotExist());
+	}
 
-    @Test
-    void unsupportedMethodDoesNotCallService() throws Exception {
-        mockMvc.perform(get(PATH))
-                .andExpect(status().isMethodNotAllowed())
-                .andExpect(jsonPath("$.code").value("COMMON-0006"));
-        verifyNoInteractions(service);
-    }
+	@Test
+	void unsupportedMethodDoesNotCallService() throws Exception {
+		mockMvc.perform(get(PATH))
+				.andExpect(status().isMethodNotAllowed())
+				.andExpect(jsonPath("$.code").value("COMMON-0006"));
+		verifyNoInteractions(service);
+	}
 
-    @Test
-    void unsupportedMediaTypeDoesNotCallService() throws Exception {
-        mockMvc.perform(post(PATH).contentType(MediaType.TEXT_PLAIN).content("request"))
-                .andExpect(status().isUnsupportedMediaType())
-                .andExpect(jsonPath("$.code").value("COMMON-0007"));
-        verifyNoInteractions(service);
-    }
+	@Test
+	void unsupportedMediaTypeDoesNotCallService() throws Exception {
+		mockMvc.perform(post(PATH).contentType(MediaType.TEXT_PLAIN).content("request"))
+				.andExpect(status().isUnsupportedMediaType())
+				.andExpect(jsonPath("$.code").value("COMMON-0007"));
+		verifyNoInteractions(service);
+	}
 }

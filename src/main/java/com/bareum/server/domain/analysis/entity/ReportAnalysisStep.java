@@ -1,12 +1,14 @@
 package com.bareum.server.domain.analysis.entity;
 
-import com.bareum.server.global.entity.BaseTimeEntity;
-
-import com.bareum.server.domain.analysis.exception.AnalysisException;
-import com.bareum.server.domain.analysis.exception.AnalysisErrorCode;
+import java.time.Instant;
+import java.util.Objects;
 
 import com.bareum.server.domain.analysis.enums.AnalysisStepCode;
 import com.bareum.server.domain.analysis.enums.AnalysisStepStatus;
+import com.bareum.server.domain.analysis.exception.AnalysisErrorCode;
+import com.bareum.server.domain.analysis.exception.AnalysisException;
+import com.bareum.server.global.entity.BaseTimeEntity;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -19,14 +21,15 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
-import java.time.Instant;
-import java.util.Objects;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 @Entity
-@Table(name = "report_analysis_step", uniqueConstraints = @UniqueConstraint(columnNames = {"report_analysis_id", "step_code"}))
+@Table(name = "report_analysis_step",
+	uniqueConstraints = @UniqueConstraint(columnNames = {
+		"report_analysis_id", "step_code"
+	}))
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class ReportAnalysisStep extends BaseTimeEntity {

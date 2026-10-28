@@ -1,10 +1,12 @@
 package com.bareum.server.domain.report.exception;
 
-import com.bareum.server.global.exception.code.BaseErrorCode;
-import lombok.Getter;
-import lombok.RequiredArgsConstructor;
 import org.slf4j.event.Level;
 import org.springframework.http.HttpStatus;
+
+import com.bareum.server.global.exception.code.BaseErrorCode;
+
+import lombok.Getter;
+import lombok.RequiredArgsConstructor;
 
 @Getter
 @RequiredArgsConstructor

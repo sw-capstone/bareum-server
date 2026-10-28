@@ -1,6 +1,6 @@
 # 로그인 토큰 갱신 구현 및 협의 사항
 
-- 작성일: 2026-10-11
+- 갱신일: 2026-10-28
 - 상태: 구현 초안·팀 검토 필요
 - 소유 역할: 백엔드·프론트엔드
 - 관련 작업: [Issue #28](https://github.com/sw-capstone/bareum-server/issues/28), BRM-30, AUTH-009
@@ -85,10 +85,10 @@ X-CSRF-TOKEN: <CSRF 조회 응답의 token>
 ## 데이터와 트랜잭션
 
 - 신규 Flyway는 used_refresh_token과 token_renew_window를 추가한다. 기존 migration을 수정하지 않으며 기존 Refresh 메타데이터도 보존한다. 이력 조회와 제한은 세션 잠금 안에서 JDBC로 수행한다.
-- 로그인과 동일하게 회원 → 세션 순서로 잠근다. 잠금 획득 후 현재 Refresh 해시·회원 상태·폐기·최대 만료를 다시 확인한다.
+- 로그인과 동일하게 회원 → 세션 순서로 잠근다. 서명 검증된 회원 ID로 회원·세션을 잠그며 별도 해시 기반 회원 검색을 하지 않는다. 잠금 획득 후 현재 Refresh 해시·회원 상태·폐기·최대 만료를 다시 확인한다.
 - 성공 시 소비된 해시 저장·요청 제한·현재 두 해시 교체·새 Access 등록을 한 트랜잭션으로 커밋한다. 기존 Access의 만료를 연장하거나 즉시 폐기하지 않는다. DB 오류면 모두 롤백한다. 토큰 원문은 저장·로그·DTO toString에 포함하지 않는다.
 - **재사용 거부 전용 예외만 롤백에서 제외**하여 401을 반환한 뒤에도 세션과 같은 family의 모든 Access 폐기가 유지된다. 다른 업무·저장 오류는 롤백한다. 외부 트랜잭션에서 재사용한다면 호출자의 롤백 정책도 함께 검토해야 한다.
-- 로그아웃 API의 폐기·쿠키 삭제·갱신 경쟁 처리 기준은 로그아웃 후속 협의 문서에 기록한다. 이 문서의 380개 테스트 결과는 갱신 PR 검증 범위이며 로그아웃의 최신 검증 결과는 별도 문서를 따른다.
+- 로그아웃 API의 폐기·쿠키 삭제·갱신 경쟁 처리는 별도 후속 작업이다.
 
 ## 환경변수
 
@@ -99,12 +99,8 @@ X-CSRF-TOKEN: <CSRF 조회 응답의 token>
 
 로그인의 LOGIN_ACCESS_TTL_SECONDS·LOGIN_SESSION_TTL_SECONDS·LOGIN_COOKIE_SECURE·LOGIN_COOKIE_SAME_SITE·LOGIN_ALLOWED_ORIGINS를 함께 사용한다. 쿠키 속성·Origin은 [로그인 협의 문서](login-authentication-draft.md)의 기준을 따른다.
 
-## 최종 검증과 남은 확인
+## 검증과 적용 조건
 
-- 2026-10-13 Auth·Term 통합 구현 기준 `./gradlew check bootJar --no-daemon`: 전체 683개 통과, 실패·오류·건너뜀 0개, JAR 빌드 성공.
-- Argon2id 신규 저장·기존 해시 호환, JWT 서명·용도·만료·위조 거부, 재로그인·갱신 후 이전 Access 보존, 계정 제한·로그아웃·Refresh 재사용·비밀번호 재설정의 폐기 범위 및 DB 오류 롤백을 확인했다.
-- 선행 리뷰·병합 후 개별 PR의 최신 develop 비교와 원격 CI를 다시 확인한다. 실제 브라우저·Google 계정·인증 방식 변경 후 실제 재설정 메일 연결은 미검증이다.
-
-## 참고
-
-- [Spring Security CSRF](https://docs.spring.io/spring-security/reference/servlet/exploits/csrf.html): 쿠키 저장·지연 조회·XOR 마스킹 처리 기준.
+- Java 25·PostgreSQL 17 신규 DB에서 `check bootJar`: 전체 461개 통과, 실패·오류·건너뜀 0개. 갱신·절대 만료·재사용·동시 갱신·재로그인 경쟁·CSRF·저장 실패 롤백과 미등록 토큰 거부를 확인했다. Spotless·Flyway 버전 중복 검사·JAR 빌드와 저장소 정적 검사도 통과했다. 기존 DB 순차 업그레이드와 PostgreSQL 18 원격 CI는 별도 확인 대상이다.
+- 신규 갱신 SQL 버전(2026.10.11.18.10)이 선행 로그인 SQL(2026.10.13.09.00)보다 낮다. 기존 DB에 순차 적용하기 전 버전 순서를 정리해야 하며, 이 조건을 해결하기 전에는 병합하지 않는다. 적용된 공유 환경의 마이그레이션은 수정하지 않는다.
+- #37 병합 후 실제 develop과 변경 범위·최신 CI를 다시 확인한다. 현재 브라우저 연동·배포 검증은 완료하지 않았다.

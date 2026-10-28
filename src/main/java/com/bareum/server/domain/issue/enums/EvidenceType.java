@@ -11,4 +11,3 @@ public enum EvidenceType {
 	INTERNAL_DIRECTIVE,
 	OTHER
 }
-

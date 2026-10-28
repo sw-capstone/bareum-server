@@ -1,7 +1,11 @@
 package com.bareum.server.domain.issue.entity;
 
+import java.time.LocalDate;
+import java.util.Objects;
+
 import com.bareum.server.domain.issue.enums.EvidenceType;
 import com.bareum.server.global.entity.BaseCreatedTimeEntity;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -13,8 +17,6 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
-import java.time.LocalDate;
-import java.util.Objects;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
@@ -91,14 +93,14 @@ public class IssueEvidence extends BaseCreatedTimeEntity {
 		LocalDate sourceEffectiveDate
 	) {
 		return IssueEvidence.builder()
-			.issue(issue)
-			.evidenceType(evidenceType)
-			.sourceTitle(sourceTitle)
-			.sourceLocator(sourceLocator)
-			.quotedText(quotedText)
-			.sourceUrl(sourceUrl)
-			.sourceVersion(sourceVersion)
-			.sourceEffectiveDate(sourceEffectiveDate)
-			.build();
+				.issue(issue)
+				.evidenceType(evidenceType)
+				.sourceTitle(sourceTitle)
+				.sourceLocator(sourceLocator)
+				.quotedText(quotedText)
+				.sourceUrl(sourceUrl)
+				.sourceVersion(sourceVersion)
+				.sourceEffectiveDate(sourceEffectiveDate)
+				.build();
 	}
 }

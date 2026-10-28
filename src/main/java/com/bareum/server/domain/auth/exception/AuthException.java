@@ -5,7 +5,7 @@ import com.bareum.server.global.exception.Domain;
 
 public class AuthException extends BusinessException {
 
-    public AuthException(AuthErrorCode errorCode) {
-        super(Domain.AUTH, errorCode);
-    }
+	public AuthException(AuthErrorCode errorCode) {
+		super(Domain.AUTH, errorCode);
+	}
 }

@@ -1,0 +1,50 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "enabledManagers": ["dockerfile"],
+  "baseBranchPatterns": ["develop"],
+  "timezone": "Asia/Seoul",
+  "schedule": ["* 9-12 * * 1"],
+  "updateNotScheduled": false,
+  "automerge": false,
+  "semanticCommits": "enabled",
+  "semanticCommitType": "chore",
+  "semanticCommitScope": null,
+  "commitMessageAction": "update",
+  "commitMessageLowerCase": "never",
+  "labels": [":gear: chore"],
+  "dependencyDashboard": true,
+  "dependencyDashboardTitle": "[Chore] Docker 이미지 업데이트 현황",
+  "dependencyDashboardLabels": [":gear: chore"],
+  "packageRules": [
+    {
+      "matchManagers": ["dockerfile"],
+      "enabled": false
+    },
+    {
+      "matchManagers": ["dockerfile"],
+      "matchFileNames": ["/^Dockerfile$/"],
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["eclipse-temurin"],
+      "matchDepTypes": ["stage", "final"],
+      "matchCurrentValue": "/^25-(jdk|jre)-noble$/",
+      "enabled": true,
+      "pinDigests": true,
+      "groupName": "Temurin Docker digests",
+      "groupSlug": "temurin-digests"
+    },
+    {
+      "matchManagers": ["dockerfile"],
+      "matchUpdateTypes": [
+        "major",
+        "minor",
+        "patch",
+        "pin",
+        "replacement",
+        "rollback",
+        "bump",
+        "lockFileMaintenance"
+      ],
+      "enabled": false
+    }
+  ]
+}

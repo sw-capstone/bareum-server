@@ -8,4 +8,3 @@ public enum AnalysisStatus {
 	FAILED,
 	CANCELLED
 }
-

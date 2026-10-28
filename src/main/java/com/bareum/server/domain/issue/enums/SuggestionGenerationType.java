@@ -4,4 +4,3 @@ public enum SuggestionGenerationType {
 	RULE,
 	LLM
 }
-

@@ -1,10 +1,16 @@
 package com.bareum.server.domain.report.entity;
 
-import com.bareum.server.domain.report.exception.ReportException;
-import com.bareum.server.domain.report.exception.ReportErrorCode;
+import java.util.Objects;
+
+import org.hibernate.annotations.ColumnDefault;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import com.bareum.server.domain.report.enums.ContentStatus;
+import com.bareum.server.domain.report.exception.ReportErrorCode;
+import com.bareum.server.domain.report.exception.ReportException;
 import com.bareum.server.global.entity.BaseTimeEntity;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -16,13 +22,9 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
-import java.util.Objects;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import org.hibernate.annotations.ColumnDefault;
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
 import tools.jackson.databind.JsonNode;
 
 @Entity

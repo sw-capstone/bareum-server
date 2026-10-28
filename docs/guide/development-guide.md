@@ -333,9 +333,36 @@ cd bareum-server
   - Git 이력을 검사한다. 명시된 인증정보 형식은 차단하고 일반 비밀번호·키 후보는 경고로 남긴다. 로컬 실행과 분류 기준은 [하네스 안내](../../harness/README.md)를 따른다.
 - 제품 구현 요약 문서 기준 — 실행 중
   - `docs/product/service-spec.md`에 정책이 요구하는 구성이 있는지 확인한다. 문서 내용의 정확성은 판정하지 않는다.
-백엔드·AI 동작, 계약 호환성, 근거·상태 보존 등 안전 불변식, 평가 데이터·성능 회귀 검사는 관련 구현과 자산이 준비된 뒤 각 저장소에 추가한다. 서버의 Spring Boot 코드는 `src/main/`, `src/test/`에 있으며 Java 25와 백엔드에서 정한 로컬 DB 연결 환경에서 `./gradlew test`로 검증할 수 있다. 현재 서버 CI는 하네스 검사만 실행하며, Gradle 테스트는 CI용 DB와 접속 기준이 확정된 뒤 연결한다.
+백엔드·AI 동작, 계약 호환성, 근거·상태 보존 등 안전 불변식, 평가 데이터·성능 회귀 검사는 관련 구현과 자산이 준비된 뒤 각 저장소에 추가한다. 서버의 Spring Boot 코드는 `src/main/`, `src/test/`에 있으며 Java 25와 백엔드에서 정한 로컬 DB 연결 환경에서 `./gradlew test`로 검증할 수 있다. PR CI는 PostgreSQL 18 테스트 DB를 준비하고 `./gradlew --no-daemon check bootJar`로 포맷 검사·테스트·JAR 빌드를 실행한다. 하네스는 별도 워크플로에서 검사한다.
 
 `test-harness.sh`는 하네스 검사기의 자체 회귀 테스트를 실행한다. 서버 제품 코드는 `./gradlew test`로 별도 검증한다.
+
+#### Java 코드 포맷
+
+Java 운영·테스트 코드는 Spotless 8.10.4와 Eclipse 4.41 포맷터로 통일한다. 세부 설정은 [공통 XML](../../config/formatter/naver-eclipse-formatter.xml)에서 관리한다.
+
+| 항목 | 규칙 |
+| --- | --- |
+| 들여쓰기 | 탭 사용, 표시 너비 4칸 |
+| 줄바꿈 | 120자 기준. 직접 넣은 줄바꿈을 보존하되 아래 개별 규칙이 우선함 |
+| 메서드·생성자 | 긴 선언은 파라미터별로 줄바꿈하고 닫는 괄호도 별도 줄에 배치 |
+| record | 항목별로 줄바꿈하고 닫는 괄호도 별도 줄에 배치 |
+| enum | 상수마다 한 줄, 인자는 길어도 한 줄 유지 |
+| 애너테이션 | 선언 위에는 한 줄에 하나씩, 파라미터·record 항목에서는 타입과 같은 줄에 배치 |
+
+빌더와 일반 체인은 짧으면 한 줄로 작성할 수 있고, 직접 여러 줄로 나누면 유지된다. import 정렬과 불필요한 공백 제거는 자동 처리한다.
+
+```bash
+# 포맷 검사
+./gradlew spotlessCheck
+
+# 포맷 자동 수정
+./gradlew spotlessApply
+```
+
+두 명령은 DB 없이 실행할 수 있다. `check`와 `build`에도 포맷 검사가 포함되므로 규칙을 위반하면 로컬·CI 모두 실패한다. PR 머지 차단에는 `Bareum Server CI`를 필수 상태 검사로 지정한다.
+
+IntelliJ에서는 `.editorconfig`를 적용하고 포맷 수정은 Gradle의 `spotlessApply`로 실행한다. 기본 `Reformat Code`는 결과가 다를 수 있다.
 
 ### 7.2 웹 검사
 
@@ -474,12 +501,19 @@ PR 작성자가 필요한 리뷰어를 직접 지정한다.
 서버:
 
 ```text
+CI / Bareum Server CI
+├── PostgreSQL 18 테스트 DB
+├── ./gradlew --no-daemon check bootJar
+│   ├── spotlessCheck
+│   └── test
+└── Docker 이미지·배포 구성 검사
+
 Server checks / harness
 ├── ./scripts/run-harness.sh check
 └── ./scripts/test-harness.sh
 ```
 
-Gradle 테스트는 로컬에서 백엔드 담당자가 정한 DB 연결 환경을 갖춘 뒤 실행한다. CI용 DB와 접속 기준이 확정되기 전까지 GitHub Actions에는 연결하지 않는다.
+Gradle 테스트를 로컬에서 실행할 때는 백엔드 담당자가 정한 DB 연결 환경을 갖춘다. `spotlessCheck`와 `spotlessApply`는 DB 없이 실행할 수 있다.
 
 웹:
 

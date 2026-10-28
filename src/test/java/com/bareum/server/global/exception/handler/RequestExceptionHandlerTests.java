@@ -1,12 +1,12 @@
 package com.bareum.server.global.exception.handler;
 
-import ch.qos.logback.classic.Logger;
-import ch.qos.logback.classic.spi.ILoggingEvent;
-import ch.qos.logback.core.read.ListAppender;
-import jakarta.validation.Valid;
-import jakarta.validation.constraints.Email;
-import jakarta.validation.constraints.Min;
-import jakarta.validation.constraints.NotBlank;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -23,12 +23,13 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
 
 class RequestExceptionHandlerTests {
 
@@ -41,7 +42,7 @@ class RequestExceptionHandlerTests {
 		mockMvc = MockMvcBuilders.standaloneSetup(new TestController())
 				.setControllerAdvice(new GlobalExceptionHandler())
 				.build();
-		logger = (Logger) LoggerFactory.getLogger(GlobalExceptionHandler.class);
+		logger = (Logger)LoggerFactory.getLogger(GlobalExceptionHandler.class);
 		appender = new ListAppender<>();
 		appender.start();
 		logger.addAppender(appender);
@@ -120,7 +121,8 @@ class RequestExceptionHandlerTests {
 
 		@GetMapping("/test/query-validation")
 		ResponseEntity<Void> queryValidation(
-				@RequestParam("page_size") @Min(value = 1, message = "크기는 1 이상이어야 합니다.") int size) {
+			@RequestParam("page_size") @Min(value = 1, message = "크기는 1 이상이어야 합니다.") int size
+		) {
 			return ResponseEntity.noContent().build();
 		}
 
@@ -131,10 +133,14 @@ class RequestExceptionHandlerTests {
 	}
 
 	record TestRequest(
-			@Email(message = "올바른 이메일 형식을 입력해주세요.") String email,
-			@NotBlank(message = "이름을 입력해주세요.") String name) {
+		@Email(message = "올바른 이메일 형식을 입력해주세요.") String email,
+		@NotBlank(message = "이름을 입력해주세요.") String name
+	) {
 	}
 
-	record TestResponse(Long id, String name) {
+	record TestResponse(
+		Long id,
+		String name
+	) {
 	}
 }

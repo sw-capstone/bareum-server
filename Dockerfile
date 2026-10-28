@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-FROM eclipse-temurin:25-jdk-noble AS build
+FROM eclipse-temurin:25-jdk-noble@sha256:589ff4cc3f71aab462e7048a47a0d10edf57fbccde3fceea2281e610bf5880b4 AS build
 
 WORKDIR /workspace
 
@@ -13,7 +13,7 @@ RUN --mount=type=cache,target=/root/.gradle \
 
 RUN java -Djarmode=tools -jar build/libs/app.jar extract --layers --destination extracted
 
-FROM eclipse-temurin:25-jre-noble AS runtime
+FROM eclipse-temurin:25-jre-noble@sha256:d9a39a23634650173f1e2bbc176227af9728587ecf0f4b62d53e9355cd7a19ab AS runtime
 
 WORKDIR /app
 

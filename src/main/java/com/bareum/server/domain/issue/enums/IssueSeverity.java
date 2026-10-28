@@ -6,4 +6,3 @@ public enum IssueSeverity {
 	LOW,
 	UNDETERMINED
 }
-

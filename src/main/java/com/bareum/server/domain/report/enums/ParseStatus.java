@@ -6,4 +6,3 @@ public enum ParseStatus {
 	SUCCEEDED,
 	FAILED
 }
-
