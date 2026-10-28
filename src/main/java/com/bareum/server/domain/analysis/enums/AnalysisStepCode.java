@@ -8,4 +8,3 @@ public enum AnalysisStepCode {
 	SUGGESTION,
 	SCORING
 }
-

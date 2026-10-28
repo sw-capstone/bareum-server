@@ -7,10 +7,10 @@ import org.springframework.security.web.SecurityFilterChain;
 
 @TestConfiguration(proxyBeanMethods = false)
 public class DocumentationSecurityConfig {
-    @Bean
-    SecurityFilterChain documentationFilterChain(HttpSecurity http) throws Exception {
-        return http.csrf(csrf -> csrf.disable())
-                .authorizeHttpRequests(auth -> auth.anyRequest().permitAll())
-                .build();
-    }
+	@Bean
+	SecurityFilterChain documentationFilterChain(HttpSecurity http) throws Exception {
+		return http.csrf(csrf -> csrf.disable())
+				.authorizeHttpRequests(auth -> auth.anyRequest().permitAll())
+				.build();
+	}
 }

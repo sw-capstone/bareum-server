@@ -4,4 +4,3 @@ public enum InputMethod {
 	FILE,
 	TEXT
 }
-
