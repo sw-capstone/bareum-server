@@ -20,7 +20,7 @@
 - JWT는 HS256 서명과 issuer·audience·sub·jti·iat·exp·용도를 확인한다. Google Client ID와 서버 JWT 서명 키는 별개다.
 - 기존 공개 인증 API·약관 조회·Scalar·서버 health는 공개 경로를 유지한다. 보호 API의 미인증·접근 거부도 기존 ProblemDetail 규격을 사용한다.
 - CORS는 설정한 정확한 Origin과 credentials만 허용한다. 쿠키를 소비하는 후속 갱신·로그아웃에는 CSRF 보호를 유지한다. 갱신·로그아웃 API 자체는 후속 PR 범위다.
-- 회원가입 코드·메일 Outbox·통합 인증 컨트롤러·확인 정책·SSM 11개 주입은 선행 코드 그대로 유지한다. 약관 버전 비교·관련 503을 추가하지 않는다.
+- 회원가입 코드·메일 Outbox·통합 인증 컨트롤러·확인 정책·기존 SSM 11개 주입은 유지하며 로그인 필수값 2개를 추가한다. 약관 버전 비교·관련 503을 추가하지 않는다.
 
 ## 설정과 배포 준비
 
@@ -35,7 +35,7 @@
 | LOGIN_MAX_REQUESTS_PER_WINDOW | 10 | 이메일별 로그인 요청 수 |
 | LOGIN_REQUEST_WINDOW_SECONDS | 60 | 요청 집계 창(초) |
 
-운영 Origin은 `https://bareum.site`, develop은 `https://bareum-web-git-develop-numkites-projects.vercel.app`이다. 실제 환경변수 준비는 배포 환경파일 관리 변경 #63과 맞추고, AWS 적용은 인프라 담당자가 진행한다. env v2의 기존 메일·확인 설정을 유지한다. 기능 코드 준비와 배포 설정 완료를 구분하며 필요한 값이 준비되기 전 병합하지 않는다.
+운영 Origin은 `https://bareum.site`, develop은 `https://bareum-web-git-develop-numkites-projects.vercel.app`이다. 기존 배포 방식에 로그인 키(SecureString)·허용 Origin(String)을 추가해 총 13개를 SSM에서 주입하고, 나머지 로그인 설정 6개는 템플릿으로 전달한다. 값 누락·키 형식·허용 주소 검증 실패 시 기존 환경파일을 보존한다. #63 통합 전까지 이 방식을 사용하며 AWS 등록·권한 확인은 인프라 담당자가 진행한다. env v3는 기존 메일·확인 설정을 보존한 39개 전체본이다. 기능 코드 준비와 배포 설정 완료를 구분하며 필요한 값이 준비되기 전 병합하지 않는다.
 
 기존 develop에 반영된 마이그레이션은 변경하지 않는다. 신규 로그인 저장 구조는 기존 준비 마이그레이션을 유지하며 병합 시 적용 순서를 다시 확인한다.
 
@@ -53,4 +53,4 @@
 
 - Java 25·PostgreSQL 17에서 `check bootJar --no-daemon`: 전체 417개 테스트 통과, 실패·오류·건너뜀 0개. Spotless·Flyway 중복 검사·JAR 빌드 성공.
 - 회원가입→로그인→내 정보 조회, 기존 공개 API·health 접근, 두 프론트 Origin의 credentials 허용, 잘못된 자격증명·제한 계정·토큰 만료·동시 발급·저장 실패 롤백을 검증했다.
-- 저장소 정적 검사 통과. PostgreSQL 18·ARM64 이미지 CI는 기존 PR 재개 후 확인한다. 실제 배포·Google 계정·브라우저 통합은 미검증이다.
+- 저장소 정적 검사 통과. PostgreSQL 18·ARM64 이미지 CI는 배포 설정 변경 후 최신 head에서 다시 확인한다. 실제 배포·Google 계정·브라우저 통합은 미검증이다.

@@ -37,6 +37,8 @@ PARAMETER_NAMES=(
   "$PREFIX/EMAIL_VERIFICATION_MAIL_FROM"
   "$PREFIX/EMAIL_VERIFICATION_MAX_VERIFICATION_ATTEMPTS"
   "$PREFIX/EMAIL_VERIFICATION_PASSWORD_RESET_VERIFICATION_TTL_SECONDS"
+  "$PREFIX/LOGIN_JWT_SIGNING_KEY"
+  "$PREFIX/LOGIN_ALLOWED_ORIGINS"
 )
 
 # GetParameters는 한 번에 최대 10개만 조회합니다. 모든 배치를 확인한 뒤 파일을 교체합니다.
@@ -89,7 +91,9 @@ if ! jq -e --arg prefix "$PREFIX" '
       $prefix + "/SPRING_MAIL_USERNAME",
       $prefix + "/EMAIL_VERIFICATION_MAIL_FROM",
       $prefix + "/EMAIL_VERIFICATION_MAX_VERIFICATION_ATTEMPTS",
-      $prefix + "/EMAIL_VERIFICATION_PASSWORD_RESET_VERIFICATION_TTL_SECONDS"] | sort)) and
+      $prefix + "/EMAIL_VERIFICATION_PASSWORD_RESET_VERIFICATION_TTL_SECONDS",
+      $prefix + "/LOGIN_JWT_SIGNING_KEY",
+      $prefix + "/LOGIN_ALLOWED_ORIGINS"] | sort)) and
   all(.Parameters[];
     (.Value | type == "string") and
     (.Value | test("\\S")) and
@@ -98,7 +102,8 @@ if ! jq -e --arg prefix "$PREFIX" '
     .Name == ($prefix + "/DB_PASSWORD") or
     .Name == ($prefix + "/EMAIL_VERIFICATION_HASH_SECRET") or
     .Name == ($prefix + "/EMAIL_VERIFICATION_OUTBOX_ENCRYPTION_KEY") or
-    .Name == ($prefix + "/SPRING_MAIL_PASSWORD"));
+    .Name == ($prefix + "/SPRING_MAIL_PASSWORD") or
+    .Name == ($prefix + "/LOGIN_JWT_SIGNING_KEY"));
     .Type == "SecureString") and
   all(.Parameters[] | select(.Name == ($prefix + "/EMAIL_VERIFICATION_HASH_SECRET"));
     (.Value | base64_byte_length) >= 32) and
@@ -107,12 +112,19 @@ if ! jq -e --arg prefix "$PREFIX" '
   all(.Parameters[] | select(.Name == ($prefix + "/EMAIL_VERIFICATION_MAX_VERIFICATION_ATTEMPTS"));
     .Type == "String" and (.Value | positive_integer("2147483647"))) and
   all(.Parameters[] | select(.Name == ($prefix + "/EMAIL_VERIFICATION_PASSWORD_RESET_VERIFICATION_TTL_SECONDS"));
-    .Type == "String" and (.Value | positive_integer("9223372036854775807")))
+    .Type == "String" and (.Value | positive_integer("9223372036854775807"))) and
+  all(.Parameters[] | select(.Name == ($prefix + "/LOGIN_JWT_SIGNING_KEY"));
+    (.Value | base64_byte_length) >= 32) and
+  all(.Parameters[] | select(.Name == ($prefix + "/LOGIN_ALLOWED_ORIGINS"));
+    .Type == "String" and (.Value | split(",") |
+      length > 0 and (length == (unique | length)) and
+      all(.[]; test("^https://([A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?\\.)*[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?(:[1-9][0-9]{0,4})?$") and
+        (if test(":[0-9]+$") then (split(":") | last | tonumber) <= 65535 else true end))))
 ' "$WORK_DIR/parameters.json" >/dev/null 2>&1; then
   fail "파라미터 검증 실패. 기존 파일을 유지합니다."
 fi
 
-awk '!/^(DB_(URL|USERNAME|PASSWORD)|EMAIL_VERIFICATION_(HASH_SECRET|OUTBOX_ENCRYPTION_KEY|MAIL_FROM|MAX_VERIFICATION_ATTEMPTS|PASSWORD_RESET_VERIFICATION_TTL_SECONDS)|SPRING_MAIL_(HOST|USERNAME|PASSWORD))=/' "$TEMPLATE" \
+awk '!/^(DB_(URL|USERNAME|PASSWORD)|EMAIL_VERIFICATION_(HASH_SECRET|OUTBOX_ENCRYPTION_KEY|MAIL_FROM|MAX_VERIFICATION_ATTEMPTS|PASSWORD_RESET_VERIFICATION_TTL_SECONDS)|SPRING_MAIL_(HOST|USERNAME|PASSWORD)|LOGIN_(JWT_SIGNING_KEY|ALLOWED_ORIGINS))=/' "$TEMPLATE" \
   > "$WORK_DIR/server.env"
 
 printf '\n' >> "$WORK_DIR/server.env"
