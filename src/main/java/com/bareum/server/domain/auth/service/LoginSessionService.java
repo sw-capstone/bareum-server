@@ -12,7 +12,6 @@ import org.springframework.transaction.annotation.Transactional;
 import com.bareum.server.domain.auth.config.LoginProperties;
 import com.bareum.server.domain.auth.exception.AuthErrorCode;
 import com.bareum.server.domain.auth.exception.AuthException;
-import com.bareum.server.domain.auth.repository.LoginAccessTokenQueryRepository;
 import com.bareum.server.domain.auth.repository.LoginSessionRepository;
 import com.bareum.server.domain.member.enums.MemberStatus;
 import com.bareum.server.domain.member.enums.SignupMethod;
@@ -25,22 +24,19 @@ public class LoginSessionService {
 	private final LoginJwtService jwt;
 	private final LoginProperties properties;
 	private final Clock clock;
-	private final LoginAccessTokenQueryRepository accessTokens;
 
 	public LoginSessionService(
 		LoginSessionRepository repository,
 		LoginTokenGenerator tokens,
 		LoginJwtService jwt,
 		LoginProperties properties,
-		@Qualifier("loginClock") Clock clock,
-		LoginAccessTokenQueryRepository accessTokens
+		@Qualifier("loginClock") Clock clock
 	) {
 		this.repository = repository;
 		this.tokens = tokens;
 		this.jwt = jwt;
 		this.properties = properties;
 		this.clock = clock;
-		this.accessTokens = accessTokens;
 	}
 
 	@Transactional
@@ -60,11 +56,9 @@ public class LoginSessionService {
 		Instant accessExpiry = now.plusSeconds(properties.accessTtlSeconds());
 		Instant sessionExpiry = now.plusSeconds(properties.sessionTtlSeconds());
 		UUID family = UUID.randomUUID();
-		String access = jwt.issue("access", memberId, family, now, accessExpiry);
 		String refresh = jwt.issue("refresh", memberId, family, now, sessionExpiry);
-		repository.replaceRefresh(memberId, family, tokens.hash("access", access), tokens.hash("refresh", refresh),
-				accessExpiry, sessionExpiry, now);
-		repository.storeAccess(tokens.hash("access", access), memberId, family, now, accessExpiry);
+		repository.replaceRefresh(memberId, family, tokens.hash("refresh", refresh), sessionExpiry, now);
+		String access = jwt.issue("access", memberId, family, now, accessExpiry);
 		return new IssuedLogin(access, refresh, accessExpiry, sessionExpiry);
 	}
 
@@ -75,14 +69,13 @@ public class LoginSessionService {
 			return Optional.empty();
 		var claims = verified.get();
 		Instant now = clock.instant();
-		return accessTokens.findActivePrincipal(tokens.hash("access", access), claims.memberId(),
-				claims.family(), now, MemberStatus.ACTIVE);
+		return repository.findActivePrincipal(claims.memberId(), claims.family(), now);
 	}
 
 	@org.springframework.scheduling.annotation.Scheduled(fixedDelay = 3600000, initialDelay = 3600000)
 	@Transactional
-	public void purgeExpiredAccessTokens() {
-		repository.deleteExpiredAccess(clock.instant());
+	public void purgeExpiredSessionRevocations() {
+		repository.deleteExpiredRevocations(clock.instant());
 	}
 
 	public record IssuedLogin(
