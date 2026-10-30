@@ -58,6 +58,6 @@ JWT 검증과 회원 상태 조회만으로도 기본 인증은 가능하다. �
 
 ## 검증 범위
 
-- Java 25·PostgreSQL 17에서 `check bootJar --no-daemon`: 전체 419개 테스트 통과, 실패·오류·건너뜀 0개. Spotless·Flyway 중복 검사·JAR 빌드 성공.
-- 회원가입→로그인→내 정보 조회, 기존 공개 API·health 접근, 두 프론트 Origin의 credentials 허용, 잘못된 자격증명·제한 계정·토큰 만료·동시 발급을 검증했다. Refresh 교체 성공 후 Access 저장 실패 시 기존 Refresh 행 전체와 이전 Access 인증이 보존되는지, CORS 허용 CSRF 헤더가 실제 검증에도 사용되는지, 만료 Access 정리가 미만료 이력을 보존하는지 확인했다.
+- Java 25·PostgreSQL 17에서 `check bootJar --no-daemon`: 전체 420개 테스트 통과, 실패·오류·건너뜀 0개. Spotless·Flyway 중복 검사·JAR 빌드 성공.
+- 회원가입→로그인→내 정보 조회, 기존 공개 API·health 접근, 두 프론트 Origin의 credentials 허용, 잘못된 자격증명·제한 계정·토큰 만료·동시 발급을 검증했다. Refresh 교체 성공 후 Access 저장 실패 시 기존 Refresh 행 전체와 이전 Access 인증이 보존되는지, CORS 허용 CSRF 헤더가 실제 검증에도 사용되는지, 만료 Access 정리가 미만료 이력을 보존하고 폐기 이력이 재로그인 후에도 유지되는지 확인했다.
 - 저장소 정적 검사 통과. PostgreSQL 18·ARM64 이미지 CI는 배포 설정 변경 후 최신 head에서 다시 확인한다. 실제 배포·Google 계정·브라우저 통합은 미검증이다.

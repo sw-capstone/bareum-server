@@ -438,6 +438,19 @@ class EmailLoginIntegrationTests {
 	}
 
 	@Test
+	void revokedAccessHistoryCannotBecomeValidAgainAfterRelogin() {
+		var previous = issue();
+		jdbc.update("UPDATE refresh_token SET revoked_at=? WHERE member_id=?", Timestamp.from(NOW), member.getId());
+		jdbc.update("UPDATE login_access_token SET revoked_at=? WHERE token_hash=?", Timestamp.from(NOW),
+				tokens.hash("access", previous.accessToken()));
+		assertTrue(sessions.authenticate(previous.accessToken()).isEmpty());
+		when(clock.instant()).thenReturn(NOW.plusSeconds(60));
+		var next = issue();
+		assertTrue(sessions.authenticate(next.accessToken()).isPresent());
+		assertTrue(sessions.authenticate(previous.accessToken()).isEmpty());
+	}
+
+	@Test
 	void withdrawnAndRevokedSessionsAreRejected() {
 		var issued = issue();
 		jdbc.update(
