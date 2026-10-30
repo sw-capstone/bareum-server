@@ -26,11 +26,19 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.mock.web.MockHttpServletResponse;
+import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
+import org.springframework.security.web.csrf.CsrfFilter;
+import org.springframework.security.web.csrf.CsrfToken;
+import org.springframework.security.web.csrf.XorCsrfTokenRequestAttributeHandler;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.transaction.PlatformTransactionManager;
 
 import com.bareum.server.domain.auth.dto.request.EmailLoginRequest;
 import com.bareum.server.domain.auth.exception.AuthErrorCode;
 import com.bareum.server.domain.auth.exception.AuthException;
+import com.bareum.server.domain.auth.repository.LoginSessionRepository;
 import com.bareum.server.domain.auth.service.EmailLoginCredentialService;
 import com.bareum.server.domain.auth.service.EmailLoginService;
 import com.bareum.server.domain.auth.service.LoginAttemptLimiter;
@@ -40,6 +48,7 @@ import com.bareum.server.domain.auth.service.PasswordHashService;
 import com.bareum.server.domain.member.entity.Member;
 import com.bareum.server.domain.member.repository.MemberRepository;
 
+import jakarta.servlet.http.Cookie;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -83,7 +92,11 @@ class EmailLoginIntegrationTests {
 	@Autowired
 	private JdbcTemplate jdbc;
 	@Autowired
-	private com.bareum.server.domain.auth.repository.LoginAccessTokenQueryRepository accessTokens;
+	private LoginSessionRepository sessionRepository;
+	@Autowired
+	private PlatformTransactionManager transactionManager;
+	@Autowired
+	private CookieCsrfTokenRepository csrfTokens;
 	@Autowired
 	private com.bareum.server.domain.auth.repository.EmailVerificationRepository verifications;
 	@Autowired
@@ -256,11 +269,13 @@ class EmailLoginIntegrationTests {
 		String refresh = cookie.substring("bareum_refresh=".length(), cookie.indexOf(';'));
 		assertFalse(response.body().contains(refresh));
 		var row = jdbc.queryForMap("SELECT * FROM refresh_token WHERE member_id=?", member.getId());
-		assertEquals(tokens.hash("access", access), row.get("access_token_hash"));
+		assertNull(row.get("access_token_hash"));
 		assertEquals(tokens.hash("refresh", refresh), row.get("refresh_token_hash"));
 		assertFalse(row.values().toString().contains(access));
 		assertFalse(row.values().toString().contains(refresh));
-		assertEquals(NOW.plusSeconds(900), ((Timestamp)row.get("access_expires_at")).toInstant());
+		assertNull(row.get("access_expires_at"));
+		assertEquals(0, jdbc.queryForObject("SELECT count(*) FROM login_access_token WHERE member_id=?", Integer.class,
+				member.getId()));
 		assertEquals(NOW.plusSeconds(28800), ((Timestamp)row.get("expires_at")).toInstant());
 		var me = request("GET", "/api/v1/auth/me", null, "Authorization", "Bearer " + access);
 		assertEquals(200, me.statusCode(), me.body());
@@ -397,9 +412,6 @@ class EmailLoginIntegrationTests {
 		assertTrue(sessions.authenticate(issued.accessToken()).isPresent());
 		when(clock.instant()).thenReturn(NOW.plusSeconds(900));
 		assertTrue(sessions.authenticate(issued.accessToken()).isEmpty());
-		jdbc.update(
-				"UPDATE refresh_token SET access_expires_at=expires_at WHERE member_id=?",
-				member.getId());
 		when(clock.instant()).thenReturn(NOW.plusSeconds(28799));
 		assertTrue(sessions.authenticate(issued.accessToken()).isEmpty());
 		when(clock.instant()).thenReturn(NOW.plusSeconds(28800));
@@ -420,6 +432,18 @@ class EmailLoginIntegrationTests {
 						"Bearer " + issued.accessToken()),
 				401,
 				"AUTH-0017");
+	}
+
+	@Test
+	void revokedSessionCannotBecomeValidAgainAfterRelogin() {
+		var previous = issue();
+		var family = jwt.verify(previous.refreshToken(), "refresh").orElseThrow().family();
+		sessionRepository.revokeFamily(member.getId(), family, NOW, previous.sessionExpiresAt());
+		assertTrue(sessions.authenticate(previous.accessToken()).isEmpty());
+		when(clock.instant()).thenReturn(NOW.plusSeconds(60));
+		var next = issue();
+		assertTrue(sessions.authenticate(next.accessToken()).isPresent());
+		assertTrue(sessions.authenticate(previous.accessToken()).isEmpty());
 	}
 
 	@Test
@@ -532,37 +556,81 @@ class EmailLoginIntegrationTests {
 	}
 
 	@Test
-	void tokenStorageFailureRollsBackSessionReplacement() {
+	void csrfHeaderAllowedByCorsIsAlsoAcceptedByTheConfiguredRepository() throws Exception {
+		var preflight = request("OPTIONS", "/api/v1/auth/token/renew", null,
+				"Origin", "https://bareum.site", "Access-Control-Request-Method", "POST",
+				"Access-Control-Request-Headers", "X-CSRF-TOKEN");
+		assertEquals(200, preflight.statusCode(), preflight.body());
+		assertTrue(preflight.headers()
+				.firstValue("Access-Control-Allow-Headers")
+				.orElseThrow()
+				.toLowerCase(java.util.Locale.ROOT)
+				.contains("x-csrf-token"));
+		var source = new MockHttpServletRequest();
+		var token = csrfTokens.generateToken(source);
+		new XorCsrfTokenRequestAttributeHandler().handle(source, new MockHttpServletResponse(), () -> token);
+		var masked = (CsrfToken)source.getAttribute(CsrfToken.class.getName());
+		var request = new MockHttpServletRequest("POST", "/api/v1/auth/token/renew");
+		request.setCookies(new Cookie("XSRF-TOKEN", token.getToken()));
+		request.addHeader("X-CSRF-TOKEN", masked.getToken());
+		var response = new MockHttpServletResponse();
+		var accepted = new java.util.concurrent.atomic.AtomicBoolean();
+		new CsrfFilter(csrfTokens).doFilter(request, response, (req, res) -> accepted.set(true));
+		assertTrue(accepted.get());
+		var missing = new MockHttpServletRequest("POST", "/api/v1/auth/token/renew");
+		missing.setCookies(new Cookie("XSRF-TOKEN", token.getToken()));
+		var rejected = new MockHttpServletResponse();
+		new CsrfFilter(csrfTokens).doFilter(missing, rejected, (req, res) -> fail("CSRF 없이 허용되면 안 됩니다."));
+		assertEquals(403, rejected.getStatus());
+	}
+
+	@Test
+	void sessionCleanupRemovesExpiredRevocationsAndKeepsUnexpiredOnes() {
+		var first = issue();
+		var firstFamily = jwt.verify(first.refreshToken(), "refresh").orElseThrow().family();
+		sessionRepository.revokeFamily(member.getId(), firstFamily, NOW, first.sessionExpiresAt());
+		when(clock.instant()).thenReturn(NOW.plusSeconds(60));
+		var second = issue();
+		var secondFamily = jwt.verify(second.refreshToken(), "refresh").orElseThrow().family();
+		sessionRepository.revokeFamily(member.getId(), secondFamily, NOW.plusSeconds(60), second.sessionExpiresAt());
+		when(clock.instant()).thenReturn(first.sessionExpiresAt());
+		sessions.purgeExpiredSessionRevocations();
+		assertEquals(0, jdbc.queryForObject("SELECT count(*) FROM revoked_login_session WHERE family_id=?",
+				Integer.class, firstFamily));
+		assertEquals(1, jdbc.queryForObject("SELECT count(*) FROM revoked_login_session WHERE family_id=?",
+				Integer.class, secondFamily));
+		var access =
+				jwt.issue("access", member.getId(), secondFamily, NOW.plusSeconds(28799), second.sessionExpiresAt());
+		assertTrue(jwt.verify(access, "access").isPresent());
+		assertTrue(sessions.authenticate(access).isEmpty());
+	}
+
+	@Test
+	void accessIssuanceFailureRollsBackRefreshReplacement() {
 		var previous = issue();
-		String otherEmail = "other-" + UUID.randomUUID() + "@example.invalid";
-		var other = members.saveAndFlush(Member.createLocal(otherEmail, "다른 사용자", storedHash));
-		memberIds.add(other.getId());
-		var collisionJwt = mock(com.bareum.server.domain.auth.service.LoginJwtService.class);
-		when(collisionJwt.issue(eq("access"), anyLong(), any(), any(), any()))
-				.thenReturn(previous.accessToken());
-		when(collisionJwt.issue(eq("refresh"), anyLong(), any(), any(), any()))
-				.thenReturn(previous.refreshToken());
+		var previousRow = jdbc.queryForMap("SELECT * FROM refresh_token WHERE member_id=?", member.getId());
+		var nextRefresh = jwt.issue("refresh", member.getId(), UUID.randomUUID(), NOW, NOW.plusSeconds(28800));
+		var failingJwt = mock(com.bareum.server.domain.auth.service.LoginJwtService.class);
+		when(failingJwt.issue(eq("refresh"), anyLong(), any(), any(), any())).thenReturn(nextRefresh);
+		when(failingJwt.issue(eq("access"), anyLong(), any(), any(), any())).thenAnswer(invocation -> {
+			var replaced = jdbc.queryForMap("SELECT * FROM refresh_token WHERE member_id=?", member.getId());
+			assertNotEquals(previousRow.get("jti"), replaced.get("jti"));
+			assertEquals(tokens.hash("refresh", nextRefresh), replaced.get("refresh_token_hash"));
+			throw new AuthException(AuthErrorCode.LOGIN_SERVICE_UNAVAILABLE);
+		});
 		var props =
-				new com.bareum.server.domain.auth.config.LoginProperties(
-						900, 28800, true, "None", List.of(), 5, 60);
-		var failing = new LoginSessionService(jdbc, tokens, collisionJwt, props, clock, accessTokens);
-		var manager =
-				new org.springframework.jdbc.datasource.DataSourceTransactionManager(
-						jdbc.getDataSource());
-		var transaction = new org.springframework.transaction.support.TransactionTemplate(manager);
-		assertThrows(
-				org.springframework.dao.DataIntegrityViolationException.class,
-				() -> transaction.execute(
-						status -> failing.issue(
-								new EmailLoginCredentialService.ValidatedMember(
-										other.getId(), storedHash))));
+				new com.bareum.server.domain.auth.config.LoginProperties(900, 28800, true, "None", List.of(), 5, 60);
+		var failing = new LoginSessionService(sessionRepository, tokens, failingJwt, props, clock);
+		var transaction = new org.springframework.transaction.support.TransactionTemplate(transactionManager);
+		assertSame(AuthErrorCode.LOGIN_SERVICE_UNAVAILABLE, assertThrows(AuthException.class,
+				() -> transaction.execute(status -> failing
+						.issue(new EmailLoginCredentialService.ValidatedMember(member.getId(), storedHash))))
+				.getBaseErrorCode());
+		verify(failingJwt).issue(eq("access"), anyLong(), any(), any(), any());
+		assertEquals(previousRow, jdbc.queryForMap("SELECT * FROM refresh_token WHERE member_id=?", member.getId()));
 		assertTrue(sessions.authenticate(previous.accessToken()).isPresent());
-		assertEquals(
-				0,
-				jdbc.queryForObject(
-						"SELECT count(*) FROM refresh_token WHERE member_id=?",
-						Integer.class,
-						other.getId()));
+		assertEquals(0, jdbc.queryForObject("SELECT count(*) FROM login_access_token WHERE member_id=?", Integer.class,
+				member.getId()));
 	}
 
 	@Test
@@ -661,6 +729,18 @@ class EmailLoginIntegrationTests {
 	}
 
 	@Test
+	void validAccessNeedsNoDatabaseRegistrationButStillRequiresAnActiveMember() {
+		var access = jwt.issue("access", member.getId(), UUID.randomUUID(), NOW, NOW.plusSeconds(900));
+		assertTrue(sessions.authenticate(access).isPresent());
+		assertEquals(0, jdbc.queryForObject("SELECT count(*) FROM refresh_token WHERE member_id=?", Integer.class,
+				member.getId()));
+		assertEquals(0, jdbc.queryForObject("SELECT count(*) FROM login_access_token WHERE member_id=?", Integer.class,
+				member.getId()));
+		var missing = jwt.issue("access", Long.MAX_VALUE, UUID.randomUUID(), NOW, NOW.plusSeconds(900));
+		assertTrue(sessions.authenticate(missing).isEmpty());
+	}
+
+	@Test
 	void legacyRefreshMetadataRemainsCompatibleButCannotAuthorize() {
 		jdbc.update(
 				"INSERT INTO refresh_token(member_id,jti,expires_at) VALUES(?,?,?)",
@@ -670,7 +750,7 @@ class EmailLoginIntegrationTests {
 		assertEquals(
 				1,
 				jdbc.queryForObject(
-						"SELECT count(*) FROM refresh_token WHERE member_id=? AND access_token_hash"
+						"SELECT count(*) FROM refresh_token WHERE member_id=? AND refresh_token_hash"
 								+ " IS NULL",
 						Integer.class,
 						member.getId()));

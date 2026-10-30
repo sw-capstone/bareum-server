@@ -47,6 +47,10 @@ import tools.jackson.databind.json.JsonMapper;
 		"auth.token-renew.request-window-seconds=60"
 	})
 class TokenRenewIntegrationTests {
+	@Autowired
+	private com.bareum.server.domain.auth.repository.LoginSessionRepository sessionRepository;
+	@Autowired
+	private com.bareum.server.domain.auth.repository.TokenRenewRepository renewRepository;
 	private static final Instant NOW = Instant.parse("2026-10-11T03:00:00Z");
 	private static final String PASSWORD = String.join("", "Fixture", "Input", "!");
 	private static String storedHash;
@@ -228,7 +232,9 @@ class TokenRenewIntegrationTests {
 		assertTrue(cookie.contains("Path=/api/v1/auth") && cookie.contains("Max-Age=27899"));
 		assertFalse(cookie.contains("Domain="));
 		var row = jdbc.queryForMap("SELECT * FROM refresh_token WHERE member_id=?", member.getId());
-		assertEquals(tokens.hash("access", access), row.get("access_token_hash"));
+		assertNull(row.get("access_token_hash"));
+		assertEquals(0, jdbc.queryForObject("SELECT count(*) FROM login_access_token WHERE member_id=?", Integer.class,
+				member.getId()));
 		assertEquals(tokens.hash("refresh", nextRefresh), row.get("refresh_token_hash"));
 		assertEquals(original.sessionExpiresAt(), ((Timestamp)row.get("expires_at")).toInstant());
 		assertEquals(NOW, ((Timestamp)row.get("created_at")).toInstant());
@@ -653,53 +659,38 @@ class TokenRenewIntegrationTests {
 	@Test
 	void renewalFailureRollsBackConsumedHashCounterAndPreviousTokens() {
 		var original = issue();
-		var other = member("Other-" + UUID.randomUUID() + "@example.invalid");
-		var existing = login.login(new EmailLoginRequest(other.getEmail(), PASSWORD, null));
-		var generator = mock(LoginTokenGenerator.class);
-		when(generator.hash("refresh", original.refreshToken()))
-				.thenReturn(tokens.hash("refresh", original.refreshToken()));
-		var collisionJwt = mock(com.bareum.server.domain.auth.service.LoginJwtService.class);
-		var tokenJwt = new com.bareum.server.domain.auth.service.LoginJwtService(
+		var previous = jdbc.queryForMap("SELECT * FROM refresh_token WHERE member_id=?", member.getId());
+		var next = tokenJwtForTest().issue("refresh", member.getId(), UUID.randomUUID(), NOW, NOW.plusSeconds(28800));
+		var failingJwt = mock(com.bareum.server.domain.auth.service.LoginJwtService.class);
+		var verified = tokenJwtForTest().verify(original.refreshToken(), "refresh");
+		when(failingJwt.verify(original.refreshToken(), "refresh")).thenReturn(verified);
+		when(failingJwt.issue(eq("refresh"), anyLong(), any(), any(), any())).thenReturn(next);
+		when(failingJwt.issue(eq("access"), anyLong(), any(), any(), any())).thenAnswer(inv -> {
+			assertEquals(tokens.hash("refresh", next), jdbc.queryForObject(
+					"SELECT refresh_token_hash FROM refresh_token WHERE member_id=?", String.class, member.getId()));
+			assertEquals(1, jdbc.queryForObject("SELECT count(*) FROM used_refresh_token WHERE token_hash=?",
+					Integer.class, tokens.hash("refresh", original.refreshToken())));
+			throw new com.bareum.server.domain.auth.exception.AuthException(
+					com.bareum.server.domain.auth.exception.AuthErrorCode.LOGIN_SERVICE_UNAVAILABLE);
+		});
+		var isolated = new TokenRenewService(sessionRepository, renewRepository, tokens, failingJwt, loginPolicy,
+				renewPolicy, clock);
+		assertThrows(com.bareum.server.domain.auth.exception.AuthException.class,
+				() -> new TransactionTemplate(transactions).execute(status -> isolated.renew(original.refreshToken())));
+		verify(failingJwt).issue(eq("access"), anyLong(), any(), any(), any());
+		assertEquals(previous, jdbc.queryForMap("SELECT * FROM refresh_token WHERE member_id=?", member.getId()));
+		assertTrue(sessions.authenticate(original.accessToken()).isPresent());
+		assertEquals(0, jdbc.queryForObject("SELECT count(*) FROM used_refresh_token WHERE token_hash=?", Integer.class,
+				tokens.hash("refresh", original.refreshToken())));
+		assertEquals(0, jdbc.queryForObject("SELECT count(*) FROM token_renew_window WHERE session_id=?", Integer.class,
+				previous.get("id")));
+	}
+
+	private com.bareum.server.domain.auth.service.LoginJwtService tokenJwtForTest() {
+		return new com.bareum.server.domain.auth.service.LoginJwtService(
 				new com.bareum.server.domain.auth.config.LoginJwtProperties(
 						"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="),
 				clock);
-		var verified = tokenJwt.verify(original.refreshToken(), "refresh");
-		when(collisionJwt.verify(original.refreshToken(), "refresh")).thenReturn(verified);
-		when(collisionJwt.issue(eq("access"), anyLong(), any(), any(), any()))
-				.thenReturn(existing.accessToken());
-		when(collisionJwt.issue(eq("refresh"), anyLong(), any(), any(), any()))
-				.thenReturn(UUID.randomUUID().toString());
-		when(generator.hash(eq("access"), anyString()))
-				.thenAnswer(i -> tokens.hash("access", i.getArgument(1)));
-		when(generator.hash(eq("refresh"), anyString()))
-				.thenAnswer(i -> tokens.hash("refresh", i.getArgument(1)));
-		var isolated =
-				new TokenRenewService(
-						jdbc,
-						generator,
-						collisionJwt,
-						loginPolicy,
-						renewPolicy,
-						Clock.fixed(NOW, java.time.ZoneOffset.UTC));
-		assertThrows(
-				org.springframework.dao.DataIntegrityViolationException.class,
-				() -> new TransactionTemplate(transactions)
-						.execute(status -> isolated.renew(original.refreshToken())));
-		assertTrue(sessions.authenticate(original.accessToken()).isPresent());
-		assertTrue(sessions.authenticate(existing.accessToken()).isPresent());
-		assertEquals(
-				0,
-				jdbc.queryForObject(
-						"SELECT count(*) FROM used_refresh_token WHERE token_hash=?",
-						Integer.class,
-						tokens.hash("refresh", original.refreshToken())));
-		assertEquals(
-				0,
-				jdbc.queryForObject(
-						"SELECT count(*) FROM token_renew_window WHERE session_id=(SELECT id FROM"
-								+ " refresh_token WHERE member_id=?)",
-						Integer.class,
-						member.getId()));
 	}
 
 	@Test
