@@ -64,6 +64,7 @@ FILES=(
   nginx/default.conf
   scripts/deploy.sh
   scripts/prepare-server-env.sh
+  scripts/prepare-ai-env.sh
   env/.env.server.template
   scripts/reload-nginx-after-cert-renewal.sh
 )
@@ -105,6 +106,7 @@ for file in "${FILES[@]}"; do
 done
 backup_file "$INFRA_DIR/env/.env.deploy" infra/env/.env.deploy required
 backup_file "$INFRA_DIR/env/.env.server" infra/env/.env.server required
+backup_file "$INFRA_DIR/env/.env.ai" infra/env/.env.ai optional
 
 for service in server ai nginx; do
   container=$(docker ps --all --quiet --filter label=com.docker.compose.project=bareum \
@@ -128,6 +130,7 @@ validate_release() {
   local mounts=()
   bash -n "$staged/scripts/deploy.sh"
   bash -n "$staged/scripts/prepare-server-env.sh"
+  bash -n "$staged/scripts/prepare-ai-env.sh"
   sh -n "$staged/scripts/reload-nginx-after-cert-renewal.sh"
   awk '
     /^[[:space:]]*(#|$)/ { next }
@@ -135,10 +138,18 @@ validate_release() {
     { key=$0; sub(/=.*/, "", key); if (seen[key]++) exit 1 }
   ' "$staged/env/.env.server.template" || fail 'Invalid or duplicate environment template entry.'
 
+  awk -F= '
+    $1 == "AI_ENV_FILE" { count++; if (substr($0, index($0, "=")+1) != "./env/.env.ai") exit 1 }
+    END { if (count > 1) exit 1 }
+  ' "$INFRA_DIR/env/.env.deploy" || fail 'AI_ENV_FILE must be ./env/.env.ai or omitted.'
+  bash "$staged/scripts/prepare-ai-env.sh" "$WORK/ai.env"
+  (cd "$WORK" && sha256sum ai.env) > "$WORK/ai-env.sha256"
+
   if ! (
     unset AI_IMAGE SERVER_ENV_FILE AI_ENV_FILE RDS_CA_FILE HTTP_BIND_IP HTTP_PORT HTTPS_PORT
     unset COMPOSE_FILE COMPOSE_PROJECT_NAME COMPOSE_PROFILES COMPOSE_ENV_FILES
     export SERVER_IMAGE
+    export AI_ENV_FILE="$WORK/ai.env"
     docker compose --project-name bareum --project-directory "$INFRA_DIR" \
       -f "$staged/docker-compose.yml" --env-file "$INFRA_DIR/env/.env.deploy" \
       config --format json

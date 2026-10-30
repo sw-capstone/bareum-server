@@ -73,6 +73,8 @@ jobs:
         run: bash .github/tests/deploy-via-ssm-test.sh
       - name: Test server environment generation
         run: bash infra/tests/prepare-server-env-test.sh
+      - name: Test AI environment generation
+        run: bash infra/tests/prepare-ai-env-test.sh
       - name: Set up JDK 25
         uses: actions/setup-java@v6
         with:
