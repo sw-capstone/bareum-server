@@ -11,6 +11,7 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
@@ -48,6 +49,16 @@ public class SecurityConfig {
 	}
 
 	@Bean
+	public CookieCsrfTokenRepository csrfTokenRepository(LoginProperties properties) {
+		var repository = new CookieCsrfTokenRepository();
+		repository.setHeaderName("X-CSRF-TOKEN");
+		repository.setCookieCustomizer(cookie -> cookie.secure(properties.cookieSecure())
+				.sameSite(properties.cookieSameSite())
+				.path("/api/v1/auth"));
+		return repository;
+	}
+
+	@Bean
 	public SecurityFilterChain securityFilterChain(
 		HttpSecurity http,
 		LoginSessionService sessions,
@@ -55,15 +66,9 @@ public class SecurityConfig {
 		CustomAuthenticationEntryPoint entry,
 		CustomAccessDeniedHandler denied,
 		UrlBasedCorsConfigurationSource cors,
-		LoginProperties properties
+		CookieCsrfTokenRepository csrfRepository
 	)
 			throws Exception {
-		var csrfRepository = new org.springframework.security.web.csrf.CookieCsrfTokenRepository();
-		csrfRepository.setHeaderName("X-CSRF-TOKEN");
-		csrfRepository.setCookieCustomizer(
-				cookie -> cookie.secure(properties.cookieSecure())
-						.sameSite(properties.cookieSameSite())
-						.path("/api/v1/auth"));
 		http.cors(c -> c.configurationSource(cors))
 				.sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 				.requestCache(c -> c.disable())

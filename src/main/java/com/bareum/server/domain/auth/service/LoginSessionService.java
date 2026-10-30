@@ -1,61 +1,51 @@
 package com.bareum.server.domain.auth.service;
 
-import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.bareum.server.domain.auth.config.LoginProperties;
 import com.bareum.server.domain.auth.exception.AuthErrorCode;
 import com.bareum.server.domain.auth.exception.AuthException;
-import com.bareum.server.domain.auth.repository.LoginAccessTokenQueryRepository;
+import com.bareum.server.domain.auth.repository.LoginSessionRepository;
 import com.bareum.server.domain.member.enums.MemberStatus;
+import com.bareum.server.domain.member.enums.SignupMethod;
 import com.bareum.server.global.security.LoginPrincipal;
 
 @Service
 public class LoginSessionService {
-	private final JdbcTemplate jdbc;
+	private final LoginSessionRepository repository;
 	private final LoginTokenGenerator tokens;
 	private final LoginJwtService jwt;
 	private final LoginProperties properties;
 	private final Clock clock;
-	private final LoginAccessTokenQueryRepository accessTokens;
 
 	public LoginSessionService(
-		JdbcTemplate jdbc,
+		LoginSessionRepository repository,
 		LoginTokenGenerator tokens,
 		LoginJwtService jwt,
 		LoginProperties properties,
-		@Qualifier("loginClock") Clock clock,
-		LoginAccessTokenQueryRepository accessTokens
+		@Qualifier("loginClock") Clock clock
 	) {
-		this.jdbc = jdbc;
+		this.repository = repository;
 		this.tokens = tokens;
 		this.jwt = jwt;
 		this.properties = properties;
 		this.clock = clock;
-		this.accessTokens = accessTokens;
 	}
 
 	@Transactional
 	public IssuedLogin issue(EmailLoginCredentialService.ValidatedMember validated) {
-		var members =
-				jdbc.query(
-						"""
-								SELECT password_hash FROM member WHERE id=? AND status='ACTIVE' AND withdrawn_at IS NULL
-								    AND signup_method='LOCAL' FOR UPDATE
-								""",
-						(rs, row) -> rs.getString(1),
-						validated.memberId());
-		if (members.isEmpty())
-			throw new AuthException(AuthErrorCode.LOGIN_ACCOUNT_RESTRICTED);
-		if (!members.getFirst().equals(validated.passwordHash()))
+		var member = repository.findMemberForUpdate(validated.memberId())
+				.filter(m -> m.getStatus() == MemberStatus.ACTIVE && m.getWithdrawnAt() == null
+						&& m.getSignupMethod() == SignupMethod.LOCAL)
+				.orElseThrow(() -> new AuthException(AuthErrorCode.LOGIN_ACCOUNT_RESTRICTED));
+		if (!member.getPasswordHash().equals(validated.passwordHash()))
 			throw new AuthException(AuthErrorCode.INVALID_LOGIN_CREDENTIALS);
 		return issueForLockedMember(validated.memberId());
 	}
@@ -66,27 +56,9 @@ public class LoginSessionService {
 		Instant accessExpiry = now.plusSeconds(properties.accessTtlSeconds());
 		Instant sessionExpiry = now.plusSeconds(properties.sessionTtlSeconds());
 		UUID family = UUID.randomUUID();
-		String access = jwt.issue("access", memberId, family, now, accessExpiry);
 		String refresh = jwt.issue("refresh", memberId, family, now, sessionExpiry);
-		jdbc.update(
-				"""
-						INSERT INTO refresh_token(member_id,jti,expires_at,created_at,updated_at,
-						    access_token_hash,refresh_token_hash,access_expires_at,revoked_at)
-						VALUES(?,?,?,?,?,?,?,?,NULL)
-						ON CONFLICT(member_id) DO UPDATE SET jti=EXCLUDED.jti,expires_at=EXCLUDED.expires_at,
-						    created_at=EXCLUDED.created_at,updated_at=EXCLUDED.updated_at,
-						    access_token_hash=EXCLUDED.access_token_hash,refresh_token_hash=EXCLUDED.refresh_token_hash,
-						    access_expires_at=EXCLUDED.access_expires_at,revoked_at=NULL
-						""",
-				memberId,
-				family,
-				Timestamp.from(sessionExpiry),
-				Timestamp.from(now),
-				Timestamp.from(now),
-				tokens.hash("access", access),
-				tokens.hash("refresh", refresh),
-				Timestamp.from(accessExpiry));
-		storeAccess(access, memberId, family, now, accessExpiry);
+		repository.replaceRefresh(memberId, family, tokens.hash("refresh", refresh), sessionExpiry, now);
+		String access = jwt.issue("access", memberId, family, now, accessExpiry);
 		return new IssuedLogin(access, refresh, accessExpiry, sessionExpiry);
 	}
 
@@ -97,20 +69,13 @@ public class LoginSessionService {
 			return Optional.empty();
 		var claims = verified.get();
 		Instant now = clock.instant();
-		return accessTokens.findActivePrincipal(tokens.hash("access", access), claims.memberId(),
-				claims.family(), now, MemberStatus.ACTIVE);
-	}
-
-	void storeAccess(String access, long memberId, UUID family, Instant now, Instant expiry) {
-		jdbc.update("""
-				INSERT INTO login_access_token(token_hash,member_id,family_id,expires_at,created_at)
-				VALUES(?,?,?,?,?)
-				""", tokens.hash("access", access), memberId, family, Timestamp.from(expiry), Timestamp.from(now));
+		return repository.findActivePrincipal(claims.memberId(), claims.family(), now);
 	}
 
 	@org.springframework.scheduling.annotation.Scheduled(fixedDelay = 3600000, initialDelay = 3600000)
-	public void purgeExpiredAccessTokens() {
-		jdbc.update("DELETE FROM login_access_token WHERE expires_at<=?", Timestamp.from(clock.instant()));
+	@Transactional
+	public void purgeExpiredSessionRevocations() {
+		repository.deleteExpiredRevocations(clock.instant());
 	}
 
 	public record IssuedLogin(

@@ -24,9 +24,8 @@ public class LoginCookieFactory {
 
 	public EmailLoginResponse response(LoginSessionService.IssuedLogin issued) {
 		Instant now = clock.instant();
-		return new EmailLoginResponse(
+		return EmailLoginResponse.of(
 				issued.accessToken(),
-				"Bearer",
 				remaining(now, issued.accessExpiresAt()),
 				remaining(now, issued.sessionExpiresAt()));
 	}

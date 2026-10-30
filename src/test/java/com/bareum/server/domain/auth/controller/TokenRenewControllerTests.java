@@ -25,8 +25,9 @@ class TokenRenewControllerTests {
 		var service = mock(TokenRenewService.class);
 		var properties = new LoginProperties(900, 28800, true, "None", List.of(), 10, 60);
 		var controller =
-				new TokenRenewController(
-						service, new LoginCookieFactory(properties, Clock.systemUTC()));
+				new AuthController(mock(EmailLoginService.class),
+						mock(com.bareum.server.domain.member.repository.MemberRepository.class),
+						new LoginCookieFactory(properties, Clock.systemUTC()), service);
 		String token = java.util.UUID.randomUUID().toString();
 		var request = new MockHttpServletRequest();
 		request.setCookies(new Cookie("bareum_refresh", token));
