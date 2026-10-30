@@ -19,7 +19,7 @@ import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
 
-/** 조회 전용 매핑. 토큰 발급·폐기는 로그인 세션의 원자적 쓰기에서 처리합니다. */
+/** 발급 이력은 불변으로 보관하고, 세션 단위 폐기는 별도 원자적 쓰기에서 처리한다. */
 @Entity
 @Table(name = "login_access_token")
 @Immutable
@@ -43,4 +43,25 @@ public class LoginAccessToken {
 
 	@Column(name = "revoked_at")
 	private Instant revokedAt;
+
+	@Column(name = "created_at", nullable = false, updatable = false)
+	private Instant createdAt;
+
+	private LoginAccessToken(String tokenHash, Member member, UUID familyId, Instant expiresAt, Instant createdAt) {
+		this.tokenHash = tokenHash;
+		this.member = member;
+		this.familyId = familyId;
+		this.expiresAt = expiresAt;
+		this.createdAt = createdAt;
+	}
+
+	public static LoginAccessToken create(
+		String tokenHash,
+		Member member,
+		UUID familyId,
+		Instant expiresAt,
+		Instant createdAt
+	) {
+		return new LoginAccessToken(tokenHash, member, familyId, expiresAt, createdAt);
+	}
 }

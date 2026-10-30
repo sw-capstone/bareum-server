@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.Repository;
 import org.springframework.data.repository.query.Param;
@@ -15,6 +16,11 @@ import com.bareum.server.global.security.LoginPrincipal;
 
 @Transactional(readOnly = true)
 public interface LoginAccessTokenQueryRepository extends Repository<LoginAccessToken, String> {
+
+	@Modifying
+	@Transactional
+	@Query("delete from LoginAccessToken a where a.expiresAt <= :now")
+	int deleteExpired(@Param("now") Instant now);
 
 	@Query("""
 			select new com.bareum.server.global.security.LoginPrincipal(m.id)
