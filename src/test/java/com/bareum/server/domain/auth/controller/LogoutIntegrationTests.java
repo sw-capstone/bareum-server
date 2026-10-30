@@ -190,6 +190,20 @@ class LogoutIntegrationTests {
 	}
 
 	@Test
+	void loggedOutFamilyStaysBlockedAfterANewLoginWithoutAccessStorage() throws Exception {
+		var previous = issue();
+		success(logout(previous.refreshToken(), csrf()));
+		when(clock.instant()).thenReturn(NOW.plusSeconds(1));
+		var next = issue();
+		assertTrue(sessions.authenticate(previous.accessToken()).isEmpty());
+		assertTrue(sessions.authenticate(next.accessToken()).isPresent());
+		assertEquals(0, jdbc.queryForObject("SELECT count(*) FROM login_access_token WHERE member_id=?", Integer.class,
+				member.getId()));
+		assertEquals(1, jdbc.queryForObject("SELECT count(*) FROM revoked_login_session WHERE member_id=?",
+				Integer.class, member.getId()));
+	}
+
+	@Test
 	void expiredAccessHeaderDoesNotPreventLogout() throws Exception {
 		var issued = issue();
 		when(clock.instant()).thenReturn(NOW.plusSeconds(901));
@@ -205,8 +219,8 @@ class LogoutIntegrationTests {
 		when(clock.instant()).thenReturn(NOW.plusSeconds(1));
 		success(logout(issued.refreshToken(), protection));
 		assertEquals(NOW, revoked(member).toInstant());
-		assertEquals(NOW, jdbc.queryForObject("SELECT revoked_at FROM login_access_token WHERE token_hash=?",
-				Timestamp.class, tokens.hash("access", issued.accessToken())).toInstant());
+		assertEquals(NOW, jdbc.queryForObject("SELECT revoked_at FROM revoked_login_session WHERE member_id=?",
+				Timestamp.class, member.getId()).toInstant());
 		success(logout(null, protection));
 	}
 

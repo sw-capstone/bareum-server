@@ -22,7 +22,9 @@ class LogoutControllerTests {
 	void infrastructureErrorsAreMappedWithoutClaimingSuccessfulLogout() {
 		var service = mock(LogoutService.class);
 		var properties = new LoginProperties(900, 28800, true, "None", List.of(), 10, 60);
-		var controller = new LogoutController(service, new LoginCookieFactory(properties, Clock.systemUTC()));
+		var controller = new AuthController(mock(EmailLoginService.class),
+				mock(com.bareum.server.domain.member.repository.MemberRepository.class),
+				new LoginCookieFactory(properties, Clock.systemUTC()), mock(TokenRenewService.class), service);
 		var request = new MockHttpServletRequest();
 		String token = java.util.UUID.randomUUID().toString();
 		request.setCookies(new Cookie("bareum_refresh", token));
@@ -39,7 +41,9 @@ class LogoutControllerTests {
 	void duplicateRefreshCookiesNeverReachTheRevocationService() {
 		var service = mock(LogoutService.class);
 		var properties = new LoginProperties(900, 28800, true, "None", List.of(), 10, 60);
-		var controller = new LogoutController(service, new LoginCookieFactory(properties, Clock.systemUTC()));
+		var controller = new AuthController(mock(EmailLoginService.class),
+				mock(com.bareum.server.domain.member.repository.MemberRepository.class),
+				new LoginCookieFactory(properties, Clock.systemUTC()), mock(TokenRenewService.class), service);
 		var request = new MockHttpServletRequest();
 		request.setCookies(new Cookie("bareum_refresh", "one"), new Cookie("bareum_refresh", "two"));
 		assertEquals("AUTH-0021", assertThrows(AuthException.class,

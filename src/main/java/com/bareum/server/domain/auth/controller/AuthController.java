@@ -1,6 +1,7 @@
 package com.bareum.server.domain.auth.controller;
 
 import java.util.Arrays;
+import java.util.List;
 
 import org.springframework.dao.DataAccessException;
 import org.springframework.http.CacheControl;
@@ -23,6 +24,7 @@ import com.bareum.server.domain.auth.exception.AuthErrorCode;
 import com.bareum.server.domain.auth.exception.AuthException;
 import com.bareum.server.domain.auth.service.EmailLoginService;
 import com.bareum.server.domain.auth.service.LoginCookieFactory;
+import com.bareum.server.domain.auth.service.LogoutService;
 import com.bareum.server.domain.auth.service.TokenRenewService;
 import com.bareum.server.domain.member.enums.MemberStatus;
 import com.bareum.server.domain.member.repository.MemberRepository;
@@ -41,6 +43,7 @@ public class AuthController implements AuthControllerDocs {
 	private final MemberRepository members;
 	private final LoginCookieFactory cookies;
 	private final TokenRenewService renewals;
+	private final LogoutService logoutService;
 
 	@PostMapping(value = "/login/email", consumes = "application/json")
 	public ResponseEntity<EmailLoginResponse> login(@Valid @RequestBody EmailLoginRequest request) {
@@ -93,5 +96,26 @@ public class AuthController implements AuthControllerDocs {
 				.cacheControl(CacheControl.noStore())
 				.header("Pragma", "no-cache")
 				.body(new CsrfTokenResponse(csrf.getHeaderName(), csrf.getToken()));
+	}
+
+	@PostMapping("/logout")
+	public ResponseEntity<Void> logout(HttpServletRequest request) {
+		Cookie[] supplied = request.getCookies();
+		var values = supplied == null ? List.<String>of() : Arrays.stream(supplied)
+				.filter(c -> LoginCookieFactory.REFRESH_COOKIE.equals(c.getName()))
+				.map(Cookie::getValue)
+				.toList();
+		if (values.size() > 1)
+			throw new AuthException(AuthErrorCode.INVALID_REFRESH_TOKEN);
+		try {
+			logoutService.logout(values.isEmpty() ? null : values.getFirst());
+			return ResponseEntity.noContent()
+					.cacheControl(CacheControl.noStore())
+					.header("Pragma", "no-cache")
+					.header(HttpHeaders.SET_COOKIE, cookies.expireRefreshCookie(), cookies.expireCsrfCookie())
+					.build();
+		} catch (DataAccessException | TransactionException failure) {
+			throw new AuthException(AuthErrorCode.LOGIN_SERVICE_UNAVAILABLE);
+		}
 	}
 }
