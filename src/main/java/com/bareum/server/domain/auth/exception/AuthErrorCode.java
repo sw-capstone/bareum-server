@@ -24,7 +24,14 @@ public enum AuthErrorCode implements BaseErrorCode {
 	EMAIL_VERIFICATION_ATTEMPTS_EXCEEDED(HttpStatus.TOO_MANY_REQUESTS, "AUTH-0010", "이메일 인증번호 확인 횟수를 초과했습니다."),
 	EMAIL_VERIFICATION_ALREADY_VERIFIED(HttpStatus.CONFLICT, "AUTH-0011", "이미 이메일 인증이 완료된 요청입니다."),
 	INVALID_SIGNUP_PASSWORD(HttpStatus.BAD_REQUEST, "AUTH-0012", "비밀번호 조건을 다시 확인해 주세요."),
-	EMAIL_VERIFICATION_TOKEN_EXPIRED(HttpStatus.BAD_REQUEST, "AUTH-0013", "이메일 인증 완료 증명이 만료되었습니다.");
+	EMAIL_VERIFICATION_TOKEN_EXPIRED(HttpStatus.BAD_REQUEST, "AUTH-0013", "이메일 인증 완료 증명이 만료되었습니다."),
+	INVALID_LOGIN_CREDENTIALS(HttpStatus.UNAUTHORIZED, "AUTH-0014", "이메일 또는 비밀번호를 확인해 주세요."),
+	GOOGLE_LOGIN_REQUIRED(HttpStatus.FORBIDDEN, "AUTH-0015", "Google 로그인을 이용해 주세요."),
+	LOGIN_ACCOUNT_RESTRICTED(HttpStatus.FORBIDDEN, "AUTH-0016", "로그인할 수 없는 계정 상태입니다."),
+	INVALID_ACCESS_TOKEN(HttpStatus.UNAUTHORIZED, "AUTH-0017", "유효한 로그인 인증이 필요합니다."),
+	ACCESS_DENIED(HttpStatus.FORBIDDEN, "AUTH-0018", "접근 권한이 없습니다."),
+	LOGIN_SERVICE_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "AUTH-0019", "로그인 인증 서비스를 일시적으로 사용할 수 없습니다."),
+	LOGIN_REQUEST_LIMIT_EXCEEDED(HttpStatus.TOO_MANY_REQUESTS, "AUTH-0020", "로그인 요청이 많습니다. 잠시 후 다시 시도해 주세요.");
 
 	private final HttpStatus httpStatus;
 	private final String code;

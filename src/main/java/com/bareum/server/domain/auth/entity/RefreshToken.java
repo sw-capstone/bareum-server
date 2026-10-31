@@ -41,6 +41,9 @@ public class RefreshToken extends BaseTimeEntity {
 	@Column(name = "expires_at", nullable = false)
 	private Instant expiresAt;
 
+	@Column(name = "revoked_at")
+	private Instant revokedAt;
+
 	private RefreshToken(Member member, UUID jti, Instant expiresAt) {
 		Objects.requireNonNull(member, "member");
 		Objects.requireNonNull(jti, "jti");

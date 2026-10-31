@@ -74,7 +74,8 @@ class EmailVerificationConfirmOpenApiTests {
 
 	@Configuration(proxyBeanMethods = false)
 	@EnableAutoConfiguration(exclude = DataSourceAutoConfiguration.class)
-	@Import({OpenApiConfig.class, EmailVerificationController.class, GlobalExceptionHandler.class})
+	@Import({OpenApiConfig.class, EmailVerificationController.class, GlobalExceptionHandler.class,
+		com.bareum.server.global.config.DocumentationSecurityConfig.class})
 	static class DocumentationApplication {
 		@Bean
 		com.bareum.server.domain.auth.service.EmailVerificationSendService sendService() {

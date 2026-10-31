@@ -84,7 +84,7 @@ CI는 AI env가 없는 초기 상태, 필수값·저장 유형·구문 오류, �
 
 ### Parameter Store와 템플릿의 관리 범위
 
-아래 11개 파라미터를 `ap-northeast-2` 리전의 `/bareum/dev/server/` 아래에 등록한다. 예를 들어 SMTP 비밀번호의 전체 경로는 `/bareum/dev/server/SPRING_MAIL_PASSWORD`다. 실제 값은 저장소·PR·로그에 남기지 않는다.
+아래 13개 파라미터를 `ap-northeast-2` 리전의 `/bareum/dev/server/` 아래에 등록한다. 예를 들어 SMTP 비밀번호의 전체 경로는 `/bareum/dev/server/SPRING_MAIL_PASSWORD`다. 실제 값은 저장소·PR·로그에 남기지 않는다.
 
 | 파라미터 이름 | 유형 | 용도·검증 기준 |
 | --- | --- | --- |
@@ -99,14 +99,16 @@ CI는 AI env가 없는 초기 상태, 필수값·저장 유형·구문 오류, �
 | `EMAIL_VERIFICATION_MAIL_FROM` | `String` | 제공자에서 승인한 발신 주소 |
 | `EMAIL_VERIFICATION_MAX_VERIFICATION_ATTEMPTS` | `String` | 인증번호 확인 실패 횟수 한도. 양의 정수이며 Java Integer 범위. 개발 적용값 5 |
 | `EMAIL_VERIFICATION_PASSWORD_RESET_VERIFICATION_TTL_SECONDS` | `String` | 재설정 완료 증명 유효기간(초). 양의 정수이며 Java Long 범위. 개발 적용값 600 |
+| `LOGIN_JWT_SIGNING_KEY` | `SecureString` | 최소 32바이트 독립 난수의 Base64 문자열. Google Client ID와 별개인 서버 서명 키 |
+| `LOGIN_ALLOWED_ORIGINS` | `String` | 운영·develop의 정확한 HTTPS Origin을 쉼표로 구분. 경로·와일드카드·중복 없이 지정 |
 
-EC2 역할이 위 11개 경로에 `ssm:GetParameters`를 수행하고 `SecureString`을 복호화할 수 있어야 한다. 고객 관리형 KMS 키를 사용한다면 해당 키의 `kms:Decrypt` 권한과 키 정책도 확인한다. Actions의 배포 역할과 EC2에서 파라미터를 조회하는 역할을 구분한다.
+EC2 역할이 위 13개 경로에 `ssm:GetParameters`를 수행하고 `SecureString`을 복호화할 수 있어야 한다. 고객 관리형 KMS 키를 사용한다면 해당 키의 `kms:Decrypt` 권한과 키 정책도 확인한다. Actions의 배포 역할과 EC2에서 파라미터를 조회하는 역할을 구분한다.
 
-신규 두 확인 정책값은 Parameter Store에서 관리하며 템플릿에 중복 정의하지 않는다. 조회 목록은 총 11개이므로 요청당 최대 10개씩 나누고, 각 배치의 누락·중복·예상하지 않은 이름을 검사한다. 배치 하나라도 실패하면 기존 환경 파일을 유지한다.
+신규 두 확인 정책값은 Parameter Store에서 관리하며 템플릿에 중복 정의하지 않는다. 조회 목록은 총 13개이므로 요청당 최대 10개씩 나누고, 각 배치의 누락·중복·예상하지 않은 이름을 검사한다. 배치 하나라도 실패하면 기존 환경 파일을 유지한다.
 
-develop 병합은 자동 배포를 시작하므로 신규 두 String 등록과 EC2 조회 권한 확인을 병합 전에 완료해야 한다. 기존 SecureString의 복호화 권한도 유지한다. 문서·모의 테스트·CI 통과만으로 실제 AWS 등록이나 배포 적용을 완료 처리하지 않는다.
+develop 병합은 자동 배포를 시작하므로 신규 로그인 키(SecureString)·허용 Origin(String)의 등록과 EC2 조회·복호화 권한을 #37 병합 전에 확인해야 한다. 기존 확인 정책 두 값도 유지한다. 기존 SecureString의 복호화 권한도 유지한다. 문서·모의 테스트·CI 통과만으로 실제 AWS 등록이나 배포 적용을 완료 처리하지 않는다.
 
-스크립트는 파라미터 누락·중복·공백만 있는 값·개행·널 문자, 비밀값 4개의 `SecureString` 여부, 두 키의 Base64 형식과 바이트 길이, 확인 정책 두 값의 String 유형·양의 정수·Java 숫자 범위를 검사한다. 검증 실패 시 기존 `.env.server`를 유지하고 배포를 중단한다. 성공 시에만 권한 `600`으로 교체하며 임시 파일은 정리한다. 생성되는 파일은 Compose의 `format: raw`로 전달하므로 값에 따옴표를 덧붙이지 않는다.
+스크립트는 파라미터 누락·중복·공백만 있는 값·개행·널 문자, 비밀값 5개의 `SecureString` 여부, 해시·Outbox·JWT 키의 Base64 형식과 바이트 길이, 확인 정책 두 값의 String 유형·양의 정수·Java 숫자 범위, 허용 Origin의 String 유형·HTTPS 주소 형식을 검사한다. 검증 실패 시 기존 `.env.server`를 유지하고 배포를 중단한다. 성공 시에만 권한 `600`으로 교체하며 임시 파일은 정리한다. 생성되는 파일은 Compose의 `format: raw`로 전달하므로 값에 따옴표를 덧붙이지 않는다.
 
 [`.env.server.template`](../../infra/env/.env.server.template)은 다음 일반 설정을 관리한다. SMTP 제공자·계정의 실제 값과 비밀키는 템플릿에 넣지 않는다.
 
@@ -117,8 +119,13 @@ develop 병합은 자동 배포를 시작하므로 신규 두 String 등록과 E
 | SMTP 연결·읽기·쓰기 타임아웃 | 각각 5000ms |
 | SIGNUP·PASSWORD_RESET 인증번호 유효기간 | 각각 300초 |
 | 최소 발송 간격·발송 제한 | 60초, 최근 1시간 5회, 최근 24시간 20회 |
+| 로그인 Access·최대 세션 | 900초, 최초 로그인부터 28800초 |
+| 로그인 쿠키 | Secure=true, SameSite=None |
+| 이메일별 로그인 요청 제한 | 최근 집계 창 60초당 10회 |
 
 기간·발송 제한은 개발 서버의 팀 미확정 임시 정책이다. 팀 확정 시 템플릿과 프론트 안내를 함께 검토한다. SMTP 제공자가 587/STARTTLS 구성을 지원하는지도 확인한다. Outbox는 미처리 작업이 있는 상태의 키 교체를 지원하지 않으므로, 대기 작업이 모두 종료되고 암호문이 제거된 뒤 암호화 키와 키 ID를 함께 교체한다.
+
+env v3는 기존 서버·메일·확인 설정에 로그인 8개를 포함한 전체본이다. 이 중 로그인 키·허용 주소는 SSM, 나머지 6개는 템플릿에서 관리한다. #63의 환경파일 통합 전까지 이 방식을 유지하며 동일 변수를 양쪽에 정의하지 않는다.
 
 ### 환경변수 생성·바인딩 테스트
 
