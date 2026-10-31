@@ -11,7 +11,7 @@ export EXPECTED_COMMIT=0123456789abcdef0123456789abcdef01234567
 IMAGE="ghcr.io/sw-capstone/bareum-server@sha256:$(printf '%064d' 2)"
 OLD_IMAGE="sha256:$(printf '%064d' 1)"
 export OLD_IMAGE
-FILES=(docker-compose.yml nginx/default.conf scripts/deploy.sh scripts/prepare-server-env.sh
+FILES=(docker-compose.yml nginx/default.conf scripts/deploy.sh scripts/prepare-server-env.sh scripts/prepare-ai-env.sh
   env/.env.server.template scripts/reload-nginx-after-cert-renewal.sh)
 for file in "${FILES[@]}"; do
   mkdir -p "$FIXTURE_SOURCE/$(dirname -- "$file")"
@@ -60,6 +60,15 @@ SCRIPT
     ;;
 esac
 MOCK
+cat > "$WORK/bin/aws" <<'MOCK'
+#!/usr/bin/env bash
+set -euo pipefail
+[[ "$1" == ssm && "$2" == get-parameter ]]
+if [[ "$MODE" == ai-env-fail ]]; then echo fixture-secret >&2; exit 1; fi
+value=$'BAREUM_AI_INTERNAL_API_TOKEN=fixture-secret\nBAREUM_AI_S3_ALLOWED_HOST=fixture.invalid\nBAREUM_AI_S3_ALLOWED_KEY_PREFIX=reports/\n'
+if [[ "$MODE" == missing-ai-token ]]; then value=$'BAREUM_AI_S3_ALLOWED_HOST=fixture.invalid\nBAREUM_AI_S3_ALLOWED_KEY_PREFIX=reports/\n'; fi
+jq -n --arg value "$value" '{Parameter:{Name:"/bareum/dev/ai/env",Type:"SecureString",Value:$value}}'
+MOCK
 cat > "$WORK/bin/docker" <<'MOCK'
 #!/usr/bin/env bash
 set -Eeuo pipefail
@@ -73,6 +82,7 @@ case "$1" in
     [[ "$*" == *'/staged/infra/docker-compose.yml'* ]]
     [[ -z "${HTTP_PORT+x}" && -z "${HTTPS_PORT+x}" && -z "${RDS_CA_FILE+x}" ]]
     [[ "$SERVER_IMAGE" == ghcr.io/sw-capstone/bareum-server@sha256:* ]]
+    [[ -f "$AI_ENV_FILE" && "$AI_ENV_FILE" == */.preparing.*/ai.env ]]
     if [[ "$MODE" == bad-compose ]]; then echo fixture-secret >&2; exit 1; fi
     jq -n --arg root "$BAREUM_ROOT" --arg certs "$LETSENCRYPT_DIR" '
       {services:{server:{volumes:[{type:"bind",source:($root+"/infra/certs/rds-ca.pem"),target:"/etc/ssl/certs/rds-ca.pem"}]},ai:{},
@@ -106,7 +116,7 @@ case "$1" in
   *) exit 90 ;;
 esac
 MOCK
-chmod +x "$WORK/bin/curl" "$WORK/bin/docker"
+chmod +x "$WORK/bin/curl" "$WORK/bin/docker" "$WORK/bin/aws"
 
 setup_case() {
   export MODE="$1" CASE_ROOT="$WORK/$1"
@@ -157,12 +167,13 @@ assert_failure() {
 }
 
 if [[ "${TEST_REAL_VALIDATION:-0}" == 1 ]]; then
-  for mode in real-success bad-compose bad-nginx missing-cert; do
+  for mode in real-success bootstrap bad-compose bad-nginx missing-cert; do
     setup_case "$mode"
+    if [[ "$mode" == bootstrap ]]; then rm "$BAREUM_ROOT/infra/env/.env.ai"; fi
     if [[ "$mode" == missing-cert ]]; then rm "$LETSENCRYPT_DIR/live/api.bareum.site/fullchain.pem"; fi
     save_baseline
     run_case
-    if [[ "$mode" == real-success ]]; then
+    if [[ "$mode" == real-success || "$mode" == bootstrap ]]; then
       if [[ "$RESULT" != 0 ]]; then cat "$CASE_ROOT/output" >&2; exit 1; fi
     else
       assert_failure
@@ -181,7 +192,7 @@ release=$(sed -n 's/^Release prepared: //p' "$CASE_ROOT/output")
 [[ -s "$release/validation.txt" && ! -e "$release/compose.json" && ! -e "$release/nginx-check.log" ]]
 [[ "$(cat "$release/commit-sha")" == "$EXPECTED_COMMIT" && "$(cat "$release/server-image")" == "$IMAGE" ]]
 [[ "$(stat -c %a "$release")" == 700 && "$(stat -c %a "$release/backup/infra/env/.env.server")" == 600 ]]
-[[ "$(wc -l < "$CASE_ROOT/curl-calls")" == 6 ]]
+[[ "$(wc -l < "$CASE_ROOT/curl-calls")" == 7 ]]
 (cd "$release/staged/infra" && sha256sum --check --status ../../staged.sha256)
 for file in "${FILES[@]}"; do
   if [[ "$file" != docker-compose.yml ]]; then cmp "$FIXTURE_SOURCE/$file" "$release/staged/infra/$file"; fi
@@ -194,7 +205,8 @@ cmp "$BAREUM_ROOT/infra/env/.env.server" "$release/backup/infra/env/.env.server"
 grep -Fxq $'infra/scripts/deploy.sh\tpresent\t755' "$release/backup/files.tsv"
 grep -Fxq "$(printf 'server\tserver-container\t%s\ttrue' "$OLD_IMAGE")" "$release/backup/images.tsv"
 [[ "$(wc -l < "$release/backup/images.tsv")" == 3 ]]
-[[ ! -e "$release/backup/infra/env/.env.ai" && ! -e "$release/backup/live" ]]
+cmp "$BAREUM_ROOT/infra/env/.env.ai" "$release/backup/infra/env/.env.ai"
+[[ ! -e "$release/backup/live" && "$(stat -c %a "$release/ai.env")" == 600 ]]
 cp "$release/backup/images.tsv" "$CASE_ROOT/first-images"
 run_case
 [[ "$RESULT" == 0 ]]
@@ -202,6 +214,16 @@ second_release=$(sed -n 's/^Release prepared: //p' "$CASE_ROOT/output")
 [[ "$release" != "$second_release" ]]
 cmp "$CASE_ROOT/first-images" "$release/backup/images.tsv"
 printf 'PASS: pinned files, restricted backups, image state, unchanged live files and separate retries\n'
+
+setup_case bootstrap
+rm "$BAREUM_ROOT/infra/env/.env.ai"
+save_baseline
+run_case
+[[ "$RESULT" == 0 && ! -e "$BAREUM_ROOT/infra/env/.env.ai" ]]
+release=$(sed -n 's/^Release prepared: //p' "$CASE_ROOT/output")
+grep -Fxq $'infra/env/.env.ai\tmissing\t-' "$release/backup/files.tsv"
+grep -q '^BAREUM_AI_INTERNAL_API_TOKEN=' "$release/ai.env"
+printf 'PASS: absent AI environment generated for candidate Compose without changing live files\n'
 
 setup_case missing-optional
 rm "$BAREUM_ROOT/infra/env/.env.server.template" "$LETSENCRYPT_DIR/renewal-hooks/deploy/reload-nginx-after-cert-renewal.sh"
@@ -235,7 +257,7 @@ for mode in download-fail empty-file interrupted missing-env inspect-fail missin
   printf 'PASS: %s leaves live files intact and removes incomplete preparation\n' "$mode"
 done
 
-for mode in bad-shell bad-hook bad-template bad-compose missing-ca bad-nginx; do
+for mode in bad-shell bad-hook bad-template ai-env-fail missing-ai-token bad-compose missing-ca bad-nginx; do
   setup_case "$mode"
   if [[ "$mode" == missing-ca ]]; then rm "$BAREUM_ROOT/infra/certs/rds-ca.pem"; fi
   save_baseline

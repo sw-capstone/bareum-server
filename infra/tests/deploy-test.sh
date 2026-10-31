@@ -45,6 +45,7 @@ case "$1" in
     ;;
   inspect)
     case "$3" in
+      '{{json .Config.Env}}') printf '["BAREUM_AI_INTERNAL_API_TOKEN=old-fixture-value"]\n' ;;
       '{{.State.Running}}') echo true ;;
       *State.Running*)
         if [[ "$MODE" == unhealthy-baseline ]]; then echo 'true unhealthy'; else echo 'true healthy'; fi
@@ -62,6 +63,7 @@ case "$1" in
     shift
     case "$operation" in
       config)
+        [[ -f "${AI_ENV_FILE:-$CASE_ROOT/infra/env/.env.ai}" ]] || exit 1
         if [[ "$MODE" == config-fail && -f "$CASE_ROOT/prepared" ]]; then exit 1; fi
         if [[ "$*" == --environment ]]; then printf 'RDS_CA_FILE=%s\n' "$RESOLVED_CA_FILE"; fi
         ;;
@@ -107,8 +109,15 @@ case "$1" in
   *) exit 91 ;;
 esac
 MOCK
+cat > "$WORK/bin/aws" <<'MOCK'
+#!/usr/bin/env bash
+set -euo pipefail
+[[ "$1" == ssm && "$2" == get-parameter ]]
+touch "$CASE_ROOT/ai-prepared"
+[[ "$MODE" != ai-env-fail ]] || exit 1
+jq -n '{Parameter:{Name:"/bareum/dev/ai/env",Type:"SecureString",Value:"BAREUM_AI_INTERNAL_API_TOKEN=new-fixture-value\nBAREUM_AI_S3_ALLOWED_HOST=fixture.invalid\nBAREUM_AI_S3_ALLOWED_KEY_PREFIX=reports/\n"}}'
+MOCK
 chmod +x "$WORK/bin/"*
-ln -s "$WORK/bin/sleep" "$WORK/bin/aws"
 
 setup_case() {
   RELEASE_DIR=''
@@ -122,6 +131,7 @@ setup_case() {
   touch "$CASE_ROOT/infra/nginx/default.conf"
   touch "$CASE_ROOT/infra/docker-compose.yml" "$CASE_ROOT/infra/certs/rds-ca.pem" "$CASE_ROOT/infra/env/.env.server.template"
   cp "$SOURCE_DIR/scripts/deploy.sh" "$CASE_ROOT/infra/scripts/"
+  cp "$SOURCE_DIR/scripts/prepare-ai-env.sh" "$CASE_ROOT/infra/scripts/"
   cat > "$CASE_ROOT/infra/scripts/prepare-server-env.sh" <<'MOCK'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -133,10 +143,13 @@ MOCK
     'SERVER_IMAGE=ghcr.io/sw-capstone/bareum-server:old' \
     'AI_IMAGE=ghcr.io/sw-capstone/bareum-ai:old' \
     'SERVER_ENV_FILE=./env/.env.server' \
+    'AI_ENV_FILE=./env/.env.ai' \
     'RDS_CA_FILE=./certs/rds-ca.pem' > "$CASE_ROOT/infra/env/.env.deploy"
   printf '%s\n' 'DB_PASSWORD=old-fixture-value' > "$CASE_ROOT/infra/env/.env.server"
   cp "$CASE_ROOT/infra/env/.env.deploy" "$CASE_ROOT/original-deploy"
   cp "$CASE_ROOT/infra/env/.env.server" "$CASE_ROOT/original-server"
+  printf 'BAREUM_AI_INTERNAL_API_TOKEN=old-fixture-value\n' > "$CASE_ROOT/infra/env/.env.ai"
+  cp "$CASE_ROOT/infra/env/.env.ai" "$CASE_ROOT/original-ai"
   printf '%s\n' "$OLD_IMAGE" > "$CASE_ROOT/current-image"
   printf '%s\n' "$OLD_NGINX_IMAGE" > "$CASE_ROOT/current-nginx"
   : > "$CASE_ROOT/calls"
@@ -156,6 +169,41 @@ run_case() {
 }
 
 pass() { printf 'PASS: %s\n' "$1"; }
+for target in server ai; do
+  setup_case bootstrap "$target"
+  rm "$CASE_ROOT/infra/env/.env.ai"
+  run_case
+  if [[ "$RESULT" != 0 ]]; then
+    printf 'FAIL: %s deployment cannot bootstrap a missing AI environment\n' "$target" >&2
+    exit 1
+  fi
+  grep -q '^BAREUM_AI_INTERNAL_API_TOKEN=new-fixture-value$' "$CASE_ROOT/infra/env/.env.ai"
+  [[ "$(stat -c %a "$CASE_ROOT/infra/env/.env.ai")" == 600 ]]
+  pass "$target bootstraps AI environment before Compose validation"
+done
+
+for target in server ai; do
+  setup_case up-fail "$target"
+  rm "$CASE_ROOT/infra/env/.env.ai"
+  run_case
+  [[ "$RESULT" != 0 && ! -e "$CASE_ROOT/infra/env/.env.ai" ]]
+  [[ "$(cat "$CASE_ROOT/current-image")" == "$OLD_IMAGE" ]]
+  if [[ "$target" == ai ]]; then
+    grep -q "inspect --format {{json .Config.Env}}" "$CASE_ROOT/calls"
+  fi
+  [[ ! -e "$CASE_ROOT/infra/.deploy-state/pending" ]]
+  pass "$target rollback restores originally absent AI env state"
+done
+
+for target in server ai; do
+  setup_case ai-env-fail "$target"
+  rm "$CASE_ROOT/infra/env/.env.ai"
+  run_case
+  [[ "$RESULT" != 0 && ! -e "$CASE_ROOT/infra/env/.env.ai" ]]
+  if grep -q ' up -d ' "$CASE_ROOT/calls"; then exit 1; fi
+  pass "$target missing AI parameter leaves running containers and absent file intact"
+done
+
 for target in server ai; do
   setup_case success "$target"
   run_case
@@ -178,7 +226,7 @@ for target in server ai; do
   pass "$target success; other service preserved"
 done
 
-for mode in pull-fail prepare-fail config-fail unhealthy-baseline missing-nginx missing-compose missing-cert missing-template; do
+for mode in pull-fail prepare-fail ai-env-fail config-fail unhealthy-baseline missing-nginx missing-compose missing-cert missing-template; do
   setup_case "$mode"
   if [[ "$mode" == missing-cert ]]; then rm "$CASE_ROOT/infra/certs/rds-ca.pem"; fi
   if [[ "$mode" == missing-nginx ]]; then rm "$CASE_ROOT/infra/nginx/default.conf"; fi
@@ -188,6 +236,7 @@ for mode in pull-fail prepare-fail config-fail unhealthy-baseline missing-nginx 
   [[ "$RESULT" != 0 ]]
   cmp "$CASE_ROOT/original-deploy" "$CASE_ROOT/infra/env/.env.deploy"
   cmp "$CASE_ROOT/original-server" "$CASE_ROOT/infra/env/.env.server"
+  cmp "$CASE_ROOT/original-ai" "$CASE_ROOT/infra/env/.env.ai"
   if grep -q ' up -d ' "$CASE_ROOT/calls"; then exit 1; fi
   pass "$mode preserves files and running container"
 done
@@ -224,6 +273,7 @@ for mode in up-fail route-fail interrupted wrong-image hangup hangup-during-roll
   [[ "$RESULT" != 0 && "$(cat "$CASE_ROOT/current-image")" == "$OLD_IMAGE" ]]
   if [[ "$mode" == hangup* ]]; then [[ "$RESULT" == 129 ]]; fi
   cmp "$CASE_ROOT/original-server" "$CASE_ROOT/infra/env/.env.server"
+  cmp "$CASE_ROOT/original-ai" "$CASE_ROOT/infra/env/.env.ai"
   grep -q "^SERVER_IMAGE=$OLD_IMAGE$" "$CASE_ROOT/infra/env/.env.deploy"
   [[ ! -e "$CASE_ROOT/infra/.deploy-state/pending" ]]
   [[ "$(stat -c %a "$CASE_ROOT/infra/env/.env.server")" == 600 ]]
@@ -269,9 +319,9 @@ setup_release() {
   local file relative source mode
   RELEASE_DIR="$CASE_ROOT/infra/.deploy-state/releases/0123456789abcdef0123456789abcdef01234567-fixture"
   mkdir -p "$RELEASE_DIR/staged/infra" "$RELEASE_DIR/backup"
-  RELEASE_FILES=(docker-compose.yml nginx/default.conf scripts/deploy.sh scripts/prepare-server-env.sh
+  RELEASE_FILES=(docker-compose.yml nginx/default.conf scripts/deploy.sh scripts/prepare-server-env.sh scripts/prepare-ai-env.sh
     env/.env.server.template scripts/reload-nginx-after-cert-renewal.sh)
-  for file in "${RELEASE_FILES[@]}" env/.env.deploy env/.env.server; do
+  for file in "${RELEASE_FILES[@]}" env/.env.deploy env/.env.server env/.env.ai; do
     source="$CASE_ROOT/infra/$file"
     relative="infra/$file"
     if [[ "$file" == scripts/reload-nginx-after-cert-renewal.sh ]]; then
@@ -286,13 +336,15 @@ setup_release() {
     else
       printf '%s\tmissing\t-\n' "$relative" >> "$RELEASE_DIR/backup/files.tsv"
     fi
-    [[ "$file" != env/.env.deploy && "$file" != env/.env.server ]] || continue
+    [[ "$file" != env/.env.deploy && "$file" != env/.env.server && "$file" != env/.env.ai ]] || continue
     mkdir -p "$(dirname "$RELEASE_DIR/staged/infra/$file")"
     if [[ -f "$source" ]]; then cp "$source" "$RELEASE_DIR/staged/infra/$file"
     else cp "$SOURCE_DIR/$file" "$RELEASE_DIR/staged/infra/$file"; fi
     printf '\n# candidate fixture\n' >> "$RELEASE_DIR/staged/infra/$file"
   done
   (cd "$RELEASE_DIR/staged/infra" && sha256sum "${RELEASE_FILES[@]}") > "$RELEASE_DIR/staged.sha256"
+  bash "$SOURCE_DIR/scripts/prepare-ai-env.sh" "$RELEASE_DIR/ai.env" >/dev/null
+  (cd "$RELEASE_DIR" && sha256sum ai.env) > "$RELEASE_DIR/ai-env.sha256"
   printf 'server\tfixture-container\t%s\ttrue\nai\tai-container\t%s\ttrue\nnginx\tnginx-container\t%s\ttrue\n' \
     "$OLD_IMAGE" "$OLD_IMAGE" "$OLD_NGINX_IMAGE" > "$RELEASE_DIR/backup/images.tsv"
   printf '%s\n' validated > "$RELEASE_DIR/status"
@@ -319,12 +371,14 @@ for mode in release-success absent-template; do
   pass "$mode installs all files, then recreates server and nginx only"
 done
 
-for mode in stale-live tampered-release wrong-status stale-image wrong-image-request; do
+for mode in stale-live stale-ai-env tampered-release tampered-ai-env wrong-status stale-image wrong-image-request; do
   setup_case "$mode"
   setup_release
   case "$mode" in
     stale-live) echo changed >> "$CASE_ROOT/infra/nginx/default.conf" ;;
+    stale-ai-env) echo changed >> "$CASE_ROOT/infra/env/.env.ai" ;;
     tampered-release) echo changed >> "$RELEASE_DIR/staged/infra/nginx/default.conf" ;;
+    tampered-ai-env) echo changed >> "$RELEASE_DIR/ai.env" ;;
     wrong-status) echo applied > "$RELEASE_DIR/status" ;;
     stale-image) echo "$NEW_IMAGE" > "$CASE_ROOT/current-image" ;;
     wrong-image-request) echo different > "$RELEASE_DIR/server-image" ;;
@@ -343,6 +397,7 @@ for mode in install-fail prepare-fail up-fail nginx-fail route-fail rollback-fai
   run_case
   [[ "$RESULT" != 0 ]]
   cmp "$CASE_ROOT/original-server" "$CASE_ROOT/infra/env/.env.server"
+  cmp "$CASE_ROOT/original-ai" "$CASE_ROOT/infra/env/.env.ai"
   for file in "${RELEASE_FILES[@]}"; do
     if [[ "$file" == scripts/reload-nginx-after-cert-renewal.sh ]]; then
       [[ ! -e "$LETSENCRYPT_DIR/renewal-hooks/deploy/reload-nginx-after-cert-renewal.sh" ]]

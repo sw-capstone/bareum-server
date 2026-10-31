@@ -11,6 +11,9 @@ export OLD_TAG="$PROJECT:old" NEW_TAG="$PROJECT:new"
 export TARGET_TAG="$NEW_TAG" DOCKER_EVENTS="$WORK/docker-events"
 FAKE_DIGEST="ghcr.io/sw-capstone/bareum-server@sha256:$(printf '%064d' 99)"
 export FAKE_DIGEST
+FAKE_AI_DIGEST="ghcr.io/sw-capstone/bareum-ai@sha256:$(printf '%064d' 97)"
+export FAKE_AI_DIGEST
+export AI_ENV_VERSION=initial
 cleanup() {
   local result=$?
   trap - EXIT
@@ -42,14 +45,15 @@ openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj /CN=api.bareum.site \
   -out "$LETSENCRYPT_DIR/live/api.bareum.site/fullchain.pem" >/dev/null 2>&1
 cp "$LETSENCRYPT_DIR/live/api.bareum.site/fullchain.pem" "$BAREUM_ROOT/infra/certs/rds-ca.pem"
 cp "$SOURCE_DIR/nginx/default.conf" "$BAREUM_ROOT/infra/nginx/default.conf"
-cp "$SOURCE_DIR/scripts/"{deploy.sh,prepare-server-env.sh,reload-nginx-after-cert-renewal.sh} "$BAREUM_ROOT/infra/scripts/"
+cp "$SOURCE_DIR/scripts/"{deploy.sh,prepare-server-env.sh,prepare-ai-env.sh,reload-nginx-after-cert-renewal.sh} "$BAREUM_ROOT/infra/scripts/"
 cp "$SOURCE_DIR/env/.env.server.template" "$BAREUM_ROOT/infra/env/"
 printf 'DB_PASSWORD=integration-secret\n' > "$BAREUM_ROOT/infra/env/.env.server"
-printf 'AI_UNCHANGED=true\n' > "$BAREUM_ROOT/infra/env/.env.ai"
+printf 'BAREUM_AI_INTERNAL_API_TOKEN=old-integration-secret\n' > "$BAREUM_ROOT/infra/env/.env.ai"
 cat > "$BAREUM_ROOT/infra/env/.env.deploy" <<ENV
 SERVER_IMAGE=$OLD_TAG
 AI_IMAGE=$OLD_TAG
 SERVER_ENV_FILE=./env/.env.server
+AI_ENV_FILE=./env/.env.ai
 RDS_CA_FILE=./certs/rds-ca.pem
 ENV
 cat > "$BAREUM_ROOT/infra/docker-compose.yml" <<COMPOSE
@@ -75,7 +79,13 @@ services:
       retries: 30
   ai:
     image: \${AI_IMAGE:?}
-    env_file: ./env/.env.ai
+    env_file:
+      - path: \${AI_ENV_FILE:-./env/.env.ai}
+        format: raw
+    healthcheck:
+      test: [CMD, wget, -q, -O, /dev/null, "http://127.0.0.1:8000/health"]
+      interval: 1s
+      retries: 30
 COMPOSE
 cp -R "$BAREUM_ROOT/infra" "$WORK/candidate"
 printf '\n# candidate deployment\n' >> "$WORK/candidate/nginx/default.conf"
@@ -101,6 +111,7 @@ for ((i=0; i<${#args[@]}; i++)); do
   if [[ "${args[i]}" == bareum ]]; then args[i]="$PROJECT"; fi
   if [[ "${args[i]}" == label=com.docker.compose.project=bareum ]]; then args[i]="label=com.docker.compose.project=$PROJECT"; fi
   if [[ "${args[i]}" == "$FAKE_DIGEST" ]]; then args[i]="$TARGET_TAG"; fi
+  if [[ "${args[i]}" == "$FAKE_AI_DIGEST" ]]; then args[i]="$TARGET_TAG"; fi
 done
 if [[ "$1" == pull ]]; then
   "$REAL_DOCKER" image inspect "${args[1]}" >/dev/null
@@ -109,18 +120,31 @@ fi
 if [[ "$1" == compose ]]; then
   selected=$(awk -F= '$1 == "SERVER_IMAGE" {print $2}' "$BAREUM_ROOT/infra/env/.env.deploy")
   if [[ "${SERVER_IMAGE:-$selected}" == "$FAKE_DIGEST" ]]; then export SERVER_IMAGE="$TARGET_TAG"; fi
-  if [[ " $* " == *' up -d '* && ( "${!#}" == server || "${!#}" == nginx ) ]]; then
+  ai_selected=$(awk -F= '$1 == "AI_IMAGE" {print $2}' "$BAREUM_ROOT/infra/env/.env.deploy")
+  if [[ "${AI_IMAGE:-$ai_selected}" == "$FAKE_AI_DIGEST" ]]; then export AI_IMAGE="$TARGET_TAG"; fi
+  if [[ " $* " == *' up -d '* && ( "${!#}" == server || "${!#}" == nginx || "${!#}" == ai ) ]]; then
     "$REAL_DOCKER" "${args[@]}"
     service="${!#}"
     container=$("$REAL_DOCKER" ps -q --filter "label=com.docker.compose.project=$PROJECT" --filter "label=com.docker.compose.service=$service")
     image=$("$REAL_DOCKER" inspect --format '{{.Image}}' "$container")
     printf '%s\t%s\t%s\n' "$service" "$container" "$image" >> "$DOCKER_EVENTS"
+    if [[ "${AI_FAIL_ONCE:-0}" == 1 && "$service" == ai && ! -e "$DOCKER_EVENTS.ai-failed" ]]; then
+      touch "$DOCKER_EVENTS.ai-failed"
+      exit 1
+    fi
     exit 0
   fi
 fi
 exec "$REAL_DOCKER" "${args[@]}"
 WRAPPER
-printf '#!/bin/sh\nexit 0\n' > "$WORK/bin/aws"
+cat > "$WORK/bin/aws" <<'MOCK'
+#!/usr/bin/env bash
+set -euo pipefail
+[[ "$1" == ssm && "$2" == get-parameter ]]
+value="BAREUM_AI_INTERNAL_API_TOKEN=integration-secret-$AI_ENV_VERSION"$'\nBAREUM_AI_S3_ALLOWED_HOST=fixture.invalid\nBAREUM_AI_S3_ALLOWED_KEY_PREFIX=reports/\n'
+if [[ "$AI_ENV_VERSION" == missing-token ]]; then value=$'BAREUM_AI_S3_ALLOWED_HOST=fixture.invalid\nBAREUM_AI_S3_ALLOWED_KEY_PREFIX=reports/\n'; fi
+jq -n --arg value "$value" '{Parameter:{Name:"/bareum/dev/ai/env",Type:"SecureString",Value:$value}}'
+MOCK
 chmod +x "$WORK/bin/"*
 export PATH="$WORK/bin:$PATH"
 compose() {
@@ -131,6 +155,15 @@ compose up -d --wait --wait-timeout 60 >/dev/null
 server_before=$(compose ps -q server)
 nginx_before=$(compose ps -q nginx)
 ai_before=$(compose ps -q ai)
+rm "$BAREUM_ROOT/infra/env/.env.ai"
+AI_ENV_VERSION=missing-token
+result=0
+bash "$SOURCE_DIR/scripts/prepare-infra-release.sh" 0123456789abcdef0123456789abcdef01234567 "$FAKE_DIGEST" --apply > "$WORK/missing-token.log" 2>&1 || result=$?
+[[ "$result" != 0 && ! -e "$BAREUM_ROOT/infra/env/.env.ai" ]]
+[[ "$(docker ps --no-trunc -q --filter "label=com.docker.compose.project=$PROJECT" --filter label=com.docker.compose.service=server)" == "$server_before" ]]
+[[ "$(docker ps --no-trunc -q --filter "label=com.docker.compose.project=$PROJECT" --filter label=com.docker.compose.service=nginx)" == "$nginx_before" ]]
+printf 'PASS: missing required AI setting blocks release before changing real containers or creating a live env file.\n'
+AI_ENV_VERSION=initial
 bash "$SOURCE_DIR/scripts/prepare-infra-release.sh" 0123456789abcdef0123456789abcdef01234567 "$FAKE_DIGEST" --apply > "$WORK/prepared"
 release=$(sed -n 's/^Release prepared: //p' "$WORK/prepared")
 [[ "$(cat "$release/status")" == applied ]]
@@ -141,12 +174,14 @@ cmp "$CANDIDATE/nginx/default.conf" "$BAREUM_ROOT/infra/nginx/default.conf"
 cmp "$CANDIDATE/scripts/reload-nginx-after-cert-renewal.sh" "$LETSENCRYPT_DIR/renewal-hooks/deploy/reload-nginx-after-cert-renewal.sh"
 [[ "$(stat -c %a "$LETSENCRYPT_DIR/renewal-hooks/deploy/reload-nginx-after-cert-renewal.sh")" == 755 ]]
 [[ "$(compose exec -T nginx wget -q -O - http://127.0.0.1:8082/health)" == '{"status":"ok"}' ]]
-[[ "$(cat "$BAREUM_ROOT/infra/env/.env.ai")" == AI_UNCHANGED=true ]]
-printf 'PASS: real containers replaced for Server and Nginx; AI preserved; candidate configuration and hook installed.\n'
+grep -q '^BAREUM_AI_INTERNAL_API_TOKEN=integration-secret-initial$' "$BAREUM_ROOT/infra/env/.env.ai"
+[[ "$(stat -c %a "$BAREUM_ROOT/infra/env/.env.ai")" == 600 ]]
+[[ "$(compose exec -T ai printenv BAREUM_AI_INTERNAL_API_TOKEN)" == old-integration-secret ]]
+printf 'PASS: initially absent AI env generated before real Compose validation; Server/Nginx replaced; running AI preserved.\n'
 
 baseline="$WORK/rollback-baseline"
 mkdir -p "$baseline/infra"
-files=(docker-compose.yml nginx/default.conf scripts/deploy.sh scripts/prepare-server-env.sh env/.env.server.template)
+files=(docker-compose.yml nginx/default.conf scripts/deploy.sh scripts/prepare-server-env.sh scripts/prepare-ai-env.sh env/.env.server.template)
 for file in "${files[@]}" env/.env.server env/.env.ai; do
   mkdir -p "$(dirname "$baseline/infra/$file")"
   cp -p "$BAREUM_ROOT/infra/$file" "$baseline/infra/$file"
@@ -158,6 +193,7 @@ nginx_image_before=$(docker inspect --format '{{.Image}}' "$(compose ps -q nginx
 find "$LETSENCRYPT_DIR/live" "$BAREUM_ROOT/infra/certs" -type f -print0 | sort -z | xargs -0 sha256sum > "$baseline/certificates.sha256"
 
 TARGET_TAG="$OLD_TAG"
+AI_ENV_VERSION=rollback-candidate
 FAKE_DIGEST="ghcr.io/sw-capstone/bareum-server@sha256:$(printf '%064d' 98)"
 awk -v image="$OLD_TAG" '{sub("image: nginx:1.30-alpine", "image: " image); print}' \
   "$CANDIDATE/docker-compose.yml" > "$WORK/failing-compose.yml"
@@ -197,3 +233,24 @@ cmp "$baseline/hook.sh" "$LETSENCRYPT_DIR/renewal-hooks/deploy/reload-nginx-afte
 sha256sum --check --status "$baseline/certificates.sha256"
 [[ "$(compose exec -T nginx wget -q -O - http://127.0.0.1:8082/health)" == '{"status":"ok"}' ]]
 printf 'PASS: real post-deployment failure restored Server/Nginx images, configuration, environment, hook and health response; AI and certificates preserved.\n'
+
+TARGET_TAG="$NEW_TAG"
+AI_ENV_VERSION=ai-deploy
+bash "$BAREUM_ROOT/infra/scripts/deploy.sh" ai "$FAKE_AI_DIGEST" > "$WORK/ai-deploy.log"
+ai_before=$(compose ps -q ai)
+[[ "$(compose exec -T ai printenv BAREUM_AI_INTERNAL_API_TOKEN)" == integration-secret-ai-deploy ]]
+printf 'PASS: AI deployment injects the generated env file into a real container.\n'
+
+rm "$BAREUM_ROOT/infra/env/.env.ai"
+TARGET_TAG="$OLD_TAG"
+AI_ENV_VERSION=ai-rollback-candidate
+export AI_FAIL_ONCE=1
+result=0
+bash "$BAREUM_ROOT/infra/scripts/deploy.sh" ai "$FAKE_AI_DIGEST" > "$WORK/ai-rollback.log" 2>&1 || result=$?
+[[ "$result" != 0 && ! -e "$BAREUM_ROOT/infra/env/.env.ai" ]]
+ai_after=$(docker ps -q --filter "label=com.docker.compose.project=$PROJECT" --filter label=com.docker.compose.service=ai)
+[[ -n "$ai_after" && "$ai_after" != "$ai_before" ]]
+[[ "$(docker exec "$ai_after" printenv BAREUM_AI_INTERNAL_API_TOKEN)" == integration-secret-ai-deploy ]]
+[[ "$(docker inspect --format '{{.Image}}' "$ai_after")" == "$(docker image inspect --format '{{.Id}}' "$NEW_TAG")" ]]
+grep -q 'Rollback completed.' "$WORK/ai-rollback.log"
+printf 'PASS: AI rollback restores the running container environment and original missing-file state.\n'

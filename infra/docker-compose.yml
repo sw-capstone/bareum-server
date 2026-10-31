@@ -72,11 +72,8 @@ services:
     init: true
     logging: *logging
     stop_grace_period: 45s
-    # 현재 AI 앱은 환경변수 없이 실행된다.
-    # API 키 등이 필요해지면 EC2에서 infra/env/.env.ai를 준비한다.
     env_file:
       - path: ${AI_ENV_FILE:-./env/.env.ai}
-        required: false
         format: raw
     healthcheck:
       test: ["CMD", "curl", "--fail", "--silent", "--show-error", "--max-time", "3", "--output", "/dev/null", "http://127.0.0.1:8000/health"]

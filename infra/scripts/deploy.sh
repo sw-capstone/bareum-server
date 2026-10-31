@@ -32,6 +32,9 @@ configure_paths() {
   HOOK_DIR="${LETSENCRYPT_DIR:-/etc/letsencrypt}/renewal-hooks/deploy"
   DEPLOY_ENV="$INFRA_DIR/env/.env.deploy"
   SERVER_ENV="$INFRA_DIR/env/.env.server"
+  AI_ENV="$INFRA_DIR/env/.env.ai"
+  AI_WORK=''
+  COMPOSE_AI_ENV=''
   STATE_DIR="$INFRA_DIR/.deploy-state"
   PENDING="$STATE_DIR/pending"
   WAIT_TIMEOUT="${DEPLOY_WAIT_TIMEOUT:-180}"
@@ -39,6 +42,8 @@ configure_paths() {
   INFRA_APPLIED=0
   NGINX_APPLIED=0
   COMPOSE_OVERRIDE=''
+  CHANGED=0
+  APPLIED=0
 }
 
 acquire_deployment_lock() {
@@ -57,6 +62,7 @@ acquire_deployment_lock() {
 compose() (
   unset SERVER_IMAGE AI_IMAGE SERVER_ENV_FILE AI_ENV_FILE RDS_CA_FILE
   unset HTTP_BIND_IP HTTP_PORT HTTPS_PORT COMPOSE_FILE COMPOSE_PROJECT_NAME COMPOSE_PROFILES COMPOSE_ENV_FILES
+  if [[ -n "$COMPOSE_AI_ENV" ]]; then export AI_ENV_FILE="$COMPOSE_AI_ENV"; fi
   local extra=()
   if [[ -n "$COMPOSE_OVERRIDE" ]]; then extra=(-f "$COMPOSE_OVERRIDE"); fi
   docker compose --project-name bareum --project-directory "$INFRA_DIR" \
@@ -65,7 +71,7 @@ compose() (
 
 release_target() {
   case "$1" in
-    docker-compose.yml|nginx/default.conf|scripts/deploy.sh|scripts/prepare-server-env.sh|env/.env.server.template)
+    docker-compose.yml|nginx/default.conf|scripts/deploy.sh|scripts/prepare-server-env.sh|scripts/prepare-ai-env.sh|env/.env.server.template)
       printf '%s/%s\n' "$INFRA_DIR" "$1" ;;
     scripts/reload-nginx-after-cert-renewal.sh) printf '%s/reload-nginx-after-cert-renewal.sh\n' "$HOOK_DIR" ;;
     *) return 1 ;;
@@ -81,11 +87,15 @@ check_release() {
   [[ "${RELEASE_DIR#"$STATE_DIR/releases/"}" =~ ^[a-f0-9]{40}-[a-zA-Z0-9]+$ ]] || fail 'Invalid release directory name.'
   [[ "$(cat "$RELEASE_DIR/status")" == validated ]] || fail 'Release has not passed validation or has already been used.'
   [[ "$(cat "$RELEASE_DIR/server-image")" == "$IMAGE" ]] || fail 'Release image does not match the requested image.'
-  RELEASE_FILES=(docker-compose.yml nginx/default.conf scripts/deploy.sh scripts/prepare-server-env.sh
+  RELEASE_FILES=(docker-compose.yml nginx/default.conf scripts/deploy.sh scripts/prepare-server-env.sh scripts/prepare-ai-env.sh
     env/.env.server.template scripts/reload-nginx-after-cert-renewal.sh)
   cmp -s "$RELEASE_DIR/staged.sha256" <(cd "$RELEASE_DIR/staged/infra" && sha256sum "${RELEASE_FILES[@]}") \
     || fail 'Release files changed after validation.'
-  for file in "${RELEASE_FILES[@]}" env/.env.deploy env/.env.server; do
+  [[ -f "$RELEASE_DIR/ai.env" && ! -L "$RELEASE_DIR/ai.env" ]] \
+    || fail 'Validated AI environment is missing.'
+  cmp -s "$RELEASE_DIR/ai-env.sha256" <(cd "$RELEASE_DIR" && sha256sum ai.env) \
+    || fail 'AI environment changed after validation.'
+  for file in "${RELEASE_FILES[@]}" env/.env.deploy env/.env.server env/.env.ai; do
     relative="infra/$file"
     if [[ "$file" == scripts/reload-nginx-after-cert-renewal.sh ]]; then relative=certbot/reload-nginx-after-cert-renewal.sh; fi
     target="$INFRA_DIR/$file"
@@ -115,6 +125,24 @@ check_release() {
   docker image inspect "$OLD_NGINX_IMAGE" >/dev/null
   NGINX_IMAGE=$(cat "$RELEASE_DIR/nginx-image")
   [[ -n "$NGINX_IMAGE" ]] || fail 'Validated Nginx image is missing.'
+}
+
+prepare_ai_environment() {
+  [[ ! -L "$AI_ENV" && ( ! -e "$AI_ENV" || -f "$AI_ENV" ) ]] \
+    || fail 'Existing .env.ai must be a regular file, not a symlink.'
+  awk -F= '
+    $1 == "AI_ENV_FILE" { count++; if (substr($0, index($0, "=")+1) != "./env/.env.ai") exit 1 }
+    END { if (count > 1) exit 1 }
+  ' "$DEPLOY_ENV" || fail 'AI_ENV_FILE must be ./env/.env.ai or omitted.'
+  if [[ -n "$RELEASE_DIR" ]]; then
+    AI_CANDIDATE="$RELEASE_DIR/ai.env"
+  else
+    [[ -f "$SCRIPT_DIR/prepare-ai-env.sh" ]] || fail 'AI environment preparation script is missing.'
+    AI_WORK=$(mktemp -d "$STATE_DIR/.ai-env.XXXXXX")
+    AI_CANDIDATE="$AI_WORK/ai.env"
+    bash "$SCRIPT_DIR/prepare-ai-env.sh" "$AI_CANDIDATE"
+  fi
+  COMPOSE_AI_ENV="$AI_CANDIDATE"
 }
 
 atomic_install() {
@@ -225,6 +253,24 @@ save_recovery_files() {
   mkdir -- "$PENDING"
   cp -- "$DEPLOY_ENV" "$PENDING/deploy.env"
   if [[ "$SERVICE" == server ]]; then cp -- "$SERVER_ENV" "$PENDING/server.env"; fi
+  cp -- "$AI_CANDIDATE" "$PENDING/ai.next.env"
+  if [[ -f "$AI_ENV" ]]; then
+    cp -- "$AI_ENV" "$PENDING/ai.env"
+  else
+    touch "$PENDING/ai-env-missing"
+    if [[ "$SERVICE" == ai ]]; then
+      docker inspect --format '{{json .Config.Env}}' "$OLD_CONTAINER" > "$PENDING/ai-container-env.json"
+      jq -e 'type == "array" and all(.[]; type == "string" and
+        test("^[A-Za-z_][A-Za-z0-9_]*=") and (test("[\r\n\u0000]") | not))' \
+        "$PENDING/ai-container-env.json" >/dev/null 2>&1 \
+        || fail 'Cannot safely back up the running AI environment.'
+      jq -r '.[]' "$PENDING/ai-container-env.json" > "$PENDING/ai.rollback.env"
+    else
+      cp -- "$AI_CANDIDATE" "$PENDING/ai.rollback.env"
+    fi
+  fi
+  AI_CANDIDATE="$PENDING/ai.next.env"
+  COMPOSE_AI_ENV="$AI_CANDIDATE"
   printf '%s\n' "$SERVICE" > "$PENDING/service"
   printf '%s\n' "$OLD_IMAGE" > "$PENDING/image-id"
   if [[ -n "$RELEASE_DIR" ]]; then
@@ -247,6 +293,14 @@ rollback() {
   if [[ "$SERVICE" == server ]]; then
     cp -- "$PENDING/server.env" "$PENDING/server.restore" && \
       mv -f -- "$PENDING/server.restore" "$SERVER_ENV" || restored=0
+  fi
+  COMPOSE_AI_ENV=''
+  if [[ -f "$PENDING/ai-env-missing" ]]; then
+    rm -f -- "$AI_ENV" || restored=0
+    COMPOSE_AI_ENV="$PENDING/ai.rollback.env"
+  else
+    cp -- "$PENDING/ai.env" "$PENDING/ai.restore" && \
+      mv -f -- "$PENDING/ai.restore" "$AI_ENV" || restored=0
   fi
   if (( APPLIED == 1 )); then
     replace_image "$PENDING/deploy.env" "$PENDING/deploy.restore" "$OLD_IMAGE" || restored=0
@@ -286,6 +340,7 @@ finish() {
     if ! rollback; then
       if [[ -n "$RELEASE_DIR" ]]; then printf '%s\n' recovery-required > "$RELEASE_DIR/status"; fi
       printf 'Rollback failed. Recovery files retained at: %s\n' "$PENDING" >&2
+      if [[ -n "$AI_WORK" ]]; then rm -rf -- "$AI_WORK"; fi
       exit 2
     fi
     printf 'Rollback completed. Deployment exits with a failure status.\n' >&2
@@ -295,6 +350,7 @@ finish() {
     else printf '%s\n' failed > "$RELEASE_DIR/status"; fi
   fi
   rm -rf -- "$PENDING"
+  if [[ -n "$AI_WORK" ]]; then rm -rf -- "$AI_WORK"; fi
   exit "$result"
 }
 register_cleanup() {
@@ -307,6 +363,8 @@ register_cleanup() {
 deploy_service() {
   CHANGED=1
   if [[ "$SERVICE" == server ]]; then bash "$SCRIPT_DIR/prepare-server-env.sh"; fi
+  atomic_install "$AI_CANDIDATE" "$AI_ENV" 600
+  COMPOSE_AI_ENV=''
   replace_image "$PENDING/deploy.env" "$PENDING/deploy.next" "$IMAGE"
   mv -f -- "$PENDING/deploy.next" "$DEPLOY_ENV"
   compose config --quiet
@@ -341,11 +399,12 @@ main() {
   configure_paths
   acquire_deployment_lock
   check_release
+  register_cleanup
+  prepare_ai_environment
   check_configuration
   check_current_service
   pull_image
   save_recovery_files
-  register_cleanup
   install_release
   deploy_service
   verify_deployment
