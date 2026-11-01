@@ -1,5 +1,5 @@
 {
-  "version": "1.4.0",
+  "version": "1.4.1",
   "required_paths": [
     "README.md",
     ".gitignore",
@@ -13,7 +13,7 @@
     "docs/architecture/README.md",
     "docs/architecture/repository-boundaries.md",
     "docs/architecture/repository-structure.md",
-    ".github/workflows/harness.yml",
+    ".github/workflows/ci.yml",
     "harness/requirements.txt",
     "harness/src/project_harness/checks.py",
     "harness/src/project_harness/cli.py",

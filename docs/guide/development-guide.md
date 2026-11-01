@@ -333,7 +333,7 @@ cd bareum-server
   - Git 이력을 검사한다. 명시된 인증정보 형식은 차단하고 일반 비밀번호·키 후보는 경고로 남긴다. 로컬 실행과 분류 기준은 [하네스 안내](../../harness/README.md)를 따른다.
 - 제품 구현 요약 문서 기준 — 실행 중
   - `docs/product/service-spec.md`에 정책이 요구하는 구성이 있는지 확인한다. 문서 내용의 정확성은 판정하지 않는다.
-백엔드·AI 동작, 계약 호환성, 근거·상태 보존 등 안전 불변식, 평가 데이터·성능 회귀 검사는 관련 구현과 자산이 준비된 뒤 각 저장소에 추가한다. 서버의 Spring Boot 코드는 `src/main/`, `src/test/`에 있으며 Java 25와 백엔드에서 정한 로컬 DB 연결 환경에서 `./gradlew test`로 검증할 수 있다. PR CI는 PostgreSQL 18 테스트 DB를 준비하고 `./gradlew --no-daemon check bootJar`로 포맷 검사·테스트·JAR 빌드를 실행한다. 하네스는 별도 워크플로에서 검사한다.
+백엔드·AI 동작, 계약 호환성, 근거·상태 보존 등 안전 불변식, 평가 데이터·성능 회귀 검사는 관련 구현과 자산이 준비된 뒤 각 저장소에 추가한다. 서버의 Spring Boot 코드는 `src/main/`, `src/test/`에 있으며 Java 25와 백엔드에서 정한 로컬 DB 연결 환경에서 `./gradlew test`로 검증할 수 있다. PR CI는 PostgreSQL 18 테스트 DB를 준비하고 `./gradlew --no-daemon check bootJar`로 포맷 검사·테스트·JAR 빌드를 실행한다. 하네스와 Gitleaks는 같은 CI 워크플로의 별도 job에서 검사한다.
 
 `test-harness.sh`는 하네스 검사기의 자체 회귀 테스트를 실행한다. 서버 제품 코드는 `./gradlew test`로 별도 검증한다.
 
@@ -508,10 +508,16 @@ CI / Bareum Server CI
 │   └── test
 └── Docker 이미지·배포 구성 검사
 
-Server checks / harness
+CI / harness
 ├── ./scripts/run-harness.sh check
 └── ./scripts/test-harness.sh
+
+CI / secret-scan
+├── Gitleaks 연동 테스트
+└── Git 이력 검사
 ```
+
+통합 CI는 `main` 또는 `develop`을 대상으로 하는 PR에서 실행한다. 작업 브랜치 push만으로는 CI를 실행하지 않으며, 해당 PR의 브랜치에 push하면 PR 이벤트로 한 번 실행한다. `develop` push에서는 배포 워크플로가 같은 CI를 호출하고, 모든 job이 성공한 뒤 이미지 게시와 배포를 진행한다. CI만 수동 실행하면 전체 검증을 수행하며, 수동 재배포는 `Deploy development`에서 `develop`을 선택해 실행한다.
 
 Gradle 테스트를 로컬에서 실행할 때는 백엔드 담당자가 정한 DB 연결 환경을 갖춘다. `spotlessCheck`와 `spotlessApply`는 DB 없이 실행할 수 있다.
 

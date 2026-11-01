@@ -41,7 +41,7 @@ AI 하네스는 필수 경로·JSON·문서 링크·비밀정보 의심 패턴�
 | `harness/tests/test_checks.py` | 하네스 검사기 자체 회귀 테스트 |
 | `scripts/run-harness.sh` | 로컬·CI 공통 검사 진입점 |
 | `scripts/test-harness.sh` | 하네스 자체 테스트 진입점 |
-| `.github/workflows/harness.yml` | Push·Pull Request 자동 실행 |
+| `.github/workflows/ci.yml` | PR, 수동 실행과 배포 워크플로 호출에서 통합 CI 실행 |
 | `docs/harness/harness-v1.4.md` | 현재 하네스 구조와 검사 범위 |
 
 ## 3. 작업별 적용 기준
