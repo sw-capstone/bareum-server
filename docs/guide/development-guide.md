@@ -519,6 +519,23 @@ CI / secret-scan
 
 통합 CI는 `main` 또는 `develop`을 대상으로 하는 PR에서 실행한다. 작업 브랜치 push만으로는 CI를 실행하지 않으며, 해당 PR의 브랜치에 push하면 PR 이벤트로 한 번 실행한다. `develop` push에서는 배포 워크플로가 같은 CI를 호출하고, 모든 job이 성공한 뒤 이미지 게시와 배포를 진행한다. CI만 수동 실행하면 전체 검증을 수행하며, 수동 재배포는 `Deploy development`에서 `develop`을 선택해 실행한다.
 
+하네스, Gitleaks, workflow와 shell 정적 검사, 변경 범위 선택 테스트는 항상 실행한다. `.github/scripts/select-ci-checks.sh`는 Java, 실제 서버 이미지와 배포 스크립트 모의 테스트를 실행할지 `server`로 출력한다. 실제 Docker를 사용하는 인프라 통합 테스트 두 개의 실행 여부는 `infra`로 따로 출력해 기존 실행 조건을 유지한다.
+
+| 변경 범위와 실행 방식 | 일반 서버 검사 (`server`) | 인프라 통합 테스트 두 개 (`infra`) |
+| --- | --- | --- |
+| 등록된 문서 경로만 변경한 PR 또는 push | 생략 | 생략 |
+| 그 외 변경을 포함한 PR | 실행 | 인프라 관련 경로 변경 시 실행 |
+| 그 외 변경을 포함한 develop push | 실행 | 실행 |
+| 수동 실행 또는 변경 범위 판별 실패 | 실행 | 실행 |
+
+문서 경로는 `README.md`, `AGENTS.md`, `docs/**/*.md`, `.github/pull_request_template.md`, `harness/README.md`, `harness/AGENTS.md`다. 이 목록에 없는 경로는 `.md`여도 일반 서버 검사를 실행한다. 새 문서 경로에서 검사를 줄이려면 문서 전용 경로 목록과 회귀 테스트를 함께 추가한다.
+
+PR에서 두 인프라 통합 테스트를 실행하는 경로는 기존과 같이 `infra/**`, `.github/workflows/**`, `.github/scripts/**`, `.github/tests/**`, `Dockerfile`, `.dockerignore`다. 두 테스트는 Compose와 Nginx 설정의 실제 검증, 배포 구성 적용과 복구를 확인한다. Java 코드만 변경한 PR에서는 두 테스트를 생략하지만, 실제 서버 이미지를 DB와 Nginx와 함께 기동하는 검사는 계속 실행한다.
+
+PR은 대상 브랜치의 기준 SHA와 검사하는 병합 커밋 SHA를 비교하고, push는 이벤트의 `before` SHA와 현재 SHA를 비교한다. 파일 이름 변경은 기존 경로의 삭제와 새 경로의 추가로 처리한다. SHA가 없거나 커밋 또는 변경 파일을 읽지 못하면 전체 검사를 실행하며, 수동 실행도 전체 검사를 수행한다.
+
+변경 범위 선택의 회귀 테스트는 `bash .github/tests/select-ci-checks-test.sh`로 실행한다. 이미지 게시와 배포 여부를 변경 범위에 연결하는 작업은 별도 단계이며, 현재 배포 워크플로는 검증 성공 후 게시와 배포를 계속 진행한다.
+
 Gradle 테스트를 로컬에서 실행할 때는 백엔드 담당자가 정한 DB 연결 환경을 갖춘다. `spotlessCheck`와 `spotlessApply`는 DB 없이 실행할 수 있다.
 
 웹:
