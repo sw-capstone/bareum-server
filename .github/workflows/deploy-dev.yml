@@ -20,7 +20,10 @@ jobs:
 
   publish:
     needs: validate
-    if: github.ref == 'refs/heads/develop'
+    if: >-
+      github.ref == 'refs/heads/develop' &&
+      needs.validate.result == 'success' &&
+      needs.validate.outputs.deploy_required == 'true'
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 40
     permissions:

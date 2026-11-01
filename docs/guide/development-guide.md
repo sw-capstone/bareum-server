@@ -513,7 +513,7 @@ CI
 └── Bareum Server CI: 선택한 검사 결과의 최종 집계
 ```
 
-통합 CI는 `main` 또는 `develop`을 대상으로 하는 PR에서 실행한다. 작업 브랜치 push만으로는 CI를 실행하지 않으며, 해당 PR의 브랜치에 push하면 PR 이벤트로 한 번 실행한다. `develop` push에서는 배포 워크플로가 같은 CI를 호출하고, 모든 job이 성공한 뒤 이미지 게시와 배포를 진행한다. CI만 수동 실행하면 전체 검증을 수행하며, 수동 재배포는 `Deploy development`에서 `develop`을 선택해 실행한다.
+통합 CI는 `main` 또는 `develop`을 대상으로 하는 PR에서 실행한다. 작업 브랜치 push만으로는 CI를 실행하지 않으며, 해당 PR의 브랜치에 push하면 PR 이벤트로 한 번 실행한다. `develop` push에서는 배포 워크플로가 같은 CI를 호출하고, 선택된 검사가 모두 성공한 뒤 문서 외 변경이 있을 때 이미지 게시와 배포를 진행한다. 등록된 문서 경로만 변경한 push는 공통 검사 후 게시와 배포를 생략한다. CI만 수동 실행하면 전체 검증을 수행하며, 수동 재배포는 `Deploy development`에서 `develop`을 선택해 실행한다.
 
 정적 검사, 하네스와 Gitleaks는 서로 독립적인 job으로 바로 실행한다. Java, 이미지, 배포 모의 테스트와 인프라 통합 테스트는 변경 범위 판별 결과만 기다린 뒤 필요한 job을 병렬로 실행한다. 한 검사에서 실패해도 다른 독립 job은 계속 실행한다. 두 인프라 matrix는 `fail-fast: false`로 설정해 한 항목의 실패 때문에 나머지 항목을 취소하지 않는다.
 
@@ -536,7 +536,7 @@ PR에서 두 인프라 통합 테스트를 실행하는 경로는 기존과 같�
 
 PR은 대상 브랜치의 기준 SHA와 검사하는 병합 커밋 SHA를 비교하고, push는 이벤트의 `before` SHA와 현재 SHA를 비교한다. 파일 이름 변경은 기존 경로의 삭제와 새 경로의 추가로 처리한다. SHA가 없거나 커밋 또는 변경 파일을 읽지 못하면 전체 검사를 실행하며, 수동 실행도 전체 검사를 수행한다.
 
-변경 범위 선택의 회귀 테스트는 `bash .github/tests/select-ci-checks-test.sh`, 최종 결과 집계 테스트는 `bash .github/tests/check-ci-results-test.sh`로 실행한다. 두 테스트는 정적 검사 job에서도 실행한다. 이미지 게시와 배포 여부를 변경 범위에 연결하는 작업은 별도 단계이며, 현재 배포 워크플로는 검증 성공 후 게시와 배포를 계속 진행한다.
+변경 범위 선택의 회귀 테스트는 `bash .github/tests/select-ci-checks-test.sh`, 최종 결과 집계 테스트는 `bash .github/tests/check-ci-results-test.sh`로 실행한다. 두 테스트는 정적 검사 job에서도 실행한다. 재사용 CI는 `server` 판별 결과를 `deploy_required` 출력으로 전달한다. 배포 워크플로는 CI 성공과 `deploy_required=true`를 확인한 뒤 이미지를 게시하며, 게시가 생략되면 배포도 생략한다. 수동 재배포는 전체 검증 후 진행한다.
 
 Gradle 테스트를 로컬에서 실행할 때는 백엔드 담당자가 정한 DB 연결 환경을 갖춘다. `spotlessCheck`와 `spotlessApply`는 DB 없이 실행할 수 있다.
 
