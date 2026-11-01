@@ -14,8 +14,45 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  validate:
-    name: Bareum Server CI
+  changes:
+    name: Select checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      server: ${{ steps.checks.outputs.server }}
+      infra: ${{ steps.checks.outputs.infra }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Select checks for changed files
+        id: checks
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.sha }}
+        run: bash .github/scripts/select-ci-checks.sh >> "$GITHUB_OUTPUT"
+
+  static:
+    name: Workflow and shell checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Validate workflow and shell syntax
+        run: bash .github/scripts/check-ci.sh
+      - name: Test CI check selection
+        run: bash .github/tests/select-ci-checks-test.sh
+      - name: Test CI result aggregation
+        run: bash .github/tests/check-ci-results-test.sh
+
+  java:
+    name: Java checks
+    needs: changes
+    if: needs.changes.outputs.server == 'true'
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 60
     services:
@@ -39,60 +76,31 @@ jobs:
       # 테스트 전용 키이며 운영 키를 사용하지 않습니다.
       EMAIL_VERIFICATION_HASH_SECRET: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
     steps:
-      - name: Checkout source
-        uses: actions/checkout@v7
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
-          fetch-depth: 0
-      - name: Select checks for changed files
-        id: checks
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
-          HEAD_SHA: ${{ github.sha }}
-        run: bash .github/scripts/select-ci-checks.sh >> "$GITHUB_OUTPUT"
-      - name: Validate workflow and shell syntax
-        run: bash .github/scripts/check-ci.sh
-      - name: Test CI check selection
-        run: bash .github/tests/select-ci-checks-test.sh
-      - name: Test SSM deployment requests
-        if: steps.checks.outputs.server == 'true'
-        run: bash .github/tests/deploy-via-ssm-test.sh
-      - name: Test server environment generation
-        if: steps.checks.outputs.server == 'true'
-        run: bash infra/tests/prepare-server-env-test.sh
-      - name: Test AI environment generation
-        if: steps.checks.outputs.server == 'true'
-        run: bash infra/tests/prepare-ai-env-test.sh
       - name: Set up JDK 25
-        if: steps.checks.outputs.server == 'true'
         uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: "25"
           cache: gradle
-      - name: Test deployment and rollback
-        if: steps.checks.outputs.server == 'true'
-        run: bash infra/tests/deploy-test.sh
-      - name: Test infrastructure release preparation
-        if: steps.checks.outputs.server == 'true'
-        run: bash infra/tests/prepare-infra-release-test.sh
-      - name: Test candidate Compose and Nginx configuration
-        if: steps.checks.outputs.infra == 'true'
-        env:
-          TEST_REAL_VALIDATION: "1"
-        run: bash infra/tests/prepare-infra-release-test.sh
-      - name: Test infrastructure release application
-        if: steps.checks.outputs.infra == 'true'
-        run: bash infra/tests/apply-infra-release-integration-test.sh
       - name: Validate and build boot JAR
-        if: steps.checks.outputs.server == 'true'
         run: ./gradlew --no-daemon check bootJar
+
+  image:
+    name: ARM64 image checks
+    needs: changes
+    if: needs.changes.outputs.server == 'true'
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - name: Set up Docker Buildx
-        if: steps.checks.outputs.server == 'true'
         uses: docker/setup-buildx-action@v4
       - name: Build ARM64 image without publishing
-        if: steps.checks.outputs.server == 'true'
         uses: docker/build-push-action@v7
         with:
           context: .
@@ -103,10 +111,64 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
       - name: Test image and Compose routes
-        if: steps.checks.outputs.server == 'true'
         env:
           SMOKE_IMAGE: bareum-server:pr-smoke
         run: bash .github/scripts/smoke-image.sh
+
+  infra-unit:
+    name: Deployment tests (${{ matrix.name }})
+    needs: changes
+    if: needs.changes.outputs.server == 'true'
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: SSM requests
+            script: .github/tests/deploy-via-ssm-test.sh
+          - name: Server environment
+            script: infra/tests/prepare-server-env-test.sh
+          - name: AI environment
+            script: infra/tests/prepare-ai-env-test.sh
+          - name: Deployment and rollback
+            script: infra/tests/deploy-test.sh
+          - name: Release preparation
+            script: infra/tests/prepare-infra-release-test.sh
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Run deployment test
+        env:
+          TEST_SCRIPT: ${{ matrix.script }}
+        run: bash "$TEST_SCRIPT"
+
+  infra-integration:
+    name: Infrastructure integration (${{ matrix.name }})
+    needs: changes
+    if: needs.changes.outputs.infra == 'true'
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Compose and Nginx
+            script: infra/tests/prepare-infra-release-test.sh
+            real_validation: "1"
+          - name: Release application and rollback
+            script: infra/tests/apply-infra-release-integration-test.sh
+            real_validation: "0"
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Run infrastructure integration test
+        env:
+          TEST_SCRIPT: ${{ matrix.script }}
+          TEST_REAL_VALIDATION: ${{ matrix.real_validation }}
+        run: bash "$TEST_SCRIPT"
 
   secret-scan:
     runs-on: ubuntu-latest
@@ -167,3 +229,18 @@ jobs:
           name: harness-report
           path: harness/reports/report.json
           if-no-files-found: warn
+
+  validate:
+    name: Bareum Server CI
+    needs: [changes, static, java, image, infra-unit, infra-integration, harness, secret-scan]
+    if: ${{ always() }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Check required CI results
+        env:
+          CI_RESULTS: ${{ toJSON(needs) }}
+        run: bash .github/scripts/check-ci-results.sh

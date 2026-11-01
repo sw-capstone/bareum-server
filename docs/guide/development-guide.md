@@ -501,23 +501,25 @@ PR 작성자가 필요한 리뷰어를 직접 지정한다.
 서버:
 
 ```text
-CI / Bareum Server CI
-├── PostgreSQL 18 테스트 DB
-├── ./gradlew --no-daemon check bootJar
-│   ├── spotlessCheck
-│   └── test
-└── Docker 이미지·배포 구성 검사
-
-CI / harness
-├── ./scripts/run-harness.sh check
-└── ./scripts/test-harness.sh
-
-CI / secret-scan
-├── Gitleaks 연동 테스트
-└── Git 이력 검사
+CI
+├── Select checks: 변경 범위 판별
+├── Workflow and shell checks: 정적 검사와 CI 실행 정책 테스트
+├── Java checks: PostgreSQL 18, JDK 25, check bootJar
+├── ARM64 image checks: 이미지 빌드와 실제 기동 검사
+├── Deployment tests: 배포 모의 테스트 5개를 matrix로 실행
+├── Infrastructure integration: 실제 Docker 통합 테스트 2개를 matrix로 실행
+├── harness: 저장소 검사와 하네스 자체 테스트
+├── secret-scan: Gitleaks 연동 테스트와 Git 이력 검사
+└── Bareum Server CI: 선택한 검사 결과의 최종 집계
 ```
 
 통합 CI는 `main` 또는 `develop`을 대상으로 하는 PR에서 실행한다. 작업 브랜치 push만으로는 CI를 실행하지 않으며, 해당 PR의 브랜치에 push하면 PR 이벤트로 한 번 실행한다. `develop` push에서는 배포 워크플로가 같은 CI를 호출하고, 모든 job이 성공한 뒤 이미지 게시와 배포를 진행한다. CI만 수동 실행하면 전체 검증을 수행하며, 수동 재배포는 `Deploy development`에서 `develop`을 선택해 실행한다.
+
+정적 검사, 하네스와 Gitleaks는 서로 독립적인 job으로 바로 실행한다. Java, 이미지, 배포 모의 테스트와 인프라 통합 테스트는 변경 범위 판별 결과만 기다린 뒤 필요한 job을 병렬로 실행한다. 한 검사에서 실패해도 다른 독립 job은 계속 실행한다. 두 인프라 matrix는 `fail-fast: false`로 설정해 한 항목의 실패 때문에 나머지 항목을 취소하지 않는다.
+
+JDK 25와 PostgreSQL 서비스는 Java job에만 준비한다. 이미지 기동 검사는 별도의 job에서 Docker Compose로 필요한 테스트 DB와 Nginx를 준비한다. 문서 전용 변경에서는 이 두 job을 생략하므로 Java용 DB 서비스도 시작하지 않는다.
+
+기존 필수 검사 이름인 `Bareum Server CI`는 모든 검사 결과를 집계하는 job에서 유지한다. 이 job은 선행 검사가 실패하거나 생략돼도 실행하며, 선택한 job이 모두 성공하고 선택하지 않은 job만 생략된 경우에 통과한다. 하네스나 Gitleaks의 실패, 취소, 필요한 검사의 예기치 않은 생략, 변경 범위 결과의 누락은 최종 검사를 실패 처리한다.
 
 하네스, Gitleaks, workflow와 shell 정적 검사, 변경 범위 선택 테스트는 항상 실행한다. `.github/scripts/select-ci-checks.sh`는 Java, 실제 서버 이미지와 배포 스크립트 모의 테스트를 실행할지 `server`로 출력한다. 실제 Docker를 사용하는 인프라 통합 테스트 두 개의 실행 여부는 `infra`로 따로 출력해 기존 실행 조건을 유지한다.
 
@@ -534,7 +536,7 @@ PR에서 두 인프라 통합 테스트를 실행하는 경로는 기존과 같�
 
 PR은 대상 브랜치의 기준 SHA와 검사하는 병합 커밋 SHA를 비교하고, push는 이벤트의 `before` SHA와 현재 SHA를 비교한다. 파일 이름 변경은 기존 경로의 삭제와 새 경로의 추가로 처리한다. SHA가 없거나 커밋 또는 변경 파일을 읽지 못하면 전체 검사를 실행하며, 수동 실행도 전체 검사를 수행한다.
 
-변경 범위 선택의 회귀 테스트는 `bash .github/tests/select-ci-checks-test.sh`로 실행한다. 이미지 게시와 배포 여부를 변경 범위에 연결하는 작업은 별도 단계이며, 현재 배포 워크플로는 검증 성공 후 게시와 배포를 계속 진행한다.
+변경 범위 선택의 회귀 테스트는 `bash .github/tests/select-ci-checks-test.sh`, 최종 결과 집계 테스트는 `bash .github/tests/check-ci-results-test.sh`로 실행한다. 두 테스트는 정적 검사 job에서도 실행한다. 이미지 게시와 배포 여부를 변경 범위에 연결하는 작업은 별도 단계이며, 현재 배포 워크플로는 검증 성공 후 게시와 배포를 계속 진행한다.
 
 Gradle 테스트를 로컬에서 실행할 때는 백엔드 담당자가 정한 DB 연결 환경을 갖춘다. `spotlessCheck`와 `spotlessApply`는 DB 없이 실행할 수 있다.
 
