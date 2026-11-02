@@ -11,6 +11,7 @@ OLD_IMAGE="sha256:$(printf '%064d' 1)"
 NEW_IMAGE="sha256:$(printf '%064d' 2)"
 OLD_NGINX_IMAGE="sha256:$(printf '%064d' 3)"
 NEW_NGINX_IMAGE="sha256:$(printf '%064d' 4)"
+OLD_COMMIT=$(printf '%040d' 1)
 export OLD_IMAGE NEW_IMAGE OLD_NGINX_IMAGE NEW_NGINX_IMAGE
 
 cat > "$WORK/bin/sleep" <<'MOCK'
@@ -21,6 +22,7 @@ cat > "$WORK/bin/install" <<'MOCK'
 #!/usr/bin/env bash
 set -euo pipefail
 if [[ "$MODE" == install-fail && "$*" == *'/staged/infra/nginx/default.conf'* ]]; then exit 1; fi
+if [[ "$MODE" == record-fail && "$*" == *'/commit-sha '* ]]; then exit 1; fi
 exec "$REAL_INSTALL" "$@"
 MOCK
 cat > "$WORK/bin/docker" <<'MOCK'
@@ -128,6 +130,8 @@ setup_case() {
   export CASE_ROOT="$WORK/$MODE-$TARGET"
   export BAREUM_ROOT="$CASE_ROOT" LETSENCRYPT_DIR="$CASE_ROOT/letsencrypt"
   mkdir -p "$CASE_ROOT/infra/scripts" "$CASE_ROOT/infra/env" "$CASE_ROOT/infra/certs" "$CASE_ROOT/infra/nginx"
+  mkdir -p "$CASE_ROOT/infra/.deploy-state"
+  printf '%s\n' "$OLD_COMMIT" > "$CASE_ROOT/infra/.deploy-state/server-deployed-sha"
   touch "$CASE_ROOT/infra/nginx/default.conf"
   touch "$CASE_ROOT/infra/docker-compose.yml" "$CASE_ROOT/infra/certs/rds-ca.pem" "$CASE_ROOT/infra/env/.env.server.template"
   cp "$SOURCE_DIR/scripts/deploy.sh" "$CASE_ROOT/infra/scripts/"
@@ -216,10 +220,12 @@ for target in server ai; do
   grep -q "^$IMAGE_KEY=ghcr.io/sw-capstone/bareum-$target:new$" "$CASE_ROOT/infra/env/.env.deploy"
   [[ ! -e "$CASE_ROOT/infra/.deploy-state/pending" ]]
   if [[ "$target" == ai ]]; then
+    [[ "$(cat "$CASE_ROOT/infra/.deploy-state/server-deployed-sha")" == "$OLD_COMMIT" ]]
     [[ ! -e "$CASE_ROOT/prepared" ]]
     cmp "$CASE_ROOT/original-server" "$CASE_ROOT/infra/env/.env.server"
     grep -q '^SERVER_IMAGE=ghcr.io/sw-capstone/bareum-server:old$' "$CASE_ROOT/infra/env/.env.deploy"
   else
+    [[ ! -e "$CASE_ROOT/infra/.deploy-state/server-deployed-sha" ]]
     [[ -f "$CASE_ROOT/prepared" ]]
     grep -q '^AI_IMAGE=ghcr.io/sw-capstone/bareum-ai:old$' "$CASE_ROOT/infra/env/.env.deploy"
   fi
@@ -348,6 +354,7 @@ setup_release() {
   printf 'server\tfixture-container\t%s\ttrue\nai\tai-container\t%s\ttrue\nnginx\tnginx-container\t%s\ttrue\n' \
     "$OLD_IMAGE" "$OLD_IMAGE" "$OLD_NGINX_IMAGE" > "$RELEASE_DIR/backup/images.tsv"
   printf '%s\n' validated > "$RELEASE_DIR/status"
+  printf '%s\n' 0123456789abcdef0123456789abcdef01234567 > "$RELEASE_DIR/commit-sha"
   printf '%s\n' "ghcr.io/sw-capstone/bareum-server@$NEW_IMAGE" > "$RELEASE_DIR/server-image"
   printf '%s\n' nginx:1.30-alpine > "$RELEASE_DIR/nginx-image"
 }
@@ -359,6 +366,8 @@ for mode in release-success absent-template; do
   run_case
   if [[ "$RESULT" != 0 ]]; then cat "$CASE_ROOT/output" >&2; exit 1; fi
   [[ "$(cat "$RELEASE_DIR/status")" == applied && "$(cat "$CASE_ROOT/current-nginx")" == "$NEW_NGINX_IMAGE" ]]
+  cmp "$RELEASE_DIR/commit-sha" "$CASE_ROOT/infra/.deploy-state/server-deployed-sha"
+  [[ "$(stat -c %a "$CASE_ROOT/infra/.deploy-state/server-deployed-sha")" == 600 ]]
   for file in "${RELEASE_FILES[@]}"; do
     target="$CASE_ROOT/infra/$file"
     if [[ "$file" == scripts/reload-nginx-after-cert-renewal.sh ]]; then target="$LETSENCRYPT_DIR/renewal-hooks/deploy/reload-nginx-after-cert-renewal.sh"; fi
@@ -371,7 +380,7 @@ for mode in release-success absent-template; do
   pass "$mode installs all files, then recreates server and nginx only"
 done
 
-for mode in stale-live stale-ai-env tampered-release tampered-ai-env wrong-status stale-image wrong-image-request; do
+for mode in stale-live stale-ai-env tampered-release tampered-ai-env wrong-status stale-image wrong-image-request wrong-commit; do
   setup_case "$mode"
   setup_release
   case "$mode" in
@@ -382,6 +391,7 @@ for mode in stale-live stale-ai-env tampered-release tampered-ai-env wrong-statu
     wrong-status) echo applied > "$RELEASE_DIR/status" ;;
     stale-image) echo "$NEW_IMAGE" > "$CASE_ROOT/current-image" ;;
     wrong-image-request) echo different > "$RELEASE_DIR/server-image" ;;
+    wrong-commit) echo "$OLD_COMMIT" > "$RELEASE_DIR/commit-sha" ;;
   esac
   run_case
   [[ "$RESULT" != 0 ]]
@@ -390,12 +400,13 @@ for mode in stale-live stale-ai-env tampered-release tampered-ai-env wrong-statu
   pass "$mode blocks mutation"
 done
 
-for mode in install-fail prepare-fail up-fail nginx-fail route-fail rollback-fail; do
+for mode in install-fail prepare-fail up-fail nginx-fail route-fail rollback-fail record-fail; do
   setup_case "release-$mode"
   MODE="$mode"
   setup_release
   run_case
   [[ "$RESULT" != 0 ]]
+  [[ "$(cat "$CASE_ROOT/infra/.deploy-state/server-deployed-sha")" == "$OLD_COMMIT" ]]
   cmp "$CASE_ROOT/original-server" "$CASE_ROOT/infra/env/.env.server"
   cmp "$CASE_ROOT/original-ai" "$CASE_ROOT/infra/env/.env.ai"
   for file in "${RELEASE_FILES[@]}"; do

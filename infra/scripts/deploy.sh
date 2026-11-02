@@ -36,6 +36,7 @@ configure_paths() {
   AI_WORK=''
   COMPOSE_AI_ENV=''
   STATE_DIR="$INFRA_DIR/.deploy-state"
+  DEPLOYED_SHA="$STATE_DIR/server-deployed-sha"
   PENDING="$STATE_DIR/pending"
   WAIT_TIMEOUT="${DEPLOY_WAIT_TIMEOUT:-180}"
   [[ "$WAIT_TIMEOUT" =~ ^[1-9][0-9]{0,2}$ ]] || fail 'DEPLOY_WAIT_TIMEOUT must be 1-999 seconds.'
@@ -52,6 +53,8 @@ acquire_deployment_lock() {
   done
   [[ -f "$DEPLOY_ENV" && ! -L "$DEPLOY_ENV" ]] || fail '.env.deploy must be a regular file, not a symlink.'
   [[ ! -L "$STATE_DIR" ]] || fail 'Deployment state directory must not be a symlink.'
+  [[ ! -L "$DEPLOYED_SHA" && ( ! -e "$DEPLOYED_SHA" || -f "$DEPLOYED_SHA" ) ]] \
+    || fail 'Deployed server SHA must be a regular file, not a symlink.'
   mkdir -p -- "$STATE_DIR"
   chmod 700 "$STATE_DIR"
   exec 9>"$STATE_DIR/lock"
@@ -87,6 +90,9 @@ check_release() {
   [[ "${RELEASE_DIR#"$STATE_DIR/releases/"}" =~ ^[a-f0-9]{40}-[a-zA-Z0-9]+$ ]] || fail 'Invalid release directory name.'
   [[ "$(cat "$RELEASE_DIR/status")" == validated ]] || fail 'Release has not passed validation or has already been used.'
   [[ "$(cat "$RELEASE_DIR/server-image")" == "$IMAGE" ]] || fail 'Release image does not match the requested image.'
+  RELEASE_COMMIT_SHA=$(cat "$RELEASE_DIR/commit-sha")
+  [[ "$RELEASE_COMMIT_SHA" =~ ^[a-f0-9]{40}$ && "${RELEASE_DIR##*/}" == "$RELEASE_COMMIT_SHA-"* ]] \
+    || fail 'Release commit does not match its directory.'
   RELEASE_FILES=(docker-compose.yml nginx/default.conf scripts/deploy.sh scripts/prepare-server-env.sh scripts/prepare-ai-env.sh
     env/.env.server.template scripts/reload-nginx-after-cert-renewal.sh)
   cmp -s "$RELEASE_DIR/staged.sha256" <(cd "$RELEASE_DIR/staged/infra" && sha256sum "${RELEASE_FILES[@]}") \
@@ -335,6 +341,14 @@ finish() {
   trap - EXIT
   trap '' HUP INT TERM
   set +e
+  if (( result == 0 )) && [[ "$SERVICE" == server ]]; then
+    if [[ -n "$RELEASE_DIR" ]]; then
+      atomic_install "$RELEASE_DIR/commit-sha" "$DEPLOYED_SHA" 600 || result=1
+    else
+      # Image-only deployments do not establish a source commit baseline.
+      rm -f -- "$DEPLOYED_SHA" || result=1
+    fi
+  fi
   if (( result != 0 && CHANGED == 1 )); then
     printf 'Deployment failed. Restoring the previous image and environment.\n' >&2
     if ! rollback; then

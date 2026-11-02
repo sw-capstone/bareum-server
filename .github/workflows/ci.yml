@@ -4,6 +4,12 @@ on:
   pull_request:
     branches: [main, develop]
   workflow_call:
+    inputs:
+      deployment_base_sha:
+        description: Last successfully deployed server commit; empty runs all checks
+        type: string
+        required: false
+        default: ""
     outputs:
       deploy_required:
         description: Whether image publishing and deployment are required
@@ -34,7 +40,7 @@ jobs:
         id: checks
         env:
           EVENT_NAME: ${{ github.event_name }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || inputs.deployment_base_sha }}
           HEAD_SHA: ${{ github.sha }}
         run: bash .github/scripts/select-ci-checks.sh >> "$GITHUB_OUTPUT"
 
@@ -131,7 +137,9 @@ jobs:
           persist-credentials: false
       - name: Test SSM deployment requests
         if: ${{ !cancelled() }}
-        run: bash .github/tests/deploy-via-ssm-test.sh
+        run: |
+          bash .github/tests/deploy-via-ssm-test.sh
+          bash .github/tests/deployment-baseline-test.sh
       - name: Test server environment generation
         if: ${{ !cancelled() }}
         run: bash infra/tests/prepare-server-env-test.sh
@@ -201,7 +209,7 @@ jobs:
       - name: Scan Git history
         env:
           EVENT_NAME: ${{ github.event_name }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || inputs.deployment_base_sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           log_opts=$(bash .github/scripts/select-secret-scan-range.sh)
