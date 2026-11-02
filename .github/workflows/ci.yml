@@ -194,17 +194,18 @@ jobs:
           GITLEAKS_BINARY: gitleaks
           PYTHONPATH: harness/src
         run: python -m unittest discover -s harness/tests -p 'test_secret_scan.py' -k ScannerTests -v
+      - name: Test secret scan history boundaries
+        env:
+          GITLEAKS_BINARY: gitleaks
+        run: bash .github/tests/select-secret-scan-range-test.sh
       - name: Scan Git history
         env:
           EVENT_NAME: ${{ github.event_name }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
-          if [ "$EVENT_NAME" = pull_request ]; then
-            ./scripts/run-secret-scan.sh --log-opts="$BASE_SHA..$HEAD_SHA"
-          else
-            ./scripts/run-secret-scan.sh
-          fi
+          log_opts=$(bash .github/scripts/select-secret-scan-range.sh)
+          ./scripts/run-secret-scan.sh --log-opts="$log_opts"
       - if: always()
         uses: actions/upload-artifact@v4
         with:

@@ -515,6 +515,8 @@ CI
 
 통합 CI는 `main` 또는 `develop`을 대상으로 하는 PR에서 실행한다. 작업 브랜치 push만으로는 CI를 실행하지 않으며, 해당 PR의 브랜치에 push하면 PR 이벤트로 한 번 실행한다. `develop` push에서는 배포 워크플로가 같은 CI를 호출하고, 선택된 검사가 모두 성공한 뒤 문서 외 변경이 있을 때 이미지 게시와 배포를 진행한다. 등록된 문서 경로만 변경한 push는 공통 검사 후 게시와 배포를 생략한다. CI만 수동 실행하면 전체 검증을 수행하며, 수동 재배포는 `Deploy development`에서 `develop`을 선택해 실행한다.
 
+Gitleaks는 PR의 `base.sha..head.sha`, `develop` push의 `before..현재 SHA`에 포함된 커밋을 검사한다. `.gitleaks.toml` 또는 `harness/secret-scan-policy.toml` 변경이나 SHA 확인 실패 시에는 검사할 커밋의 전체 이력으로 대체한다. 수동 실행은 받아온 모든 브랜치와 태그의 이력을 검사한다. 세부 기준은 [`DEC-SEC-001`](../decisions/DEC-SEC-001-secret-detection.md)을 따른다.
+
 정적 검사, 하네스와 Gitleaks는 서로 독립적인 job으로 바로 실행한다. Java, 이미지, 배포 모의 테스트와 인프라 통합 테스트는 변경 범위 판별 결과만 기다린 뒤 필요한 job을 병렬로 실행한다. 한 검사에서 실패해도 다른 독립 job은 계속 실행한다. 배포 모의 테스트 5개는 한 job 안에서 순서대로 실행하며, 앞 테스트가 실패해도 실행이 취소되지 않았다면 나머지 테스트를 계속 실행한다. 하나라도 실패하면 해당 job은 실패한다. 실제 인프라 통합 테스트 2개는 `fail-fast: false`인 matrix로 유지한다.
 
 JDK 25와 PostgreSQL 서비스는 Java job에만 준비한다. 이미지 기동 검사는 별도의 job에서 Docker Compose로 필요한 테스트 DB와 Nginx를 준비한다. 문서 전용 변경에서는 이 두 job을 생략하므로 Java용 DB 서비스도 시작하지 않는다.
@@ -537,6 +539,8 @@ PR에서 두 인프라 통합 테스트를 실행하는 경로는 기존과 같�
 PR은 대상 브랜치의 기준 SHA와 검사하는 병합 커밋 SHA를 비교하고, push는 이벤트의 `before` SHA와 현재 SHA를 비교한다. 파일 이름 변경은 기존 경로의 삭제와 새 경로의 추가로 처리한다. SHA가 없거나 커밋 또는 변경 파일을 읽지 못하면 전체 검사를 실행하며, 수동 실행도 전체 검사를 수행한다.
 
 변경 범위 선택의 회귀 테스트는 `bash .github/tests/select-ci-checks-test.sh`, 최종 결과 집계 테스트는 `bash .github/tests/check-ci-results-test.sh`로 실행한다. 두 테스트는 정적 검사 job에서도 실행한다. 재사용 CI는 `server` 판별 결과를 `deploy_required` 출력으로 전달한다. 배포 워크플로는 CI 성공과 `deploy_required=true`를 확인한 뒤 이미지를 게시하며, 게시가 생략되면 배포도 생략한다. 수동 재배포는 전체 검증 후 진행한다.
+
+비밀정보 검사 범위 테스트는 `bash .github/tests/select-secret-scan-range-test.sh`로 실행한다. `secret-scan` job에서는 `GITLEAKS_BINARY=gitleaks`를 지정해 중간 커밋의 합성 토큰 탐지, 관계없는 브랜치와 기존 이력의 제외, 수동 실행의 전체 이력 검사도 함께 확인한다.
 
 Gradle 테스트를 로컬에서 실행할 때는 백엔드 담당자가 정한 DB 연결 환경을 갖춘다. `spotlessCheck`와 `spotlessApply`는 DB 없이 실행할 수 있다.
 
