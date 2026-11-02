@@ -120,33 +120,30 @@ jobs:
         run: bash .github/scripts/smoke-image.sh
 
   infra-unit:
-    name: Deployment tests (${{ matrix.name }})
+    name: Deployment tests
     needs: changes
     if: needs.changes.outputs.server == 'true'
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 20
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: SSM requests
-            script: .github/tests/deploy-via-ssm-test.sh
-          - name: Server environment
-            script: infra/tests/prepare-server-env-test.sh
-          - name: AI environment
-            script: infra/tests/prepare-ai-env-test.sh
-          - name: Deployment and rollback
-            script: infra/tests/deploy-test.sh
-          - name: Release preparation
-            script: infra/tests/prepare-infra-release-test.sh
     steps:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - name: Run deployment test
-        env:
-          TEST_SCRIPT: ${{ matrix.script }}
-        run: bash "$TEST_SCRIPT"
+      - name: Test SSM deployment requests
+        if: ${{ !cancelled() }}
+        run: bash .github/tests/deploy-via-ssm-test.sh
+      - name: Test server environment generation
+        if: ${{ !cancelled() }}
+        run: bash infra/tests/prepare-server-env-test.sh
+      - name: Test AI environment generation
+        if: ${{ !cancelled() }}
+        run: bash infra/tests/prepare-ai-env-test.sh
+      - name: Test deployment and rollback
+        if: ${{ !cancelled() }}
+        run: bash infra/tests/deploy-test.sh
+      - name: Test infrastructure release preparation
+        if: ${{ !cancelled() }}
+        run: bash infra/tests/prepare-infra-release-test.sh
 
   infra-integration:
     name: Infrastructure integration (${{ matrix.name }})

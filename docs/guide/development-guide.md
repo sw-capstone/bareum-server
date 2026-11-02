@@ -506,7 +506,7 @@ CI
 ├── Workflow and shell checks: 정적 검사와 CI 실행 정책 테스트
 ├── Java checks: PostgreSQL 18, JDK 25, check bootJar
 ├── ARM64 image checks: 이미지 빌드와 실제 기동 검사
-├── Deployment tests: 배포 모의 테스트 5개를 matrix로 실행
+├── Deployment tests: 배포 모의 테스트 5개를 한 job의 별도 step으로 실행
 ├── Infrastructure integration: 실제 Docker 통합 테스트 2개를 matrix로 실행
 ├── harness: 저장소 검사와 하네스 자체 테스트
 ├── secret-scan: Gitleaks 연동 테스트와 Git 이력 검사
@@ -515,7 +515,7 @@ CI
 
 통합 CI는 `main` 또는 `develop`을 대상으로 하는 PR에서 실행한다. 작업 브랜치 push만으로는 CI를 실행하지 않으며, 해당 PR의 브랜치에 push하면 PR 이벤트로 한 번 실행한다. `develop` push에서는 배포 워크플로가 같은 CI를 호출하고, 선택된 검사가 모두 성공한 뒤 문서 외 변경이 있을 때 이미지 게시와 배포를 진행한다. 등록된 문서 경로만 변경한 push는 공통 검사 후 게시와 배포를 생략한다. CI만 수동 실행하면 전체 검증을 수행하며, 수동 재배포는 `Deploy development`에서 `develop`을 선택해 실행한다.
 
-정적 검사, 하네스와 Gitleaks는 서로 독립적인 job으로 바로 실행한다. Java, 이미지, 배포 모의 테스트와 인프라 통합 테스트는 변경 범위 판별 결과만 기다린 뒤 필요한 job을 병렬로 실행한다. 한 검사에서 실패해도 다른 독립 job은 계속 실행한다. 두 인프라 matrix는 `fail-fast: false`로 설정해 한 항목의 실패 때문에 나머지 항목을 취소하지 않는다.
+정적 검사, 하네스와 Gitleaks는 서로 독립적인 job으로 바로 실행한다. Java, 이미지, 배포 모의 테스트와 인프라 통합 테스트는 변경 범위 판별 결과만 기다린 뒤 필요한 job을 병렬로 실행한다. 한 검사에서 실패해도 다른 독립 job은 계속 실행한다. 배포 모의 테스트 5개는 한 job 안에서 순서대로 실행하며, 앞 테스트가 실패해도 실행이 취소되지 않았다면 나머지 테스트를 계속 실행한다. 하나라도 실패하면 해당 job은 실패한다. 실제 인프라 통합 테스트 2개는 `fail-fast: false`인 matrix로 유지한다.
 
 JDK 25와 PostgreSQL 서비스는 Java job에만 준비한다. 이미지 기동 검사는 별도의 job에서 Docker Compose로 필요한 테스트 DB와 Nginx를 준비한다. 문서 전용 변경에서는 이 두 job을 생략하므로 Java용 DB 서비스도 시작하지 않는다.
 
