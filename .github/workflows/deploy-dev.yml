@@ -14,13 +14,49 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  deployment-base:
+    name: Read deployed server commit
+    if: github.ref == 'refs/heads/develop'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      sha: ${{ steps.deployed.outputs.sha }}
+    env:
+      AWS_REGION: ap-northeast-2
+      AWS_DEFAULT_REGION: ap-northeast-2
+      AWS_PAGER: ""
+      EC2_INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: aws-actions/configure-aws-credentials@v6.3.0
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ap-northeast-2
+          role-session-name: read-server-${{ github.run_id }}
+          role-duration-seconds: 3600
+          allowed-account-ids: "253388242909"
+      - name: Read last successful deployment through SSM
+        id: deployed
+        run: bash .github/scripts/deploy-via-ssm.sh --read-deployed-sha
+
   validate:
+    needs: deployment-base
     if: github.ref == 'refs/heads/develop'
     uses: ./.github/workflows/ci.yml
+    with:
+      deployment_base_sha: ${{ needs.deployment-base.outputs.sha }}
 
   publish:
     needs: validate
-    if: github.ref == 'refs/heads/develop'
+    if: >-
+      github.ref == 'refs/heads/develop' &&
+      needs.validate.result == 'success' &&
+      needs.validate.outputs.deploy_required == 'true'
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 40
     permissions:

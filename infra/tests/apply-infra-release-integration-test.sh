@@ -167,6 +167,7 @@ AI_ENV_VERSION=initial
 bash "$SOURCE_DIR/scripts/prepare-infra-release.sh" 0123456789abcdef0123456789abcdef01234567 "$FAKE_DIGEST" --apply > "$WORK/prepared"
 release=$(sed -n 's/^Release prepared: //p' "$WORK/prepared")
 [[ "$(cat "$release/status")" == applied ]]
+cmp "$release/commit-sha" "$BAREUM_ROOT/infra/.deploy-state/server-deployed-sha"
 [[ "$(compose ps -q server)" != "$server_before" && "$(compose ps -q nginx)" != "$nginx_before" ]]
 [[ "$(compose ps -q ai)" == "$ai_before" ]]
 [[ "$(docker inspect --format '{{.Image}}' "$(compose ps -q server)")" == "$(docker image inspect --format '{{.Id}}' "$NEW_TAG")" ]]
@@ -205,12 +206,13 @@ printf '\nTEST_RELEASE=rollback-candidate\n' >> "$CANDIDATE/env/.env.server.temp
 printf '\n# rollback candidate hook\n' >> "$CANDIDATE/scripts/reload-nginx-after-cert-renewal.sh"
 : > "$DOCKER_EVENTS"
 result=0
-bash "$SOURCE_DIR/scripts/prepare-infra-release.sh" 0123456789abcdef0123456789abcdef01234567 "$FAKE_DIGEST" --apply > "$WORK/rollback.log" 2>&1 || result=$?
+bash "$SOURCE_DIR/scripts/prepare-infra-release.sh" 1111111111111111111111111111111111111111 "$FAKE_DIGEST" --apply > "$WORK/rollback.log" 2>&1 || result=$?
 release=$(sed -n 's/^Release prepared: //p' "$WORK/rollback.log")
 if [[ "$result" != 1 ]]; then cat "$WORK/rollback.log" >&2; exit 1; fi
 grep -q 'Post-deployment Nginx route health check failed.' "$WORK/rollback.log"
 grep -q 'Rollback completed.' "$WORK/rollback.log"
 [[ "$(cat "$release/status")" == failed && ! -e "$BAREUM_ROOT/infra/.deploy-state/pending" ]]
+[[ "$(cat "$BAREUM_ROOT/infra/.deploy-state/server-deployed-sha")" == 0123456789abcdef0123456789abcdef01234567 ]]
 
 candidate_image=$(docker image inspect --format '{{.Id}}' "$OLD_TAG")
 [[ "$candidate_image" != "$server_image_before" && "$candidate_image" != "$nginx_image_before" ]]
@@ -237,6 +239,7 @@ printf 'PASS: real post-deployment failure restored Server/Nginx images, configu
 TARGET_TAG="$NEW_TAG"
 AI_ENV_VERSION=ai-deploy
 bash "$BAREUM_ROOT/infra/scripts/deploy.sh" ai "$FAKE_AI_DIGEST" > "$WORK/ai-deploy.log"
+[[ "$(cat "$BAREUM_ROOT/infra/.deploy-state/server-deployed-sha")" == 0123456789abcdef0123456789abcdef01234567 ]]
 ai_before=$(compose ps -q ai)
 [[ "$(compose exec -T ai printenv BAREUM_AI_INTERNAL_API_TOKEN)" == integration-secret-ai-deploy ]]
 printf 'PASS: AI deployment injects the generated env file into a real container.\n'
