@@ -107,7 +107,8 @@ class EmailSignupOpenApiTests {
 
 	@Configuration(proxyBeanMethods = false)
 	@EnableAutoConfiguration(exclude = DataSourceAutoConfiguration.class)
-	@Import({OpenApiConfig.class, EmailSignupController.class, GlobalExceptionHandler.class})
+	@Import({OpenApiConfig.class, EmailSignupController.class, GlobalExceptionHandler.class,
+		com.bareum.server.global.config.DocumentationSecurityConfig.class})
 	static class DocumentationApplication {
 		@Bean
 		EmailSignupService emailSignupService() {

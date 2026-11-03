@@ -55,7 +55,9 @@ jq -n --arg prefix "$PREFIX" '
       {Name: "SPRING_MAIL_USERNAME", Value: "sender@fixture.invalid", Type: "String"},
       {Name: "EMAIL_VERIFICATION_MAIL_FROM", Value: "sender@fixture.invalid", Type: "String"},
       {Name: "EMAIL_VERIFICATION_MAX_VERIFICATION_ATTEMPTS", Value: "5", Type: "String"},
-      {Name: "EMAIL_VERIFICATION_PASSWORD_RESET_VERIFICATION_TTL_SECONDS", Value: "600", Type: "String"}
+      {Name: "EMAIL_VERIFICATION_PASSWORD_RESET_VERIFICATION_TTL_SECONDS", Value: "600", Type: "String"},
+      {Name: "LOGIN_JWT_SIGNING_KEY", Value: ("j" * 32 | @base64), Type: "SecureString"},
+      {Name: "LOGIN_ALLOWED_ORIGINS", Value: "https://bareum.site,https://bareum-web-git-develop-numkites-projects.vercel.app", Type: "String"}
     ] | map(.Name = ($prefix + "/" + .Name)))
   }
 ' > "$WORK/baseline.json"
@@ -82,7 +84,7 @@ run_case() {
       printf 'FAIL: key appeared in output (%s)\n' "$MODE" >&2
       exit 1
     fi
-  done < <(jq -r '.Parameters[] | select(.Name | test("(HASH_SECRET|ENCRYPTION_KEY)$")) | .Value' "$WORK/baseline.json")
+  done < <(jq -r '.Parameters[] | select(.Name | test("(HASH_SECRET|ENCRYPTION_KEY|JWT_SIGNING_KEY)$")) | .Value' "$WORK/baseline.json")
   [[ -z "$(find "$CASE_ROOT/infra/env" -name '.env.prepare.*' -print)" ]]
 }
 
@@ -127,7 +129,7 @@ cmp "$CASE_ROOT/expected-names" "$CASE_ROOT/requested-names"
 grep -Fxq -- '--with-decryption' "$CASE_ROOT/aws-args"
 grep -Fxq -- 'ap-northeast-2' "$CASE_ROOT/aws-args"
 [[ $(wc -l < "$CASE_ROOT/aws-calls") == 2 ]]
-printf 'PASS: eleven parameters fetched in two batches of at most ten\n'
+printf 'PASS: thirteen parameters fetched in two batches of at most ten\n'
 
 setup_case stale-template
 jq -r '.Parameters[] | (.Name | split("/") | last) + "=stale-template-value"' \
@@ -149,7 +151,7 @@ while IFS= read -r name; do
   expect_failure
 done < <(jq -r '.Parameters[].Name' "$WORK/baseline.json")
 
-for key in DB_PASSWORD EMAIL_VERIFICATION_HASH_SECRET EMAIL_VERIFICATION_OUTBOX_ENCRYPTION_KEY SPRING_MAIL_PASSWORD; do
+for key in DB_PASSWORD EMAIL_VERIFICATION_HASH_SECRET EMAIL_VERIFICATION_OUTBOX_ENCRYPTION_KEY SPRING_MAIL_PASSWORD LOGIN_JWT_SIGNING_KEY; do
   setup_case "plaintext-$key"
   jq --arg name "$PREFIX/$key" '(.Parameters[] | select(.Name == $name)).Type = "String"' \
     "$WORK/baseline.json" > "$CASE_ROOT/response.json"
@@ -205,6 +207,44 @@ expect_failure
 
 setup_case long-overflow
 jq '(.Parameters[] | select(.Name | endswith("/EMAIL_VERIFICATION_PASSWORD_RESET_VERIFICATION_TTL_SECONDS"))).Value = "9223372036854775808"' \
+  "$WORK/baseline.json" > "$CASE_ROOT/response.json"
+run_case
+expect_failure
+
+setup_case longer-jwt-key
+jq '(.Parameters[] | select(.Name | endswith("/LOGIN_JWT_SIGNING_KEY"))).Value = ("j" * 48 | @base64)' \
+  "$WORK/baseline.json" > "$CASE_ROOT/response.json"
+run_case
+expect_success
+
+for scenario in short-jwt invalid-jwt-base64 invalid-jwt-padding; do
+  setup_case "$scenario"
+  case "$scenario" in
+    short-jwt) value='"j" * 31 | @base64' ;;
+    invalid-jwt-base64) value='"!" * 44' ;;
+    invalid-jwt-padding) value='("A" * 42) + "=A"' ;;
+  esac
+  jq "(.Parameters[] | select(.Name | endswith(\"/LOGIN_JWT_SIGNING_KEY\"))).Value = ($value)" \
+    "$WORK/baseline.json" > "$CASE_ROOT/response.json"
+  run_case
+  expect_failure
+done
+
+origin_case=0
+for value in '*' 'null' 'http://bareum.site' 'https://bareum.site/' 'https://bareum.site/path' \
+  'https://bareum.site?query=1' 'https://user@bareum.site' 'https://bareum.site#fragment' \
+  'https://bareum.site,' ',https://bareum.site' 'https://bareum.site, https://web.example.invalid' \
+  'https://bareum.site,https://bareum.site' 'https://bareum.site:65536' 'https://bareum..site' 'https://-bareum.site'; do
+  origin_case=$((origin_case+1))
+  setup_case "invalid-origin-$origin_case"
+  jq --arg value "$value" '(.Parameters[] | select(.Name | endswith("/LOGIN_ALLOWED_ORIGINS"))).Value = $value' \
+    "$WORK/baseline.json" > "$CASE_ROOT/response.json"
+  run_case
+  expect_failure
+done
+
+setup_case secure-origins
+jq '(.Parameters[] | select(.Name | endswith("/LOGIN_ALLOWED_ORIGINS"))).Type = "SecureString"' \
   "$WORK/baseline.json" > "$CASE_ROOT/response.json"
 run_case
 expect_failure

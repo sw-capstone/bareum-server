@@ -146,7 +146,8 @@ class EmailVerificationResendOpenApiTests {
 	@Import({
 		OpenApiConfig.class,
 		EmailVerificationController.class,
-		GlobalExceptionHandler.class
+		GlobalExceptionHandler.class,
+		com.bareum.server.global.config.DocumentationSecurityConfig.class
 	})
 	static class DocumentationApplication {
 		@Bean

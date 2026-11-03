@@ -44,6 +44,16 @@ scalar:
   layout: classic
 
 auth:
+  login-jwt:
+    signing-key: ${LOGIN_JWT_SIGNING_KEY:}
+  login:
+    access-ttl-seconds: ${LOGIN_ACCESS_TTL_SECONDS:900}
+    session-ttl-seconds: ${LOGIN_SESSION_TTL_SECONDS:28800}
+    cookie-secure: ${LOGIN_COOKIE_SECURE:true}
+    cookie-same-site: ${LOGIN_COOKIE_SAME_SITE:None}
+    allowed-origins: ${LOGIN_ALLOWED_ORIGINS:}
+    max-requests-per-window: ${LOGIN_MAX_REQUESTS_PER_WINDOW:10}
+    request-window-seconds: ${LOGIN_REQUEST_WINDOW_SECONDS:60}
   email-verification:
     hash-secret: ${EMAIL_VERIFICATION_HASH_SECRET}
     mail-from: ${EMAIL_VERIFICATION_MAIL_FROM:}

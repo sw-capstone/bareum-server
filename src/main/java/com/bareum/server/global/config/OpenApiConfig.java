@@ -19,6 +19,7 @@ import io.swagger.v3.oas.models.media.IntegerSchema;
 import io.swagger.v3.oas.models.media.ObjectSchema;
 import io.swagger.v3.oas.models.media.Schema;
 import io.swagger.v3.oas.models.media.StringSchema;
+import io.swagger.v3.oas.models.security.SecurityScheme;
 import io.swagger.v3.oas.models.servers.Server;
 
 /**
@@ -38,6 +39,9 @@ public class OpenApiConfig {
 						.description("바름 API 문서"))
 				.servers(List.of(new Server().url("/").description("현재 접속 서버")))
 				.components(new Components()
+						.addSecuritySchemes("bearerAuth", new SecurityScheme()
+								.type(SecurityScheme.Type.HTTP)
+								.scheme("bearer"))
 						.addSchemas("ProblemDetail", problemSchema())
 						.addSchemas("ValidationProblemDetail", validationProblemSchema())
 						.addSchemas("BadRequestProblemDetail", new ComposedSchema()

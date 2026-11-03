@@ -1,6 +1,31 @@
 package com.bareum.server.global.security.handler;
 
-public class CustomAuthenticationEntryPoint {
+import java.io.IOException;
 
-	// TODO: Spring Security 도입 시 ProblemDetailFactory로 인증 실패 응답 생성
+import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.web.AuthenticationEntryPoint;
+import org.springframework.stereotype.Component;
+
+import com.bareum.server.domain.auth.exception.AuthErrorCode;
+
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+
+@Component
+public class CustomAuthenticationEntryPoint implements AuthenticationEntryPoint {
+	private final SecurityProblemWriter problems;
+
+	public CustomAuthenticationEntryPoint(SecurityProblemWriter problems) {
+		this.problems = problems;
+	}
+
+	@Override
+	public void commence(
+		HttpServletRequest request,
+		HttpServletResponse response,
+		AuthenticationException e
+	)
+			throws IOException {
+		problems.write(request, response, AuthErrorCode.INVALID_ACCESS_TOKEN);
+	}
 }
