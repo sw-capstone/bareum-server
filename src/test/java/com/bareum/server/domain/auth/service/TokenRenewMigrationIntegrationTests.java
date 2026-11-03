@@ -28,7 +28,7 @@ class TokenRenewMigrationIntegrationTests {
 					.schemas(schema)
 					.defaultSchema(schema)
 					.locations("classpath:db/migration")
-					.target("2026.10.30.21.48")
+					.target("2026.11.03.13.35")
 					.outOfOrder(false)
 					.cleanDisabled(true)
 					.load()
@@ -47,12 +47,12 @@ class TokenRenewMigrationIntegrationTests {
 					.schemas(schema)
 					.defaultSchema(schema)
 					.locations("classpath:db/migration")
-					.target("2026.10.30.22.00")
+					.target("2026.11.03.13.36")
 					.outOfOrder(false)
 					.cleanDisabled(true)
 					.load();
 			assertEquals(1, upgrade.migrate().migrationsExecuted);
-			assertEquals("2026.10.30.22.00", upgrade.info().current().getVersion().toString());
+			assertEquals("2026.11.03.13.36", upgrade.info().current().getVersion().toString());
 			upgrade.validate();
 			assertEquals(0, upgrade.migrate().migrationsExecuted);
 			assertEquals(before,
