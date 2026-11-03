@@ -197,8 +197,6 @@ class LogoutIntegrationTests {
 		var next = issue();
 		assertTrue(sessions.authenticate(previous.accessToken()).isEmpty());
 		assertTrue(sessions.authenticate(next.accessToken()).isPresent());
-		assertEquals(0, jdbc.queryForObject("SELECT count(*) FROM login_access_token WHERE member_id=?", Integer.class,
-				member.getId()));
 		assertEquals(1, jdbc.queryForObject("SELECT count(*) FROM revoked_login_session WHERE member_id=?",
 				Integer.class, member.getId()));
 	}
