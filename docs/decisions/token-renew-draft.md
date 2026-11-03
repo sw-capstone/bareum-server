@@ -1,6 +1,6 @@
 # 로그인 토큰 갱신 구현 및 협의 사항
 
-- 갱신일: 2026-10-30
+- 갱신일: 2026-11-03
 - 상태: 구현 초안·팀 검토 필요
 - 소유 역할: 백엔드·프론트엔드
 - 관련 작업: [Issue #28](https://github.com/sw-capstone/bareum-server/issues/28), BRM-30, AUTH-009
@@ -99,8 +99,10 @@ X-CSRF-TOKEN: <CSRF 조회 응답의 token>
 
 로그인의 LOGIN_ACCESS_TTL_SECONDS·LOGIN_SESSION_TTL_SECONDS·LOGIN_COOKIE_SECURE·LOGIN_COOKIE_SAME_SITE·LOGIN_ALLOWED_ORIGINS를 함께 사용한다. 쿠키 속성·Origin은 [로그인 협의 문서](login-authentication-draft.md)의 기준을 따른다.
 
+두 갱신 제한 값은 일반 설정으로 `infra/env/.env.server.template`에서 관리하며, 배포 스크립트가 생성하는 `.env.server`로 전달한다. SSM에는 중복 등록하지 않는다. 환경변수 문서의 다음 버전에도 같은 이름·값을 추가한다. 배포 테스트는 템플릿의 모든 설정이 생성 파일에 그대로 포함되고 중복 키가 없는지 검사한다.
+
 ## 검증과 적용 조건
 
-- Java 25·PostgreSQL 17 신규 DB에서 `check bootJar`: 전체 467개 통과, 실패·오류·건너뜀 0개. 갱신·절대 만료·재사용·동시 갱신·재로그인 경쟁·CSRF·저장 실패 롤백과 미등록 토큰 거부를 확인했다. Spotless·Flyway 버전 중복 검사·JAR 빌드와 저장소 정적 검사도 통과했다. 선행 로그인 버전까지 적용한 별도 DB 스키마에서 갱신 SQL 순차 적용·기존 세션 보존·재실행 시 추가 적용 없음도 확인했다. PostgreSQL 18 원격 CI는 재오픈 후 확인한다.
+- Java 25·PostgreSQL 17 신규 DB에서 `check bootJar`: 전체 625개 중 623개 통과, 실패·오류 0개. 실제 AI 서버가 필요한 PDF 연동 2개는 조건부 생략했다. 갱신·절대 만료·재사용·동시 갱신·재로그인 경쟁·CSRF·저장 실패 롤백과 미등록 토큰 거부를 확인했다. Spotless·Flyway 버전 중복 검사·JAR 빌드와 저장소 정적 검사도 통과했다. 선행 로그인 정리 버전까지 적용한 별도 DB 스키마에서 갱신 SQL 순차 적용·기존 세션 보존·재실행 시 추가 적용 없음도 확인했다. PostgreSQL 18 원격 CI는 재오픈 후 확인한다.
 - 미배포 신규 갱신 SQL을 `V2026.11.03.13.36__add_refresh_token_rotation.sql`로 배치했다. 선행 로그인 정리 버전(2026.11.03.13.35)보다 높으며 SQL 본문과 적용된 기존 마이그레이션은 변경하지 않았다. 병합 시 기준 브랜치의 최신 버전을 다시 확인한다.
 - #37 병합 후 실제 develop과 변경 범위·최신 CI를 다시 확인한다. 현재 브라우저 연동·배포 검증은 완료하지 않았다.
