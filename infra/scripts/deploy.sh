@@ -74,7 +74,7 @@ compose() (
 
 release_target() {
   case "$1" in
-    docker-compose.yml|nginx/default.conf|scripts/deploy.sh|scripts/prepare-server-env.sh|scripts/prepare-ai-env.sh|env/.env.server.template)
+    docker-compose.yml|nginx/default.conf|scripts/deploy.sh|scripts/prepare-server-env.sh|scripts/prepare-ai-env.sh)
       printf '%s/%s\n' "$INFRA_DIR" "$1" ;;
     scripts/reload-nginx-after-cert-renewal.sh) printf '%s/reload-nginx-after-cert-renewal.sh\n' "$HOOK_DIR" ;;
     *) return 1 ;;
@@ -94,7 +94,7 @@ check_release() {
   [[ "$RELEASE_COMMIT_SHA" =~ ^[a-f0-9]{40}$ && "${RELEASE_DIR##*/}" == "$RELEASE_COMMIT_SHA-"* ]] \
     || fail 'Release commit does not match its directory.'
   RELEASE_FILES=(docker-compose.yml nginx/default.conf scripts/deploy.sh scripts/prepare-server-env.sh scripts/prepare-ai-env.sh
-    env/.env.server.template scripts/reload-nginx-after-cert-renewal.sh)
+    scripts/reload-nginx-after-cert-renewal.sh)
   cmp -s "$RELEASE_DIR/staged.sha256" <(cd "$RELEASE_DIR/staged/infra" && sha256sum "${RELEASE_FILES[@]}") \
     || fail 'Release files changed after validation.'
   [[ -f "$RELEASE_DIR/ai.env" && ! -L "$RELEASE_DIR/ai.env" ]] \
@@ -223,9 +223,8 @@ check_configuration() {
     [[ -n "$ca_file" ]] || fail 'RDS_CA_FILE is required.'
     [[ "$ca_file" == /* ]] || ca_file="$INFRA_DIR/$ca_file"
     [[ -f "$ca_file" && -r "$ca_file" ]] || fail 'RDS CA file is missing or unreadable.'
-    for required_file in "$source_infra/scripts/prepare-server-env.sh" "$source_infra/env/.env.server.template"; do
-      [[ -f "$required_file" && -r "$required_file" ]] || fail "Required file is missing or unreadable: $required_file"
-    done
+    [[ -f "$source_infra/scripts/prepare-server-env.sh" && -r "$source_infra/scripts/prepare-server-env.sh" ]] \
+      || fail 'Server environment preparation script is missing or unreadable.'
     for tool in aws jq; do
       command -v "$tool" >/dev/null || fail "Required command not found: $tool"
     done

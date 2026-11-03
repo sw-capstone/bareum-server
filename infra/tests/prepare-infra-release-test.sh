@@ -12,7 +12,7 @@ IMAGE="ghcr.io/sw-capstone/bareum-server@sha256:$(printf '%064d' 2)"
 OLD_IMAGE="sha256:$(printf '%064d' 1)"
 export OLD_IMAGE
 FILES=(docker-compose.yml nginx/default.conf scripts/deploy.sh scripts/prepare-server-env.sh scripts/prepare-ai-env.sh
-  env/.env.server.template scripts/reload-nginx-after-cert-renewal.sh)
+  scripts/reload-nginx-after-cert-renewal.sh)
 for file in "${FILES[@]}"; do
   mkdir -p "$FIXTURE_SOURCE/$(dirname -- "$file")"
   cp "$SOURCE_DIR/$file" "$FIXTURE_SOURCE/$file"
@@ -26,7 +26,7 @@ while [[ "$1" != https://* ]]; do shift; done
 prefix="https://raw.githubusercontent.com/sw-capstone/bareum-server/$EXPECTED_COMMIT/infra/"
 [[ "$1" == "$prefix"* && "$2" == --output ]]
 file="${1#"$prefix"}"
-if [[ "$file" == env/.env.server.template ]]; then
+if [[ "$file" == scripts/prepare-server-env.sh ]]; then
   case "$MODE" in
     download-fail) exit 22 ;;
     empty-file) : > "$3"; exit 0 ;;
@@ -43,7 +43,6 @@ if [[ "$file" == docker-compose.yml ]]; then
 fi
 case "$MODE:$file" in
   bad-shell:scripts/deploy.sh|bad-hook:scripts/reload-nginx-after-cert-renewal.sh) printf '\nif then\n' >> "$3" ;;
-  bad-template:env/.env.server.template) printf '\nSERVER_PORT=9999\n' >> "$3" ;;
   bad-compose:docker-compose.yml) printf '\nservices: [\n' >> "$3" ;;
   bad-nginx:nginx/default.conf) printf '\ninvalid_directive;\n' >> "$3" ;;
   apply-*:scripts/deploy.sh)
@@ -121,7 +120,7 @@ chmod +x "$WORK/bin/curl" "$WORK/bin/docker" "$WORK/bin/aws"
 setup_case() {
   export MODE="$1" CASE_ROOT="$WORK/$1"
   export BAREUM_ROOT="$CASE_ROOT/bareum" LETSENCRYPT_DIR="$CASE_ROOT/letsencrypt"
-  mkdir -p "$BAREUM_ROOT/infra" "$BAREUM_ROOT/webroot" "$LETSENCRYPT_DIR/renewal-hooks/deploy" "$LETSENCRYPT_DIR/live"
+  mkdir -p "$BAREUM_ROOT/infra/env" "$BAREUM_ROOT/webroot" "$LETSENCRYPT_DIR/renewal-hooks/deploy" "$LETSENCRYPT_DIR/live"
   for file in "${FILES[@]}"; do
     mkdir -p "$BAREUM_ROOT/infra/$(dirname -- "$file")"
     printf 'old %s\n' "$file" > "$BAREUM_ROOT/infra/$file"
@@ -192,7 +191,7 @@ release=$(sed -n 's/^Release prepared: //p' "$CASE_ROOT/output")
 [[ -s "$release/validation.txt" && ! -e "$release/compose.json" && ! -e "$release/nginx-check.log" ]]
 [[ "$(cat "$release/commit-sha")" == "$EXPECTED_COMMIT" && "$(cat "$release/server-image")" == "$IMAGE" ]]
 [[ "$(stat -c %a "$release")" == 700 && "$(stat -c %a "$release/backup/infra/env/.env.server")" == 600 ]]
-[[ "$(wc -l < "$CASE_ROOT/curl-calls")" == 7 ]]
+[[ "$(wc -l < "$CASE_ROOT/curl-calls")" == 6 ]]
 (cd "$release/staged/infra" && sha256sum --check --status ../../staged.sha256)
 for file in "${FILES[@]}"; do
   if [[ "$file" != docker-compose.yml ]]; then cmp "$FIXTURE_SOURCE/$file" "$release/staged/infra/$file"; fi
@@ -226,15 +225,13 @@ grep -q '^BAREUM_AI_INTERNAL_API_TOKEN=' "$release/ai.env"
 printf 'PASS: absent AI environment generated for candidate Compose without changing live files\n'
 
 setup_case missing-optional
-rm "$BAREUM_ROOT/infra/env/.env.server.template" "$LETSENCRYPT_DIR/renewal-hooks/deploy/reload-nginx-after-cert-renewal.sh"
+rm "$LETSENCRYPT_DIR/renewal-hooks/deploy/reload-nginx-after-cert-renewal.sh"
 save_baseline
 run_case
 [[ "$RESULT" == 0 ]]
 release=$(sed -n 's/^Release prepared: //p' "$CASE_ROOT/output")
-grep -Fxq $'infra/env/.env.server.template\tmissing\t-' "$release/backup/files.tsv"
 grep -Fxq $'certbot/reload-nginx-after-cert-renewal.sh\tmissing\t-' "$release/backup/files.tsv"
-[[ ! -e "$BAREUM_ROOT/infra/env/.env.server.template" ]]
-printf 'PASS: missing old template and hook recorded without installation\n'
+printf 'PASS: missing old hook recorded without installation\n'
 
 setup_case missing-ai
 save_baseline
@@ -257,7 +254,7 @@ for mode in download-fail empty-file interrupted missing-env inspect-fail missin
   printf 'PASS: %s leaves live files intact and removes incomplete preparation\n' "$mode"
 done
 
-for mode in bad-shell bad-hook bad-template ai-env-fail missing-ai-token bad-compose missing-ca bad-nginx; do
+for mode in bad-shell bad-hook ai-env-fail missing-ai-token bad-compose missing-ca bad-nginx; do
   setup_case "$mode"
   if [[ "$mode" == missing-ca ]]; then rm "$BAREUM_ROOT/infra/certs/rds-ca.pem"; fi
   save_baseline
