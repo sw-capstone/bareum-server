@@ -6,69 +6,48 @@ umask 077
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd -- "$SCRIPT_DIR/../.." && pwd)"
 
-TEMPLATE="$REPO_DIR/infra/env/.env.server.template"
-OUTPUT="$REPO_DIR/infra/env/.env.server"
-PREFIX="/bareum/dev/server"
+OUTPUT="${1:-$REPO_DIR/infra/env/.env.server}"
+PARAMETER=/bareum/dev/server/env
 
 fail() {
   printf '%s\n' "$1" >&2
   exit 1
 }
 
-command -v aws >/dev/null || fail "AWS CLI가 필요합니다."
-command -v jq >/dev/null || fail "jq가 필요합니다."
-[[ -f "$TEMPLATE" ]] || fail "환경변수 템플릿이 없습니다."
-[[ ! -d "$OUTPUT" ]] || fail "출력 경로가 디렉터리입니다."
+[[ $# -le 1 ]] || fail 'Usage: prepare-server-env.sh [OUTPUT_FILE]'
+command -v aws >/dev/null || fail 'AWS CLI가 필요합니다.'
+command -v jq >/dev/null || fail 'jq가 필요합니다.'
+[[ "$OUTPUT" == /* && ! -L "$OUTPUT" && ( ! -e "$OUTPUT" || -f "$OUTPUT" ) ]] \
+  || fail '출력 경로는 심볼릭 링크나 디렉터리가 아닌 절대 파일 경로여야 합니다.'
 
-WORK_DIR="$(mktemp -d "$REPO_DIR/infra/env/.env.prepare.XXXXXX")"
+WORK_DIR="$(mktemp -d "$(dirname -- "$OUTPUT")/.env.prepare.XXXXXX")"
 trap 'rm -rf -- "$WORK_DIR"' EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
-PARAMETER_NAMES=(
-  "$PREFIX/DB_URL"
-  "$PREFIX/DB_USERNAME"
-  "$PREFIX/DB_PASSWORD"
-  "$PREFIX/EMAIL_VERIFICATION_HASH_SECRET"
-  "$PREFIX/EMAIL_VERIFICATION_OUTBOX_ENCRYPTION_KEY"
-  "$PREFIX/SPRING_MAIL_PASSWORD"
-  "$PREFIX/SPRING_MAIL_HOST"
-  "$PREFIX/SPRING_MAIL_USERNAME"
-  "$PREFIX/EMAIL_VERIFICATION_MAIL_FROM"
-  "$PREFIX/EMAIL_VERIFICATION_MAX_VERIFICATION_ATTEMPTS"
-  "$PREFIX/EMAIL_VERIFICATION_PASSWORD_RESET_VERIFICATION_TTL_SECONDS"
-  "$PREFIX/LOGIN_JWT_SIGNING_KEY"
-  "$PREFIX/LOGIN_ALLOWED_ORIGINS"
-)
+if ! aws ssm get-parameter \
+  --region ap-northeast-2 \
+  --name "$PARAMETER" \
+  --with-decryption \
+  --output json \
+  --no-cli-pager \
+  > "$WORK_DIR/parameter.json" 2> "$WORK_DIR/aws-error"; then
+  fail 'Parameter Store 조회 실패. 기존 파일을 유지합니다.'
+fi
 
-# GetParameters는 한 번에 최대 10개만 조회합니다. 모든 배치를 확인한 뒤 파일을 교체합니다.
-for ((offset=0; offset<${#PARAMETER_NAMES[@]}; offset+=10)); do
-  names=("${PARAMETER_NAMES[@]:offset:10}")
-  response="$WORK_DIR/batch-$offset.json"
-  if ! aws ssm get-parameters \
-    --region ap-northeast-2 \
-    --names "${names[@]}" \
-    --with-decryption \
-    --output json \
-    --no-cli-pager \
-    > "$response" 2> "$WORK_DIR/aws-error"; then
-    fail "Parameter Store 조회 실패. 기존 파일을 유지합니다."
-  fi
-  # 누락·중복·다른 배치의 값이 섞인 응답도 거부합니다.
-  if ! jq -ne --slurpfile response "$response" --args '
-    $response[0] |
-    (.InvalidParameters == []) and
-    ([.Parameters[].Name] | sort == ($ARGS.positional | sort))
-  ' "${names[@]}" >/dev/null 2>&1; then
-    fail "파라미터 조회 목록 검증 실패. 기존 파일을 유지합니다."
-  fi
-done
+# 응답 하나에 완성된 env 파일이 들어 있어야 하며 CR과 NUL 문자는 허용하지 않는다.
+if ! jq -se --arg name "$PARAMETER" '
+  length == 1 and (.[0].Parameter |
+    .Name == $name and .Type == "SecureString" and
+    (.Value | type == "string" and length > 0 and (test("[\r\u0000]") | not)))
+' "$WORK_DIR/parameter.json" >/dev/null 2>&1; then
+  fail 'env 파라미터 응답 검증 실패. 기존 파일을 유지합니다.'
+fi
 
-# 복호화된 값은 권한이 제한된 임시 파일에만 저장합니다.
-jq -s '{InvalidParameters: [], Parameters: [.[].Parameters[]]}' \
-  "$WORK_DIR"/batch-*.json > "$WORK_DIR/parameters.json"
+jq -j '.Parameter.Value' "$WORK_DIR/parameter.json" > "$WORK_DIR/server.env"
 
-if ! jq -e --arg prefix "$PREFIX" '
+# 파일은 실행하거나 치환하지 않는다. 검증용으로만 파싱하고 원문 그대로 설치한다.
+if ! jq -Rse '
   def base64_byte_length:
     if test("^([A-Za-z0-9+/]{4})*([A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$")
     then (length / 4 * 3) - (match("=*$").length)
@@ -79,65 +58,38 @@ if ! jq -e --arg prefix "$PREFIX" '
     ((length < ($max | length)) or
       (length == ($max | length) and . <= $max));
 
-  (.InvalidParameters == []) and
-  ([.Parameters[].Name] | sort ==
-    ([$prefix + "/DB_URL",
-      $prefix + "/DB_USERNAME",
-      $prefix + "/DB_PASSWORD",
-      $prefix + "/EMAIL_VERIFICATION_HASH_SECRET",
-      $prefix + "/EMAIL_VERIFICATION_OUTBOX_ENCRYPTION_KEY",
-      $prefix + "/SPRING_MAIL_PASSWORD",
-      $prefix + "/SPRING_MAIL_HOST",
-      $prefix + "/SPRING_MAIL_USERNAME",
-      $prefix + "/EMAIL_VERIFICATION_MAIL_FROM",
-      $prefix + "/EMAIL_VERIFICATION_MAX_VERIFICATION_ATTEMPTS",
-      $prefix + "/EMAIL_VERIFICATION_PASSWORD_RESET_VERIFICATION_TTL_SECONDS",
-      $prefix + "/LOGIN_JWT_SIGNING_KEY",
-      $prefix + "/LOGIN_ALLOWED_ORIGINS"] | sort)) and
-  all(.Parameters[];
-    (.Value | type == "string") and
-    (.Value | test("\\S")) and
-    (.Value | test("[\r\n\u0000]") | not)) and
-  all(.Parameters[] | select(
-    .Name == ($prefix + "/DB_PASSWORD") or
-    .Name == ($prefix + "/EMAIL_VERIFICATION_HASH_SECRET") or
-    .Name == ($prefix + "/EMAIL_VERIFICATION_OUTBOX_ENCRYPTION_KEY") or
-    .Name == ($prefix + "/SPRING_MAIL_PASSWORD") or
-    .Name == ($prefix + "/LOGIN_JWT_SIGNING_KEY"));
-    .Type == "SecureString") and
-  all(.Parameters[] | select(.Name == ($prefix + "/EMAIL_VERIFICATION_HASH_SECRET"));
-    (.Value | base64_byte_length) >= 32) and
-  all(.Parameters[] | select(.Name == ($prefix + "/EMAIL_VERIFICATION_OUTBOX_ENCRYPTION_KEY"));
-    (.Value | base64_byte_length) == 32) and
-  all(.Parameters[] | select(.Name == ($prefix + "/EMAIL_VERIFICATION_MAX_VERIFICATION_ATTEMPTS"));
-    .Type == "String" and (.Value | positive_integer("2147483647"))) and
-  all(.Parameters[] | select(.Name == ($prefix + "/EMAIL_VERIFICATION_PASSWORD_RESET_VERIFICATION_TTL_SECONDS"));
-    .Type == "String" and (.Value | positive_integer("9223372036854775807"))) and
-  all(.Parameters[] | select(.Name == ($prefix + "/LOGIN_JWT_SIGNING_KEY"));
-    (.Value | base64_byte_length) >= 32) and
-  all(.Parameters[] | select(.Name == ($prefix + "/LOGIN_ALLOWED_ORIGINS"));
-    .Type == "String" and (.Value | split(",") |
-      length > 0 and (length == (unique | length)) and
-      all(.[]; test("^https://([A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?\\.)*[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?(:[1-9][0-9]{0,4})?$") and
-        (if test(":[0-9]+$") then (split(":") | last | tonumber) <= 65535 else true end))))
-' "$WORK_DIR/parameters.json" >/dev/null 2>&1; then
-  fail "파라미터 검증 실패. 기존 파일을 유지합니다."
+  split("\n") | map(select(test("^[ \t]*(#|$)") | not)) |
+  if all(.[]; test("^[A-Za-z_][A-Za-z0-9_]*=")) then
+    map(capture("^(?<key>[A-Za-z_][A-Za-z0-9_]*)=(?<value>.*)$"))
+  else error("invalid env syntax") end |
+  if ([.[].key] | length == (unique | length)) then
+    from_entries
+  else error("duplicate env key") end |
+  . as $env |
+  (["SERVER_PORT", "DB_URL", "DB_USERNAME", "DB_PASSWORD",
+    "EMAIL_VERIFICATION_HASH_SECRET", "EMAIL_VERIFICATION_OUTBOX_ENCRYPTION_KEY",
+    "SPRING_MAIL_PASSWORD", "SPRING_MAIL_HOST", "SPRING_MAIL_USERNAME",
+    "EMAIL_VERIFICATION_MAIL_FROM", "EMAIL_VERIFICATION_MAX_VERIFICATION_ATTEMPTS",
+    "EMAIL_VERIFICATION_PASSWORD_RESET_VERIFICATION_TTL_SECONDS",
+    "LOGIN_JWT_SIGNING_KEY", "LOGIN_ALLOWED_ORIGINS"] |
+    all(.[]; $env[.] | type == "string" and test("\\S"))) and
+  (.SERVER_PORT == "8080") and
+  (.EMAIL_VERIFICATION_HASH_SECRET | base64_byte_length >= 32) and
+  (.EMAIL_VERIFICATION_OUTBOX_ENCRYPTION_KEY | base64_byte_length == 32) and
+  (.EMAIL_VERIFICATION_MAX_VERIFICATION_ATTEMPTS | positive_integer("2147483647")) and
+  (.EMAIL_VERIFICATION_PASSWORD_RESET_VERIFICATION_TTL_SECONDS | positive_integer("9223372036854775807")) and
+  (.LOGIN_JWT_SIGNING_KEY | base64_byte_length >= 32) and
+  (.LOGIN_ALLOWED_ORIGINS | split(",") |
+    length > 0 and (length == (unique | length)) and
+    all(.[]; test("^https://([A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?\\.)*[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?(:[1-9][0-9]{0,4})?$") and
+      (if test(":[0-9]+$") then (split(":") | last | tonumber) <= 65535 else true end)))
+' "$WORK_DIR/server.env" >/dev/null 2>&1; then
+  fail 'env 내용 검증 실패. 필수값, raw 구문, 중복 키와 값 형식을 확인하세요. 기존 파일을 유지합니다.'
 fi
-
-awk '!/^(DB_(URL|USERNAME|PASSWORD)|EMAIL_VERIFICATION_(HASH_SECRET|OUTBOX_ENCRYPTION_KEY|MAIL_FROM|MAX_VERIFICATION_ATTEMPTS|PASSWORD_RESET_VERIFICATION_TTL_SECONDS)|SPRING_MAIL_(HOST|USERNAME|PASSWORD)|LOGIN_(JWT_SIGNING_KEY|ALLOWED_ORIGINS))=/' "$TEMPLATE" \
-  > "$WORK_DIR/server.env"
-
-printf '\n' >> "$WORK_DIR/server.env"
-
-jq -r '
-  .Parameters
-  | sort_by(.Name)[]
-  | (.Name | split("/") | last) + "=" + .Value
-' "$WORK_DIR/parameters.json" >> "$WORK_DIR/server.env"
 
 chmod 600 "$WORK_DIR/server.env"
 
-# 모든 작업이 성공했을 때만 기존 파일을 교체합니다.
+# 모든 작업이 성공했을 때만 같은 파일시스템에서 기존 파일을 교체한다.
 mv -f -- "$WORK_DIR/server.env" "$OUTPUT"
 
 printf '완료: Spring 환경변수 파일 생성 (권한 600)\n'

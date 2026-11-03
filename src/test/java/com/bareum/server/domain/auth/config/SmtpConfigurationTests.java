@@ -2,9 +2,6 @@ package com.bareum.server.domain.auth.config;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -60,7 +57,7 @@ class SmtpConfigurationTests {
 	}
 
 	@Test
-	void deploymentEnvironmentBindsSmtpCredentialsSecurityAndTimeouts() throws IOException {
+	void deploymentEnvironmentBindsSmtpCredentialsSecurityAndTimeouts() {
 		Map<String, Object> environment = deploymentEnvironment();
 		context.withInitializer(ctx -> ctx.getEnvironment()
 				.getPropertySources()
@@ -88,7 +85,7 @@ class SmtpConfigurationTests {
 	}
 
 	@Test
-	void deploymentEnvironmentOverridesReachJavaMail() throws IOException {
+	void deploymentEnvironmentOverridesReachJavaMail() {
 		Map<String, Object> environment = deploymentEnvironment();
 		environment.put("SMTP_CONNECTION_TIMEOUT_MS", "1100");
 		environment.put("SMTP_READ_TIMEOUT_MS", "1200");
@@ -106,15 +103,17 @@ class SmtpConfigurationTests {
 				});
 	}
 
-	private Map<String, Object> deploymentEnvironment() throws IOException {
+	private Map<String, Object> deploymentEnvironment() {
+		// 실제 운영값이 아닌 SMTP 환경변수 바인딩 검증용 가짜 설정이다.
 		Map<String, Object> environment = new HashMap<>();
-		for (String line : Files.readAllLines(Path.of("infra/env/.env.server.template"))) {
-			if (line.isBlank() || line.startsWith("#")) {
-				continue;
-			}
-			String[] entry = line.split("=", 2);
-			environment.put(entry[0], entry[1]);
-		}
+		environment.put("SPRING_MAIL_PORT", "587");
+		environment.put("SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH", "true");
+		environment.put("SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE", "true");
+		environment.put("SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_REQUIRED", "true");
+		environment.put("SPRING_MAIL_PROPERTIES_MAIL_SMTP_SSL_CHECKSERVERIDENTITY", "true");
+		environment.put("SMTP_CONNECTION_TIMEOUT_MS", "5000");
+		environment.put("SMTP_READ_TIMEOUT_MS", "5000");
+		environment.put("SMTP_WRITE_TIMEOUT_MS", "5000");
 		environment.put("SPRING_MAIL_HOST", "smtp.example.invalid");
 		environment.put("SPRING_MAIL_USERNAME", "sender@example.invalid");
 		environment.put("SPRING_MAIL_PASSWORD", "test-only-smtp-password");

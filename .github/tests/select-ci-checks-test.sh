@@ -64,7 +64,7 @@ for file in harness/src/project_harness/checks.py harness/policy.json .gitleaks.
   packages/contracts/content.schema.json .editorconfig docs/example.java CONTRIBUTING.md notes/meeting.md; do
   check_file "$file" true
 done
-for file in Dockerfile .dockerignore infra/nginx/default.conf infra/scripts/deploy.sh infra/env/.env.server.template \
+for file in Dockerfile .dockerignore infra/nginx/default.conf infra/scripts/deploy.sh infra/env/.env.deploy.example \
   .github/workflows/ci.yml .github/scripts/check-ci.sh .github/tests/new-test.sh; do
   check_file "$file" true true
 done

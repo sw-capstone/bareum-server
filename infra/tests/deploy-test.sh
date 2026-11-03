@@ -133,7 +133,7 @@ setup_case() {
   mkdir -p "$CASE_ROOT/infra/.deploy-state"
   printf '%s\n' "$OLD_COMMIT" > "$CASE_ROOT/infra/.deploy-state/server-deployed-sha"
   touch "$CASE_ROOT/infra/nginx/default.conf"
-  touch "$CASE_ROOT/infra/docker-compose.yml" "$CASE_ROOT/infra/certs/rds-ca.pem" "$CASE_ROOT/infra/env/.env.server.template"
+  touch "$CASE_ROOT/infra/docker-compose.yml" "$CASE_ROOT/infra/certs/rds-ca.pem"
   cp "$SOURCE_DIR/scripts/deploy.sh" "$CASE_ROOT/infra/scripts/"
   cp "$SOURCE_DIR/scripts/prepare-ai-env.sh" "$CASE_ROOT/infra/scripts/"
   cat > "$CASE_ROOT/infra/scripts/prepare-server-env.sh" <<'MOCK'
@@ -232,12 +232,12 @@ for target in server ai; do
   pass "$target success; other service preserved"
 done
 
-for mode in pull-fail prepare-fail ai-env-fail config-fail unhealthy-baseline missing-nginx missing-compose missing-cert missing-template; do
+for mode in pull-fail prepare-fail ai-env-fail config-fail unhealthy-baseline missing-nginx missing-compose missing-cert missing-preparer; do
   setup_case "$mode"
   if [[ "$mode" == missing-cert ]]; then rm "$CASE_ROOT/infra/certs/rds-ca.pem"; fi
   if [[ "$mode" == missing-nginx ]]; then rm "$CASE_ROOT/infra/nginx/default.conf"; fi
   if [[ "$mode" == missing-compose ]]; then rm "$CASE_ROOT/infra/docker-compose.yml"; fi
-  if [[ "$mode" == missing-template ]]; then rm "$CASE_ROOT/infra/env/.env.server.template"; fi
+  if [[ "$mode" == missing-preparer ]]; then rm "$CASE_ROOT/infra/scripts/prepare-server-env.sh"; fi
   run_case
   [[ "$RESULT" != 0 ]]
   cmp "$CASE_ROOT/original-deploy" "$CASE_ROOT/infra/env/.env.deploy"
@@ -326,7 +326,7 @@ setup_release() {
   RELEASE_DIR="$CASE_ROOT/infra/.deploy-state/releases/0123456789abcdef0123456789abcdef01234567-fixture"
   mkdir -p "$RELEASE_DIR/staged/infra" "$RELEASE_DIR/backup"
   RELEASE_FILES=(docker-compose.yml nginx/default.conf scripts/deploy.sh scripts/prepare-server-env.sh scripts/prepare-ai-env.sh
-    env/.env.server.template scripts/reload-nginx-after-cert-renewal.sh)
+    scripts/reload-nginx-after-cert-renewal.sh)
   for file in "${RELEASE_FILES[@]}" env/.env.deploy env/.env.server env/.env.ai; do
     source="$CASE_ROOT/infra/$file"
     relative="infra/$file"
@@ -359,9 +359,9 @@ setup_release() {
   printf '%s\n' nginx:1.30-alpine > "$RELEASE_DIR/nginx-image"
 }
 
-for mode in release-success absent-template; do
+for mode in release-success legacy-template; do
   setup_case "$mode"
-  if [[ "$mode" == absent-template ]]; then rm "$CASE_ROOT/infra/env/.env.server.template"; fi
+  if [[ "$mode" == legacy-template ]]; then printf 'obsolete\n' > "$CASE_ROOT/infra/env/.env.server.template"; fi
   setup_release
   run_case
   if [[ "$RESULT" != 0 ]]; then cat "$CASE_ROOT/output" >&2; exit 1; fi
