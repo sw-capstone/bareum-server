@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/sw-capstone/bareum-server/raw/develop/packages/contracts/pdf-parsing/1.0.0/failure.schema.json",
+  "$defs": {
+    "AttemptIdentifier": {
+      "exclusiveMinimum": 0,
+      "maximum": 9223372036854775807,
+      "type": "integer"
+    },
+    "ErrorAction": {
+      "enum": [
+        "CREATE_NEW_ATTEMPT",
+        "FIX_REQUEST",
+        "STOP"
+      ],
+      "title": "ErrorAction",
+      "type": "string"
+    },
+    "ErrorCode": {
+      "enum": [
+        "MALFORMED_JSON",
+        "INVALID_REQUEST",
+        "UNAUTHORIZED",
+        "ATTEMPT_IN_PROGRESS",
+        "SOURCE_URL_EXPIRED",
+        "SOURCE_DOWNLOAD_TEMPORARY_FAILURE",
+        "SOURCE_ACCESS_DENIED",
+        "SOURCE_NOT_FOUND",
+        "SOURCE_IDENTITY_MISMATCH",
+        "FILE_TOO_LARGE",
+        "UNSUPPORTED_MEDIA_TYPE",
+        "PAGE_LIMIT_EXCEEDED",
+        "PDF_ENCRYPTED",
+        "PDF_CORRUPTED",
+        "NO_EXTRACTABLE_TEXT",
+        "CAPACITY_EXCEEDED",
+        "PARSER_TIMEOUT",
+        "PARSER_FAILED",
+        "CONFIGURATION_UNAVAILABLE"
+      ],
+      "title": "ErrorCode",
+      "type": "string"
+    },
+    "ParseError": {
+      "additionalProperties": false,
+      "description": "오류 코드에 맞는 행동을 함께 전달한다.",
+      "properties": {
+        "code": {
+          "$ref": "#/$defs/ErrorCode"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        },
+        "action": {
+          "$ref": "#/$defs/ErrorAction"
+        }
+      },
+      "required": [
+        "code",
+        "message",
+        "action"
+      ],
+      "title": "ParseError",
+      "type": "object"
+    },
+    "ReportIdentifier": {
+      "exclusiveMinimum": 0,
+      "maximum": 9223372036854775807,
+      "type": "integer"
+    }
+  },
+  "additionalProperties": false,
+  "description": "접수 전 오류에는 아직 확인할 수 없는 식별자를 null로 둔다.",
+  "properties": {
+    "reportId": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ReportIdentifier"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "parseAttemptId": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/AttemptIdentifier"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "error": {
+      "$ref": "#/$defs/ParseError"
+    }
+  },
+  "required": [
+    "reportId",
+    "parseAttemptId",
+    "error"
+  ],
+  "title": "ParseErrorResponse",
+  "type": "object",
+  "$comment": "AI #27 내부 PDF 파싱 API의 전송 계약. parsed는 추출 스키마 1.2.0이며 서비스 공통 본문과 구분한다. 식별자 일치·시각 순서·원본 해시·HTTP 상태와 오류 행동의 대응은 Java 호출 경계에서 검사한다."
+}

@@ -1,0 +1,12 @@
+{
+  "reportId": 101,
+  "parseAttemptId": 201,
+  "source": {
+    "objectKey": "reports/101/original.pdf",
+    "originalFilename": "결과보고서.pdf",
+    "sizeBytes": 100,
+    "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "downloadUrl": "https://example-bucket.s3.ap-northeast-2.amazonaws.com/reports/101/original.pdf?signature=example",
+    "urlExpiresAt": "2099-01-01T00:00:00Z"
+  }
+}

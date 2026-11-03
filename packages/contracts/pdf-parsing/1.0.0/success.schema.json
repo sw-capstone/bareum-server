@@ -1,0 +1,144 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/sw-capstone/bareum-server/raw/develop/packages/contracts/pdf-parsing/1.0.0/success.schema.json",
+  "$defs": {
+    "AttemptIdentifier": {
+      "exclusiveMinimum": 0,
+      "maximum": 9223372036854775807,
+      "type": "integer"
+    },
+    "ExtractionQuality": {
+      "enum": [
+        "COMPLETE",
+        "PARTIAL"
+      ],
+      "title": "ExtractionQuality",
+      "type": "string"
+    },
+    "JsonObject": {
+      "additionalProperties": {
+        "$ref": "#/$defs/JsonValue"
+      },
+      "type": "object"
+    },
+    "JsonValue": {},
+    "ParsedPdf": {
+      "additionalProperties": true,
+      "description": "1.2.0 추출 JSON의 내부 필드와 추가 필드를 재해석 없이 보존한다.",
+      "properties": {
+        "schema_version": {
+          "const": "1.2.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "document": {
+          "$ref": "#/$defs/JsonObject"
+        },
+        "parser": {
+          "$ref": "#/$defs/JsonObject"
+        },
+        "pages": {
+          "items": {
+            "$ref": "#/$defs/JsonObject"
+          },
+          "title": "Pages",
+          "type": "array"
+        },
+        "sections": {
+          "items": {
+            "$ref": "#/$defs/JsonObject"
+          },
+          "title": "Sections",
+          "type": "array"
+        },
+        "blocks": {
+          "items": {
+            "$ref": "#/$defs/JsonObject"
+          },
+          "title": "Blocks",
+          "type": "array"
+        },
+        "layout_regions": {
+          "items": {
+            "$ref": "#/$defs/JsonObject"
+          },
+          "title": "Layout Regions",
+          "type": "array"
+        },
+        "warnings": {
+          "items": {
+            "$ref": "#/$defs/JsonObject"
+          },
+          "title": "Warnings",
+          "type": "array"
+        }
+      },
+      "required": [
+        "schema_version",
+        "document",
+        "parser",
+        "pages",
+        "sections",
+        "blocks",
+        "layout_regions",
+        "warnings"
+      ],
+      "title": "ParsedPdf",
+      "type": "object"
+    },
+    "ReportIdentifier": {
+      "exclusiveMinimum": 0,
+      "maximum": 9223372036854775807,
+      "type": "integer"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "reportId": {
+      "$ref": "#/$defs/ReportIdentifier"
+    },
+    "parseAttemptId": {
+      "$ref": "#/$defs/AttemptIdentifier"
+    },
+    "status": {
+      "const": "SUCCEEDED",
+      "default": "SUCCEEDED",
+      "title": "Status",
+      "type": "string"
+    },
+    "startedAt": {
+      "format": "date-time",
+      "title": "Startedat",
+      "type": "string"
+    },
+    "completedAt": {
+      "format": "date-time",
+      "title": "Completedat",
+      "type": "string"
+    },
+    "extractionQuality": {
+      "$ref": "#/$defs/ExtractionQuality"
+    },
+    "parsed": {
+      "$ref": "#/$defs/ParsedPdf"
+    },
+    "error": {
+      "default": null,
+      "title": "Error",
+      "type": "null"
+    }
+  },
+  "required": [
+    "reportId",
+    "parseAttemptId",
+    "startedAt",
+    "completedAt",
+    "extractionQuality",
+    "parsed",
+    "status",
+    "error"
+  ],
+  "title": "SucceededResponse",
+  "type": "object",
+  "$comment": "AI #27 내부 PDF 파싱 API의 전송 계약. parsed는 추출 스키마 1.2.0이며 서비스 공통 본문과 구분한다. 식별자 일치·시각 순서·원본 해시·HTTP 상태와 오류 행동의 대응은 Java 호출 경계에서 검사한다."
+}

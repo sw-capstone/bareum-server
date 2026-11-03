@@ -1,0 +1,47 @@
+{
+  "reportId": 101,
+  "parseAttemptId": 201,
+  "status": "SUCCEEDED",
+  "startedAt": "2026-10-18T12:00:00Z",
+  "completedAt": "2026-10-18T12:00:01Z",
+  "extractionQuality": "COMPLETE",
+  "parsed": {
+    "schema_version": "1.2.0",
+    "document": {
+      "filename": "결과보고서.pdf",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "page_count": 1
+    },
+    "parser": {
+      "name": "bareum-pdf"
+    },
+    "pages": [
+      {
+        "page": 1,
+        "width": 595,
+        "height": 842
+      }
+    ],
+    "sections": [],
+    "blocks": [
+      {
+        "id": "p1",
+        "page": 1,
+        "kind": "para",
+        "text": "교육을 실시했다.",
+        "source_text": "교육을 실시했다.",
+        "bbox": [
+          50,
+          100,
+          500,
+          140
+        ],
+        "parent_id": null,
+        "section_id": null
+      }
+    ],
+    "layout_regions": [],
+    "warnings": []
+  },
+  "error": null
+}
