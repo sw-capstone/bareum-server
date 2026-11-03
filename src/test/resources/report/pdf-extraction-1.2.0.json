@@ -1,0 +1,240 @@
+{
+  "schema_version": "1.2.0",
+  "document": {
+    "document_id": "fixture",
+    "filename": "contract-fixture.pdf",
+    "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "page_count": 1
+  },
+  "parser": {
+    "name": "contract-fixture",
+    "source_hashes": {},
+    "settings": {}
+  },
+  "pages": [
+    {
+      "page": 1,
+      "width": 595,
+      "height": 842
+    }
+  ],
+  "sections": [
+    {
+      "section_id": "s1",
+      "head_block_id": "h1",
+      "head_text": "추진 결과",
+      "block_ids": [
+        "h1",
+        "p1",
+        "note",
+        "table1"
+      ],
+      "child_block_ids": [
+        "p1",
+        "note",
+        "table1"
+      ],
+      "page_range": [
+        1,
+        1
+      ]
+    }
+  ],
+  "blocks": [
+    {
+      "id": "h1",
+      "page": 1,
+      "kind": "heading",
+      "text": "추진 결과",
+      "source_text": "추진 결과",
+      "bbox": [
+        40,
+        30,
+        400,
+        60
+      ],
+      "line_count": 1,
+      "section_id": "s1"
+    },
+    {
+      "id": "p1",
+      "page": 1,
+      "kind": "para",
+      "text": "교육을 실시했다. 만족도 조사를 진행했다.",
+      "source_text": "교육을 실시했다.\n만족도 조사를 진행했다.",
+      "bbox": [
+        40,
+        80,
+        500,
+        130
+      ],
+      "line_count": 1,
+      "parent_id": "h1",
+      "section_id": "s1",
+      "source_fragments": [
+        {
+          "text": "교육을 실시했다.",
+          "bbox": [
+            40,
+            80,
+            500,
+            100
+          ]
+        },
+        {
+          "text": "만족도 조사를 진행했다.",
+          "bbox": [
+            40,
+            110,
+            500,
+            130
+          ]
+        }
+      ]
+    },
+    {
+      "id": "note",
+      "page": 1,
+      "kind": "para",
+      "text": "(단위: 천원)",
+      "source_text": "(단위: 천원)",
+      "bbox": [
+        350,
+        140,
+        500,
+        160
+      ],
+      "line_count": 1,
+      "parent_id": "h1",
+      "section_id": "s1"
+    },
+    {
+      "id": "table1",
+      "page": 1,
+      "kind": "table",
+      "text": "사업 | 결과\n주민교육 | 교육을 실시했다. 만족도 조사를 진행했다.\n | ",
+      "source_text": "사업 | 결과\n주민교육 | 교육을 실시했다. 만족도 조사를 진행했다.\n | ",
+      "bbox": [
+        40,
+        180,
+        500,
+        270
+      ],
+      "line_count": 1,
+      "parent_id": "h1",
+      "section_id": "s1",
+      "rows": [
+        [
+          "사업",
+          "결과"
+        ],
+        [
+          "주민교육",
+          "교육을 실시했다. 만족도 조사를 진행했다."
+        ],
+        [
+          "",
+          ""
+        ]
+      ],
+      "source_rows": [
+        [
+          "사업",
+          "결과"
+        ],
+        [
+          "주민교육",
+          "교육을 실시했다.\n만족도 조사를 진행했다."
+        ],
+        [
+          "",
+          ""
+        ]
+      ],
+      "cells": [
+        {
+          "row": 0,
+          "col": 0,
+          "rowspan": 1,
+          "colspan": 1,
+          "bbox": [
+            40,
+            180,
+            220,
+            210
+          ]
+        },
+        {
+          "row": 0,
+          "col": 1,
+          "rowspan": 1,
+          "colspan": 1,
+          "bbox": [
+            220,
+            180,
+            500,
+            210
+          ]
+        },
+        {
+          "row": 1,
+          "col": 0,
+          "rowspan": 2,
+          "colspan": 1,
+          "bbox": [
+            40,
+            210,
+            220,
+            270
+          ]
+        },
+        {
+          "row": 1,
+          "col": 1,
+          "rowspan": 1,
+          "colspan": 1,
+          "bbox": [
+            220,
+            210,
+            500,
+            240
+          ]
+        },
+        {
+          "row": 2,
+          "col": 1,
+          "rowspan": 1,
+          "colspan": 1,
+          "bbox": [
+            220,
+            240,
+            500,
+            270
+          ]
+        }
+      ],
+      "requires_vision": true
+    }
+  ],
+  "layout_regions": [],
+  "warnings": [
+    {
+      "code": "table_cell_linebreak_review",
+      "page": 1,
+      "bbox": [
+        220,
+        210,
+        500,
+        240
+      ],
+      "row": 1,
+      "col": 1,
+      "detail": "원문 줄 경계를 보존했습니다."
+    },
+    {
+      "code": "new_warning_code",
+      "page": 1,
+      "detail": "새로운 추출 경고를 보존합니다."
+    }
+  ]
+}

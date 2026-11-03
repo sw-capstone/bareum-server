@@ -269,13 +269,11 @@ class EmailLoginIntegrationTests {
 		String refresh = cookie.substring("bareum_refresh=".length(), cookie.indexOf(';'));
 		assertFalse(response.body().contains(refresh));
 		var row = jdbc.queryForMap("SELECT * FROM refresh_token WHERE member_id=?", member.getId());
-		assertNull(row.get("access_token_hash"));
+		assertFalse(row.containsKey("access_token_hash"));
 		assertEquals(tokens.hash("refresh", refresh), row.get("refresh_token_hash"));
 		assertFalse(row.values().toString().contains(access));
 		assertFalse(row.values().toString().contains(refresh));
-		assertNull(row.get("access_expires_at"));
-		assertEquals(0, jdbc.queryForObject("SELECT count(*) FROM login_access_token WHERE member_id=?", Integer.class,
-				member.getId()));
+		assertFalse(row.containsKey("access_expires_at"));
 		assertEquals(NOW.plusSeconds(28800), ((Timestamp)row.get("expires_at")).toInstant());
 		var me = request("GET", "/api/v1/auth/me", null, "Authorization", "Bearer " + access);
 		assertEquals(200, me.statusCode(), me.body());
@@ -629,8 +627,6 @@ class EmailLoginIntegrationTests {
 		verify(failingJwt).issue(eq("access"), anyLong(), any(), any(), any());
 		assertEquals(previousRow, jdbc.queryForMap("SELECT * FROM refresh_token WHERE member_id=?", member.getId()));
 		assertTrue(sessions.authenticate(previous.accessToken()).isPresent());
-		assertEquals(0, jdbc.queryForObject("SELECT count(*) FROM login_access_token WHERE member_id=?", Integer.class,
-				member.getId()));
 	}
 
 	@Test
@@ -733,8 +729,6 @@ class EmailLoginIntegrationTests {
 		var access = jwt.issue("access", member.getId(), UUID.randomUUID(), NOW, NOW.plusSeconds(900));
 		assertTrue(sessions.authenticate(access).isPresent());
 		assertEquals(0, jdbc.queryForObject("SELECT count(*) FROM refresh_token WHERE member_id=?", Integer.class,
-				member.getId()));
-		assertEquals(0, jdbc.queryForObject("SELECT count(*) FROM login_access_token WHERE member_id=?", Integer.class,
 				member.getId()));
 		var missing = jwt.issue("access", Long.MAX_VALUE, UUID.randomUUID(), NOW, NOW.plusSeconds(900));
 		assertTrue(sessions.authenticate(missing).isEmpty());

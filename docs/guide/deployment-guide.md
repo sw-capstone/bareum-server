@@ -6,16 +6,22 @@
 
 ```text
 develop에 병합
-→ CI 검사
+→ SSM으로 마지막 서버 배포 성공 SHA 조회
+→ 마지막 배포 이후 변경에 필요한 CI 검사
 → ARM64 앱 이미지 빌드·GHCR 게시
 → SSM으로 EC2에 배포 명령 전달
 → 해당 커밋의 준비 스크립트 다운로드·해시 확인
 → 설정 다운로드·백업·사전 검증
 → 설정 설치·Server/Nginx 재생성
 → 이미지와 내부 health 응답 확인
+→ 배포 성공 SHA 갱신
 ```
 
 - [배포 워크플로](../../.github/workflows/deploy-dev.yml)는 `develop`의 push와 수동 실행을 지원한다. 수동 실행도 `develop`을 선택해야 한다. 작업 브랜치 푸시나 PR 생성만으로는 배포되지 않는다.
+- 마지막 서버 배포 성공 SHA부터 현재 SHA까지 등록된 문서 경로만 변경됐다면 공통 검사만 수행하고 이미지 빌드, GHCR 게시와 서버 배포를 생략한다. 직전 push가 문서 전용이어도, 그전에 실패하거나 대기 중 취소된 서버 변경이 남아 있으면 필요한 CI 검사와 배포를 다시 수행한다. 문서 경로와 검사 선택 기준은 [개발 가이드](./development-guide.md#12-github-actions와-리뷰)를 따른다.
+- 통합 CI의 선택된 검사가 모두 성공하고 `deploy_required=true`인 경우에만 이미지를 게시한다. 이미지 게시가 생략되거나 실패하면 서버 배포도 실행하지 않는다.
+- 수동 실행은 문서 전용 여부와 관계없이 전체 검증 후 이미지 게시와 재배포를 수행한다. 변경 범위를 판별하지 못한 경우도 전체 검증 후 배포한다.
+- 배포 기준 조회는 기존 Actions 배포 잠금과 EC2 배포 잠금이 해제될 때까지 기다린 뒤 성공 기록을 읽는다. 기록이 없거나 잘못됐거나 Git에서 해당 커밋을 찾지 못하면 전체 검사로 대체한다. SSM 조회 실패나 미완료 복구 상태는 배포를 중단하며, 성공한 조회에서 기록이 없는 경우와 구분한다.
 - 앱 이미지는 게시 결과의 digest로 고정하고, 설정은 이미지를 빌드한 커밋 SHA로 받는다.
 - [SSM 실행 스크립트](../../.github/scripts/deploy-via-ssm.sh)는 EC2에 준비 스크립트를 내려받는다. EC2의 Git 저장소나 준비 스크립트 사전 설치는 필요하지 않다.
 - 배포 중 Server와 Nginx를 재생성하므로 잠깐 요청이 실패할 수 있다. 무중단 배포 구성은 아니다.
@@ -30,6 +36,7 @@ develop에 병합
 | `infra/nginx/default.conf` | `/opt/bareum/infra/nginx/default.conf` |
 | `infra/scripts/deploy.sh` | `/opt/bareum/infra/scripts/deploy.sh` |
 | `infra/scripts/prepare-server-env.sh` | `/opt/bareum/infra/scripts/prepare-server-env.sh` |
+| `infra/scripts/prepare-ai-env.sh` | `/opt/bareum/infra/scripts/prepare-ai-env.sh` |
 | `infra/env/.env.server.template` | `/opt/bareum/infra/env/.env.server.template` |
 | `infra/scripts/reload-nginx-after-cert-renewal.sh` | `/etc/letsencrypt/renewal-hooks/deploy/reload-nginx-after-cert-renewal.sh` |
 
@@ -42,13 +49,44 @@ develop에 병합
 | 배포 연결 | GitHub 변수 `EC2_INSTANCE_ID`, `AWS_ROLE_ARN`으로 대상 EC2와 OIDC 역할을 지정한다. Actions는 SSM 명령 전송·결과 조회 권한을 사용한다. |
 | 이미지·파일 접근 | EC2는 GHCR 이미지 읽기 인증과 GitHub 원본 파일·AWS 접근, Docker·배포 파일 접근 권한을 사용한다. |
 | 배포 환경변수 | `/opt/bareum/infra/env/.env.deploy`에 이미지와 경로를 관리한다. `SERVER_ENV_FILE=./env/.env.server`를 사용하며, 형식은 [예시 파일](../../infra/env/.env.deploy.example)을 참고한다. |
-| 앱 환경변수 | Parameter Store의 `/bareum/dev/server/` 아래 DB·이메일 설정 11개와 템플릿의 일반 설정을 합쳐 `.env.server`를 생성한다. 필수 파라미터와 검증 기준은 아래 표를 따른다. |
+| 서버 환경변수 | Parameter Store의 `/bareum/dev/server/` 아래 DB·이메일 설정 11개와 템플릿의 일반 설정을 합쳐 `.env.server`를 생성한다. 필수 파라미터와 검증 기준은 아래 표를 따른다. |
+| AI 환경변수 | Parameter Store의 `/bareum/dev/ai/env`에 완성된 AI env 파일 전체를 `SecureString`으로 저장한다. 배포 시 조회·검증한 뒤 `.env.ai`를 생성한다. |
 | HTTPS 인증서 | `/etc/letsencrypt/live/api.bareum.site/`에 인증서·개인 키를 보관하고, `/var/www/certbot`을 도메인 인증 경로로 사용한다. |
 | RDS 인증서 | `.env.deploy`의 `RDS_CA_FILE`이 EC2의 CA 파일 경로를 지정한다. |
 
 배포 스크립트는 Linux의 Bash·Docker Compose·AWS CLI와 `curl`, `jq`, `flock`, GNU coreutils를 사용하며, 기존 Server·Nginx가 정상 동작하는 상태에서 실행한다.
 
-앱 비밀값은 Git에 넣지 않는다. Server 배포 시 [환경변수 생성 스크립트](../../infra/scripts/prepare-server-env.sh)가 템플릿과 Parameter Store 값으로 `.env.server`를 다시 생성한다. 템플릿에 없는 수동 추가 값은 유지되지 않는다. `.env.ai`, 인증서·개인 키, RDS CA는 배포 파일로 덮어쓰지 않는다.
+앱 비밀값은 Git에 넣지 않는다. Server 배포 시 [서버 환경변수 생성 스크립트](../../infra/scripts/prepare-server-env.sh)가 템플릿과 Parameter Store 값으로 `.env.server`를 다시 생성한다. 템플릿에 없는 수동 추가 값은 유지되지 않는다. AI 환경파일도 아래 방식으로 자동 생성한다. 인증서·개인 키와 RDS CA는 배포 파일로 덮어쓰지 않는다.
+
+### AI 환경파일 자동 생성
+
+[AI 환경변수 생성 스크립트](../../infra/scripts/prepare-ai-env.sh)는 `ap-northeast-2`의 `/bareum/dev/ai/env` 하나를 `ssm:GetParameter`로 조회·복호화한다. 이 파라미터의 등록과 EC2 역할의 조회·복호화 권한은 최초 배포 전에 운영자가 준비해야 한다. 고객 관리형 KMS 키를 사용하면 해당 키의 복호화 권한도 필요하다. 파라미터에는 키 이름별 JSON이 아닌 `KEY=value` 형식의 env 파일 전체를 넣는다. 서버 설정과 AI 설정은 별도 파일로 관리한다.
+
+아래 세 항목은 기본값이 없으며 실제 배포 값이 필요하다. 토큰은 서버가 AI 요청에 사용하는 인증 토큰과 일치해야 한다.
+
+| 필수 항목 | 검증 기준 |
+| --- | --- |
+| `BAREUM_AI_INTERNAL_API_TOKEN` | 공백만 있는 값이나 `replace-me`를 허용하지 않음 |
+| `BAREUM_AI_S3_ALLOWED_HOST` | 프로토콜·경로가 없는 소문자 DNS 호스트 이름 |
+| `BAREUM_AI_S3_ALLOWED_KEY_PREFIX` | 비어 있지 않고 `/`로 시작하지 않으며 `/`로 끝나는 원본 키 접두사 |
+
+`bareum-ai/.env.example`에 있는 파일 크기·페이지 수·동시 실행 수·타임아웃 설정도 같은 파일에 기록할 수 있다. 생략 시 AI 코드의 기본값이 적용된다. 명시한 값은 양수여야 하며 최대 파일 크기는 20,000,000바이트, 최대 페이지 수는 60이다. Compose는 `format: raw`를 사용하므로 값에 따옴표를 덧붙이거나 변수 치환을 기대하지 않는다. 중복 키, 잘못된 env 구문, CR·널 문자와 필수값·숫자 형식 오류는 배포를 차단한다. 값은 출력하지 않는다.
+
+Server 릴리스 준비 시 AI env를 권한이 제한된 릴리스 폴더에 먼저 생성하고, 후보 Compose 검증에는 이 파일을 사용한다. 기존 EC2에 `.env.ai`가 없어도 이 순서로 검증할 수 있다. 검증만 하는 실행은 실제 `.env.ai`를 변경하지 않는다. 적용할 때만 `/opt/bareum/infra/env/.env.ai`를 권한 `600`으로 교체하며 기존 파일 또는 파일이 없던 상태를 복구 자료에 기록한다. `AI_ENV_FILE`은 생략하거나 `./env/.env.ai`로 지정한다. 다른 출력 경로는 지원하지 않는다.
+
+AI 단독 배포도 동일하게 AI env를 먼저 준비하고 검증한 뒤 컨테이너를 재생성한다. 실패하면 기존 환경파일을 복원하며, 원래 파일이 없었다면 실행 중이던 AI 컨테이너의 환경변수를 복구에 사용하고 파일이 없던 상태로 돌린다. Server 배포는 AI 환경파일을 준비하지만 실행 중인 AI 컨테이너는 재생성하지 않는다. AI 설정 변경의 실제 반영은 AI 배포 후 확인한다. 조회·검증 실패 시에는 기존 환경파일과 실행 중인 컨테이너를 변경하지 않는다.
+
+### AI 환경파일·배포 회귀 테스트
+
+```bash
+bash infra/tests/prepare-ai-env-test.sh
+bash infra/tests/deploy-test.sh
+bash infra/tests/prepare-infra-release-test.sh
+TEST_REAL_VALIDATION=1 bash infra/tests/prepare-infra-release-test.sh
+bash infra/tests/apply-infra-release-integration-test.sh
+```
+
+CI는 AI env가 없는 초기 상태, 필수값·저장 유형·구문 오류, 조회 실패 시 기존 파일 보존, 값과 파일 권한, 배포 실패 시 복구를 검사한다. 실제 Compose·컨테이너 검사도 처음에는 `.env.ai`가 없는 상태에서 릴리스를 적용하고, AI 단독 배포의 환경변수 주입과 파일이 없던 상태의 복구를 확인한다. AWS 응답은 모의하며 컨테이너는 Nginx 테스트 이미지를 사용한다. 실제 AWS 권한·AI 이미지의 파싱 동작·S3 접근은 별도 배포 확인 대상이다.
 
 ### Parameter Store와 템플릿의 관리 범위
 
@@ -148,6 +186,7 @@ sudo cat "$RELEASE_DIR/commit-sha" "$RELEASE_DIR/server-image" "$RELEASE_DIR/sta
 - `/opt/bareum/infra/.deploy-state/lock`: 설정 준비 또는 적용 중 다른 실행을 막는다. 잠금 파일의 존재만으로 실행 중이라고 판단하지 않는다.
 - `.deploy-state/releases/<SHA>-<식별자>/`: 받은 파일, 체크섬, 기존 설정·이미지 백업, 검증 결과를 보관한다.
 - `.deploy-state/pending/`: 진행 중이거나 복구가 필요한 배포의 복구 자료다. 다음 배포를 차단하므로 임의로 삭제하지 않는다.
+- `.deploy-state/server-deployed-sha`: 마지막으로 검증된 서버 릴리스의 배포 성공 SHA다. Server/Nginx 이미지와 health 확인 후에만 권한 `600`으로 원자적으로 갱신한다. 실패나 자동 복구 시에는 이전 기록을 유지한다. 커밋을 확인할 수 없는 이미지 단독 서버 배포가 성공하면 기록을 제거해 다음 CI에서 전체 검사하게 하며, AI 배포는 이 기록을 바꾸지 않는다.
 
 | 릴리스 상태 | 의미 |
 | --- | --- |

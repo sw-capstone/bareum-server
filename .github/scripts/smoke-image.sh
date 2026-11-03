@@ -29,7 +29,7 @@ printf '%s\n' 'DB_URL=jdbc:postgresql://postgres:5432/bareum_ci' \
   'EMAIL_VERIFICATION_HASH_SECRET=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=' \
   'EMAIL_VERIFICATION_OUTBOX_ENABLED=false' \
   'SERVER_PORT=8080' 'SPRING_JPA_SHOW_SQL=false' > "$SERVER_ENV_FILE"
-touch "$RDS_CA_FILE"
+touch "$RDS_CA_FILE" "$AI_ENV_FILE"
 certificate_dir="$CI_LETSENCRYPT_DIR/live/api.bareum.site"
 mkdir -p "$certificate_dir" "$CI_CERTBOT_WEBROOT/.well-known/acme-challenge"
 openssl req -x509 -newkey rsa:2048 -nodes -days 1 \

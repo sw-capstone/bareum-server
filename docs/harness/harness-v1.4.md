@@ -48,7 +48,7 @@
 bareum-server/
 ├── .github/
 │   └── workflows/
-│       └── harness.yml       # GitHub Actions 실행 정의
+│       └── ci.yml            # 서버 CI, 하네스와 Gitleaks 실행 정의
 ├── docs/
 │   └── harness/
 │       ├── harness-v1.4.md   # 현재 구조 설계 문서
@@ -72,7 +72,7 @@ bareum-server/
 
 | 경로 | 역할 |
 | --- | --- |
-| `.github/workflows/harness.yml` | Push와 Pull Request에서 서버 테스트·하네스 검사·자체 테스트 실행 |
+| `.github/workflows/ci.yml` | PR, 수동 실행과 배포 워크플로 호출에서 서버 검사, 하네스와 Gitleaks 실행 |
 | `harness/policy.json` | 필수 경로, 검사 종류, 정책 버전 관리 |
 | `harness/src/project_harness/` | 검사 로직과 명령행 실행기 관리 |
 | `harness/tests/` | 검사기의 입력·판정·상태 구분 검증 |

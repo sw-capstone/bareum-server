@@ -1,0 +1,9 @@
+{
+  "reportId": 101,
+  "parseAttemptId": 201,
+  "error": {
+    "code": "CAPACITY_EXCEEDED",
+    "message": "현재 새 파싱을 시작할 수 없습니다.",
+    "action": "CREATE_NEW_ATTEMPT"
+  }
+}

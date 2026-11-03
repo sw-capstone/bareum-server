@@ -1,0 +1,35 @@
+package com.bareum.server.domain.report.enums;
+
+import static com.bareum.server.domain.report.enums.PdfParseErrorAction.*;
+
+import lombok.Getter;
+import lombok.RequiredArgsConstructor;
+
+/** AI PDF 파싱 API가 반환하는 오류 코드와 후속 처리 기준을 나타낸다. */
+@Getter
+@RequiredArgsConstructor
+public enum PdfParseErrorCode {
+
+	MALFORMED_JSON(400, FIX_REQUEST),
+	INVALID_REQUEST(422, FIX_REQUEST),
+	UNAUTHORIZED(401, STOP),
+	ATTEMPT_IN_PROGRESS(409, CREATE_NEW_ATTEMPT),
+	SOURCE_URL_EXPIRED(424, CREATE_NEW_ATTEMPT),
+	SOURCE_DOWNLOAD_TEMPORARY_FAILURE(424, CREATE_NEW_ATTEMPT),
+	SOURCE_ACCESS_DENIED(424, STOP),
+	SOURCE_NOT_FOUND(424, STOP),
+	SOURCE_IDENTITY_MISMATCH(422, STOP),
+	FILE_TOO_LARGE(413, STOP),
+	UNSUPPORTED_MEDIA_TYPE(415, STOP),
+	PAGE_LIMIT_EXCEEDED(422, STOP),
+	PDF_ENCRYPTED(422, STOP),
+	PDF_CORRUPTED(422, STOP),
+	NO_EXTRACTABLE_TEXT(422, STOP),
+	CAPACITY_EXCEEDED(503, CREATE_NEW_ATTEMPT),
+	PARSER_TIMEOUT(504, CREATE_NEW_ATTEMPT),
+	PARSER_FAILED(500, STOP),
+	CONFIGURATION_UNAVAILABLE(503, STOP);
+
+	private final int httpStatus;
+	private final PdfParseErrorAction action;
+}

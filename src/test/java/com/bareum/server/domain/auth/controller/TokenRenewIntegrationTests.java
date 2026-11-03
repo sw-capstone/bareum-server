@@ -232,9 +232,7 @@ class TokenRenewIntegrationTests {
 		assertTrue(cookie.contains("Path=/api/v1/auth") && cookie.contains("Max-Age=27899"));
 		assertFalse(cookie.contains("Domain="));
 		var row = jdbc.queryForMap("SELECT * FROM refresh_token WHERE member_id=?", member.getId());
-		assertNull(row.get("access_token_hash"));
-		assertEquals(0, jdbc.queryForObject("SELECT count(*) FROM login_access_token WHERE member_id=?", Integer.class,
-				member.getId()));
+		assertFalse(row.containsKey("access_token_hash"));
 		assertEquals(tokens.hash("refresh", nextRefresh), row.get("refresh_token_hash"));
 		assertEquals(original.sessionExpiresAt(), ((Timestamp)row.get("expires_at")).toInstant());
 		assertEquals(NOW, ((Timestamp)row.get("created_at")).toInstant());
