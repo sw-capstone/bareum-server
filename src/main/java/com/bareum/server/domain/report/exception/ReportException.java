@@ -8,4 +8,8 @@ public class ReportException extends BusinessException {
 	public ReportException(ReportErrorCode errorCode) {
 		super(Domain.REPORT, errorCode);
 	}
+
+	public ReportException(ReportErrorCode errorCode, Throwable cause) {
+		super(Domain.REPORT, errorCode, cause);
+	}
 }

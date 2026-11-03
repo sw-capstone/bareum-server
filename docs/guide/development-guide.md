@@ -333,7 +333,7 @@ cd bareum-server
   - Git 이력을 검사한다. 명시된 인증정보 형식은 차단하고 일반 비밀번호·키 후보는 경고로 남긴다. 로컬 실행과 분류 기준은 [하네스 안내](../../harness/README.md)를 따른다.
 - 제품 구현 요약 문서 기준 — 실행 중
   - `docs/product/service-spec.md`에 정책이 요구하는 구성이 있는지 확인한다. 문서 내용의 정확성은 판정하지 않는다.
-백엔드·AI 동작, 계약 호환성, 근거·상태 보존 등 안전 불변식, 평가 데이터·성능 회귀 검사는 관련 구현과 자산이 준비된 뒤 각 저장소에 추가한다. 서버의 Spring Boot 코드는 `src/main/`, `src/test/`에 있으며 Java 25와 백엔드에서 정한 로컬 DB 연결 환경에서 `./gradlew test`로 검증할 수 있다. PR CI는 PostgreSQL 18 테스트 DB를 준비하고 `./gradlew --no-daemon check bootJar`로 포맷 검사·테스트·JAR 빌드를 실행한다. 하네스는 별도 워크플로에서 검사한다.
+백엔드·AI 동작, 계약 호환성, 근거·상태 보존 등 안전 불변식, 평가 데이터·성능 회귀 검사는 관련 구현과 자산이 준비된 뒤 각 저장소에 추가한다. 서버의 Spring Boot 코드는 `src/main/`, `src/test/`에 있으며 Java 25와 백엔드에서 정한 로컬 DB 연결 환경에서 `./gradlew test`로 검증할 수 있다. PR CI는 PostgreSQL 18 테스트 DB를 준비하고 `./gradlew --no-daemon check bootJar`로 포맷 검사·테스트·JAR 빌드를 실행한다. 하네스와 Gitleaks는 같은 CI 워크플로의 별도 job에서 검사한다.
 
 `test-harness.sh`는 하네스 검사기의 자체 회귀 테스트를 실행한다. 서버 제품 코드는 `./gradlew test`로 별도 검증한다.
 
@@ -501,17 +501,48 @@ PR 작성자가 필요한 리뷰어를 직접 지정한다.
 서버:
 
 ```text
-CI / Bareum Server CI
-├── PostgreSQL 18 테스트 DB
-├── ./gradlew --no-daemon check bootJar
-│   ├── spotlessCheck
-│   └── test
-└── Docker 이미지·배포 구성 검사
-
-Server checks / harness
-├── ./scripts/run-harness.sh check
-└── ./scripts/test-harness.sh
+CI
+├── Select checks: 변경 범위 판별
+├── Workflow and shell checks: 정적 검사와 CI 실행 정책 테스트
+├── Java checks: PostgreSQL 18, JDK 25, check bootJar
+├── ARM64 image checks: 이미지 빌드와 실제 기동 검사
+├── Deployment tests: 배포 모의 테스트 5개를 한 job의 별도 step으로 실행
+├── Infrastructure integration: 실제 Docker 통합 테스트 2개를 matrix로 실행
+├── harness: 저장소 검사와 하네스 자체 테스트
+├── secret-scan: Gitleaks 연동 테스트와 Git 이력 검사
+└── Bareum Server CI: 선택한 검사 결과의 최종 집계
 ```
+
+통합 CI는 `main` 또는 `develop`을 대상으로 하는 PR에서 실행한다. 작업 브랜치 push만으로는 CI를 실행하지 않으며, 해당 PR의 브랜치에 push하면 PR 이벤트로 한 번 실행한다. `develop` push에서는 배포 워크플로가 EC2의 마지막 서버 배포 성공 SHA를 조회해 같은 CI에 `deployment_base_sha`로 전달한다. 마지막 배포 이후 문서 외 변경이 있고 선택된 검사가 모두 성공하면 이미지 게시와 배포를 진행한다. 마지막 배포 이후 등록된 문서 경로만 변경됐다면 공통 검사 후 게시와 배포를 생략한다. CI만 수동 실행하면 전체 검증을 수행하며, 수동 재배포는 `Deploy development`에서 `develop`을 선택해 실행한다.
+
+Gitleaks는 PR의 `base.sha..head.sha`, `develop` push의 `마지막 서버 배포 성공 SHA..현재 SHA`에 포함된 커밋을 검사한다. 이전 실행의 실패나 취소로 남은 커밋도 다시 검사해 후속 문서 push로 검사를 우회하지 않게 한다. `.gitleaks.toml` 또는 `harness/secret-scan-policy.toml` 변경이나 SHA 확인 실패 시에는 검사할 커밋의 전체 이력으로 대체한다. 수동 실행은 받아온 모든 브랜치와 태그의 이력을 검사한다. 세부 기준은 [`DEC-SEC-001`](../decisions/DEC-SEC-001-secret-detection.md)을 따른다.
+
+정적 검사, 하네스와 Gitleaks는 서로 독립적인 job으로 바로 실행한다. Java, 이미지, 배포 모의 테스트와 인프라 통합 테스트는 변경 범위 판별 결과만 기다린 뒤 필요한 job을 병렬로 실행한다. 한 검사에서 실패해도 다른 독립 job은 계속 실행한다. 배포 모의 테스트 5개는 한 job 안에서 순서대로 실행하며, 앞 테스트가 실패해도 실행이 취소되지 않았다면 나머지 테스트를 계속 실행한다. 하나라도 실패하면 해당 job은 실패한다. 실제 인프라 통합 테스트 2개는 `fail-fast: false`인 matrix로 유지한다.
+
+JDK 25와 PostgreSQL 서비스는 Java job에만 준비한다. 이미지 기동 검사는 별도의 job에서 Docker Compose로 필요한 테스트 DB와 Nginx를 준비한다. 문서 전용 변경에서는 이 두 job을 생략하므로 Java용 DB 서비스도 시작하지 않는다.
+
+기존 필수 검사 이름인 `Bareum Server CI`는 모든 검사 결과를 집계하는 job에서 유지한다. 이 job은 선행 검사가 실패하거나 생략돼도 실행하며, 선택한 job이 모두 성공하고 선택하지 않은 job만 생략된 경우에 통과한다. 하네스나 Gitleaks의 실패, 취소, 필요한 검사의 예기치 않은 생략, 변경 범위 결과의 누락은 최종 검사를 실패 처리한다.
+
+하네스, Gitleaks, workflow와 shell 정적 검사, 변경 범위 선택 테스트는 항상 실행한다. `.github/scripts/select-ci-checks.sh`는 Java, 실제 서버 이미지와 배포 스크립트 모의 테스트를 실행할지 `server`로 출력한다. 실제 Docker를 사용하는 인프라 통합 테스트 두 개의 실행 여부는 `infra`로 따로 출력해 기존 실행 조건을 유지한다.
+
+| 변경 범위와 실행 방식 | 일반 서버 검사 (`server`) | 인프라 통합 테스트 두 개 (`infra`) |
+| --- | --- | --- |
+| PR 범위 또는 마지막 배포 이후 변경이 등록된 문서 경로뿐인 경우 | 생략 | 생략 |
+| 그 외 변경을 포함한 PR | 실행 | 인프라 관련 경로 변경 시 실행 |
+| 마지막 배포 이후 그 외 변경이 남아 있는 develop push | 실행 | 실행 |
+| 수동 실행 또는 변경 범위 판별 실패 | 실행 | 실행 |
+
+문서 경로는 `README.md`, `AGENTS.md`, `docs/**/*.md`, `.github/pull_request_template.md`, `harness/README.md`, `harness/AGENTS.md`다. 이 목록에 없는 경로는 `.md`여도 일반 서버 검사를 실행한다. 새 문서 경로에서 검사를 줄이려면 문서 전용 경로 목록과 회귀 테스트를 함께 추가한다.
+
+PR에서 두 인프라 통합 테스트를 실행하는 경로는 기존과 같이 `infra/**`, `.github/workflows/**`, `.github/scripts/**`, `.github/tests/**`, `Dockerfile`, `.dockerignore`다. 두 테스트는 Compose와 Nginx 설정의 실제 검증, 배포 구성 적용과 복구를 확인한다. Java 코드만 변경한 PR에서는 두 테스트를 생략하지만, 실제 서버 이미지를 DB와 Nginx와 함께 기동하는 검사는 계속 실행한다.
+
+PR은 대상 브랜치의 기준 SHA와 검사하는 병합 커밋 SHA를 비교하고, develop push는 실제 마지막 서버 배포 성공 SHA와 현재 SHA를 비교한다. 문서 push가 앞선 서버 변경의 대기 실행을 대체하거나 앞선 검증과 배포가 실패했더라도 미배포 변경을 포함한다. 파일 이름 변경은 기존 경로의 삭제와 새 경로의 추가로 처리한다. SHA가 없거나 커밋 또는 변경 파일을 읽지 못하면 전체 검사를 실행하며, 수동 실행도 전체 검사를 수행한다. EC2 기준 조회 자체가 실패하거나 복구가 미완료라면 배포 워크플로를 중단한다.
+
+변경 범위 선택의 회귀 테스트는 `bash .github/tests/select-ci-checks-test.sh`, 최종 결과 집계 테스트는 `bash .github/tests/check-ci-results-test.sh`로 실행한다. 두 테스트는 정적 검사 job에서도 실행한다. 재사용 CI는 `server` 판별 결과를 `deploy_required` 출력으로 전달한다. 배포 워크플로는 CI 성공과 `deploy_required=true`를 확인한 뒤 이미지를 게시하며, 게시가 생략되면 배포도 생략한다. 수동 재배포는 전체 검증 후 진행한다.
+
+`bash .github/tests/deployment-baseline-test.sh`는 Linux에서 SSM 응답을 모의하고 실제 원격 조회 명령과 Git 변경 범위 판별을 연결해 미배포 변경, 문서 누적, 성공 기록 누락과 미완료 복구 상태를 검사한다. 서버 릴리스 배포가 실제로 성공했을 때만 기준을 갱신하는지는 배포 모의 테스트와 실제 컨테이너 통합 테스트에서 확인한다.
+
+비밀정보 검사 범위 테스트는 `bash .github/tests/select-secret-scan-range-test.sh`로 실행한다. `secret-scan` job에서는 `GITLEAKS_BINARY=gitleaks`를 지정해 중간 커밋의 합성 토큰 탐지, 관계없는 브랜치와 기존 이력의 제외, 수동 실행의 전체 이력 검사도 함께 확인한다.
 
 Gradle 테스트를 로컬에서 실행할 때는 백엔드 담당자가 정한 DB 연결 환경을 갖춘다. `spotlessCheck`와 `spotlessApply`는 DB 없이 실행할 수 있다.
 

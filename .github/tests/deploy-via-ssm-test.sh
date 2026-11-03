@@ -42,8 +42,8 @@ case "$MODE" in
   timedout) status=TimedOut; response=1 ;;
   bad-response) response=1 ;;
 esac
-jq -n --arg status "$status" --argjson response "$response" \
-  '{Status:$status,ResponseCode:$response,StandardOutputContent:"test output",StandardErrorContent:""}'
+jq -n --arg status "$status" --argjson response "$response" --arg stdout "${MOCK_STDOUT-test output}" \
+  '{Status:$status,ResponseCode:$response,StandardOutputContent:$stdout,StandardErrorContent:""}'
 MOCK
 cat > "$work/bin/sleep" <<'MOCK'
 #!/usr/bin/env bash
@@ -62,6 +62,26 @@ for mode in success eventual pending failed cancelled timedout bad-response deni
   grep -q 'AWS-RunShellScript' "$MOCK_CALLS"
   printf 'PASS: %s\n' "$mode"
 done
+
+export GITHUB_OUTPUT="$work/outputs"
+for baseline in "$DEPLOY_COMMIT_SHA" '' invalid $'invalid\nsha=injected'; do
+  export MODE=success MOCK_STDOUT="$baseline"
+  : > "$GITHUB_OUTPUT"
+  bash "$source_dir/scripts/deploy-via-ssm.sh" --read-deployed-sha > "$work/output" 2>&1
+  expected='sha='
+  if [[ "$baseline" == "$DEPLOY_COMMIT_SHA" ]]; then expected="sha=$baseline"; fi
+  [[ "$(cat "$GITHUB_OUTPUT")" == "$expected" ]]
+done
+printf 'PASS: baseline lookup exports only a valid commit or an unknown baseline\n'
+for mode in failed bad-response denied send-fail; do
+  export MODE="$mode"
+  : > "$GITHUB_OUTPUT"
+  result=0
+  bash "$source_dir/scripts/deploy-via-ssm.sh" --read-deployed-sha > "$work/output" 2>&1 || result=$?
+  [[ "$result" != 0 && ! -s "$GITHUB_OUTPUT" ]]
+done
+printf 'PASS: SSM lookup failures stop the workflow instead of pretending no deployment exists\n'
+unset MOCK_STDOUT
 for invalid_commit in '' develop 01234567 '0123456789abcdef0123456789abcdef01234567;id'; do
   rm -f "$MOCK_CALLS"
   DEPLOY_COMMIT_SHA="$invalid_commit" bash "$source_dir/scripts/deploy-via-ssm.sh" > "$work/output" 2>&1 && exit 1
