@@ -34,11 +34,13 @@ import com.bareum.server.domain.report.repository.ReportParseAttemptRepository;
 import com.bareum.server.domain.report.repository.ReportRepository;
 import com.bareum.server.domain.report.source.UploadedReportFile;
 
+import lombok.RequiredArgsConstructor;
 import tools.jackson.databind.json.JsonMapper;
 
 /** 접수 선점, 파싱 상태와 결과 저장, 만료 기록 삭제를 쓰기 트랜잭션으로 처리한다. */
 @Service
 @Transactional
+@RequiredArgsConstructor
 public class ReportIntakeCommandService {
 	private final MemberRepository members;
 	private final ReportIntakeRequestRepository requests;
@@ -49,26 +51,6 @@ public class ReportIntakeCommandService {
 	private final ReportUploadProperties properties;
 	private final ReportIntakeProperties intakeProperties;
 	private final JsonMapper mapper = JsonMapper.builder().build();
-
-	public ReportIntakeCommandService(
-		MemberRepository members,
-		ReportIntakeRequestRepository requests,
-		ReportRepository reports,
-		ReportParseAttemptRepository attempts,
-		ReportContentRepository contents,
-		Clock clock,
-		ReportUploadProperties properties,
-		ReportIntakeProperties intakeProperties
-	) {
-		this.members = members;
-		this.requests = requests;
-		this.reports = reports;
-		this.attempts = attempts;
-		this.contents = contents;
-		this.clock = clock;
-		this.properties = properties;
-		this.intakeProperties = intakeProperties;
-	}
 
 	public Reservation reserve(long memberId, UUID key, String fingerprint, String objectKey) {
 		// 사용자 행을 짧게 잠가 첫 요청의 동시 INSERT도 한 번만 수행한다.

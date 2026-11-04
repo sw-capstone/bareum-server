@@ -32,6 +32,7 @@ public interface ReportRepository extends JpaRepository<Report, Long> {
 				""",
 		nativeQuery = true)
 	List<Long> findSourceCleanupIds(Instant now, long afterId, int batchSize);
+
 	@Lock(LockModeType.PESSIMISTIC_WRITE)
 	@Query("select r from Report r where r.id = :id and r.member.id = :memberId")
 	Optional<Report> findOwnedForUpdate(@Param("id") Long id, @Param("memberId") Long memberId);

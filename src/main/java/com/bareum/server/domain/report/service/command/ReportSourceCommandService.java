@@ -17,26 +17,17 @@ import com.bareum.server.domain.report.repository.ReportParseAttemptRepository;
 import com.bareum.server.domain.report.repository.ReportRepository;
 import com.bareum.server.domain.report.source.SourceCleanupTarget;
 
+import lombok.RequiredArgsConstructor;
+
 /** 파일 접수 취소와 원본 정리 대상 확정, 버전 복구와 삭제 완료 기록을 저장한다. */
 @Service
 @Transactional
+@RequiredArgsConstructor
 public class ReportSourceCommandService {
 	private final ReportRepository reports;
 	private final ReportParseAttemptRepository attempts;
 	private final Clock clock;
 	private final ReportIntakeRequestRepository requests;
-
-	public ReportSourceCommandService(
-		ReportRepository reports,
-		ReportParseAttemptRepository attempts,
-		Clock clock,
-		ReportIntakeRequestRepository requests
-	) {
-		this.reports = reports;
-		this.attempts = attempts;
-		this.clock = clock;
-		this.requests = requests;
-	}
 
 	public boolean request(long memberId, long reportId) {
 		var report = reports.findOwnedForUpdate(reportId, memberId)
