@@ -99,7 +99,7 @@ X-CSRF-TOKEN: <CSRF 조회 응답의 token>
 
 로그인의 LOGIN_ACCESS_TTL_SECONDS·LOGIN_SESSION_TTL_SECONDS·LOGIN_COOKIE_SECURE·LOGIN_COOKIE_SAME_SITE·LOGIN_ALLOWED_ORIGINS를 함께 사용한다. 쿠키 속성·Origin은 [로그인 협의 문서](login-authentication-draft.md)의 기준을 따른다.
 
-두 갱신 제한 값은 env v5에 포함하며, #66의 배포 방식에 따라 `/bareum/dev/server/env` SecureString에 저장된 전체 환경파일에 추가한다. 개별 파라미터나 배포 템플릿은 사용하지 않는다. 기존 전체 설정을 유지한 채 두 항목의 반영 여부를 확인하고, 누락됐다면 병합 전에 추가한다. 생성 스크립트는 새 키를 허용하고 원문을 `.env.server`로 전달하므로, 갱신 설정 때문에 조회 목록이나 필수 검증 규칙을 추가하지 않는다. 애플리케이션은 위 범위의 설정값을 검증한다.
+두 갱신 제한 값은 최신 env v6에 포함하며, #66의 배포 방식에 따라 `/bareum/dev/server/env` SecureString에 저장된 전체 환경파일에 반영한다. 개별 파라미터나 배포 템플릿은 사용하지 않는다. 기존 전체 설정을 유지한 채 두 항목의 반영 여부를 확인하고, 누락됐다면 병합 전에 추가한다. 생성 스크립트는 새 키를 허용하고 원문을 `.env.server`로 전달하므로, 갱신 설정 때문에 조회 목록이나 필수 검증 규칙을 추가하지 않는다. 애플리케이션은 위 범위의 설정값을 검증한다.
 
 ## 검증과 적용 조건
 
