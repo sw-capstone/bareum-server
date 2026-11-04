@@ -6,7 +6,7 @@ import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.bareum.server.domain.report.intake.ReportIntakePolicy;
+import com.bareum.server.domain.report.config.ReportIntakeProperties;
 import com.bareum.server.domain.report.repository.ReportIntakeRequestRepository;
 import com.bareum.server.domain.report.repository.ReportRepository;
 
@@ -19,16 +19,17 @@ import lombok.RequiredArgsConstructor;
 public class ReportMaintenanceQueryService {
 	private final ReportIntakeRequestRepository requests;
 	private final ReportRepository reports;
+	private final ReportIntakeProperties properties;
 
 	public List<Long> expiredRequests(Instant now, long afterId) {
-		return requests.findExpiredProcessingIds(now, afterId, ReportIntakePolicy.MAINTENANCE_BATCH_SIZE);
+		return requests.findExpiredProcessingIds(now, afterId, properties.maintenanceBatchSize());
 	}
 
 	public List<Long> orphanSources(Instant now, long afterId) {
-		return requests.findOrphanCleanupIds(now, afterId, ReportIntakePolicy.MAINTENANCE_BATCH_SIZE);
+		return requests.findOrphanCleanupIds(now, afterId, properties.maintenanceBatchSize());
 	}
 
 	public List<Long> reportSources(Instant now, long afterId) {
-		return reports.findSourceCleanupIds(now, afterId, ReportIntakePolicy.MAINTENANCE_BATCH_SIZE);
+		return reports.findSourceCleanupIds(now, afterId, properties.maintenanceBatchSize());
 	}
 }

@@ -13,6 +13,7 @@ import com.bareum.server.domain.auth.exception.AuthException;
 import com.bareum.server.domain.member.enums.MemberStatus;
 import com.bareum.server.domain.member.repository.MemberRepository;
 import com.bareum.server.domain.report.body.ValidatedReportBody;
+import com.bareum.server.domain.report.config.ReportIntakeProperties;
 import com.bareum.server.domain.report.config.ReportUploadProperties;
 import com.bareum.server.domain.report.dto.response.ReportUploadResponse;
 import com.bareum.server.domain.report.entity.Report;
@@ -46,6 +47,7 @@ public class ReportIntakeCommandService {
 	private final ReportContentRepository contents;
 	private final Clock clock;
 	private final ReportUploadProperties properties;
+	private final ReportIntakeProperties intakeProperties;
 	private final JsonMapper mapper = JsonMapper.builder().build();
 
 	public ReportIntakeCommandService(
@@ -55,7 +57,8 @@ public class ReportIntakeCommandService {
 		ReportParseAttemptRepository attempts,
 		ReportContentRepository contents,
 		Clock clock,
-		ReportUploadProperties properties
+		ReportUploadProperties properties,
+		ReportIntakeProperties intakeProperties
 	) {
 		this.members = members;
 		this.requests = requests;
@@ -64,6 +67,7 @@ public class ReportIntakeCommandService {
 		this.contents = contents;
 		this.clock = clock;
 		this.properties = properties;
+		this.intakeProperties = intakeProperties;
 	}
 
 	public Reservation reserve(long memberId, UUID key, String fingerprint, String objectKey) {
@@ -235,7 +239,7 @@ public class ReportIntakeCommandService {
 	}
 
 	public int purgeExpiredRequests(Instant now) {
-		return requests.deleteExpiredBatch(now, 1000);
+		return requests.deleteExpiredBatch(now, intakeProperties.retentionBatchSize());
 	}
 
 	private ReportIntakeResult result(ReportIntakeRequest request) {

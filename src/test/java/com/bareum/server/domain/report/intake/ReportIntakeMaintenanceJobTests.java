@@ -3,11 +3,13 @@ package com.bareum.server.domain.report.intake;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
+import org.springframework.core.env.MapPropertySource;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 
 import com.bareum.server.domain.report.config.ReportUploadConfig;
@@ -44,5 +46,36 @@ class ReportIntakeMaintenanceJobTests {
 		}
 		verify(service).recoverInterruptedRequests();
 		verify(service).deleteSources();
+	}
+
+	/** 설정한 복구 주기가 실제 재실행에 반영되고 원본 정리 주기는 별도로 적용되는지 검증한다. */
+	@Test
+	void configuredIntervalsControlEachJobIndependently() throws Exception {
+		var recoveryRuns = new CountDownLatch(2);
+		var cleanupStarted = new CountDownLatch(1);
+		var service = mock(ReportIntakeMaintenanceService.class);
+		doAnswer(i -> {
+			recoveryRuns.countDown();
+			return null;
+		}).when(service).recoverInterruptedRequests();
+		doAnswer(i -> {
+			cleanupStarted.countDown();
+			return null;
+		}).when(service).deleteSources();
+		try (var context = new AnnotationConfigApplicationContext()) {
+			context.getEnvironment()
+					.getPropertySources()
+					.addFirst(new MapPropertySource("job-intervals", Map.of(
+							"report.intake.recovery-interval-ms", "20", "report.intake.source-cleanup-interval-ms",
+							"300000")));
+			context.registerBean(ReportIntakeMaintenanceService.class, () -> service);
+			context.registerBean("taskScheduler", ThreadPoolTaskScheduler.class, ThreadPoolTaskScheduler::new);
+			context.register(TimeConfig.class, ReportUploadConfig.class, ReportIntakeMaintenanceJob.class);
+			context.refresh();
+			assertTrue(cleanupStarted.await(3, TimeUnit.SECONDS));
+			assertTrue(recoveryRuns.await(3, TimeUnit.SECONDS));
+		}
+		verify(service, atLeast(2)).recoverInterruptedRequests();
+		verify(service, times(1)).deleteSources();
 	}
 }

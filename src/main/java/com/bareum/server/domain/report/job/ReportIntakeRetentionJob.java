@@ -5,10 +5,9 @@ import java.time.Clock;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
-import com.bareum.server.domain.report.intake.ReportIntakePolicy;
 import com.bareum.server.domain.report.service.command.ReportIntakeCommandService;
 
-/** 매시간 보관 기한이 지난 접수 요청 기록의 정리를 실행하는 스케줄러. */
+/** 설정한 실행 간격마다 보관 기한이 지난 접수 요청 기록의 정리를 실행한다. */
 @Component
 public class ReportIntakeRetentionJob {
 	private final ReportIntakeCommandService commands;
@@ -22,8 +21,8 @@ public class ReportIntakeRetentionJob {
 		this.clock = clock;
 	}
 
-	@Scheduled(fixedDelay = ReportIntakePolicy.IDEMPOTENCY_CLEANUP_INTERVAL_MS,
-		initialDelay = ReportIntakePolicy.IDEMPOTENCY_CLEANUP_INTERVAL_MS)
+	@Scheduled(fixedDelayString = "${report.intake.retention-interval-ms:3600000}",
+		initialDelayString = "${report.intake.retention-interval-ms:3600000}")
 	public int purgeExpiredRequests() {
 		return commands.purgeExpiredRequests(clock.instant());
 	}

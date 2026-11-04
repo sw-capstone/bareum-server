@@ -27,7 +27,9 @@ import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
 /** S3 저장소와 PDF 파싱 서버 통신에 필요한 객체를 등록한다. */
 @Configuration(proxyBeanMethods = false)
-@EnableConfigurationProperties(ReportUploadProperties.class)
+@EnableConfigurationProperties({
+	ReportUploadProperties.class, ReportIntakeProperties.class
+})
 public class ReportUploadConfig {
 	/** 원본 삭제 지연이 접수 복구와 다른 예약 작업을 막지 않도록 전용 스케줄러를 등록한다. */
 	@Bean(defaultCandidate = false)
