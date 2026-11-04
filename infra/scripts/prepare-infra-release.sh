@@ -65,7 +65,6 @@ FILES=(
   scripts/deploy.sh
   scripts/prepare-server-env.sh
   scripts/prepare-ai-env.sh
-  env/.env.server.template
   scripts/reload-nginx-after-cert-renewal.sh
 )
 
@@ -132,11 +131,6 @@ validate_release() {
   bash -n "$staged/scripts/prepare-server-env.sh"
   bash -n "$staged/scripts/prepare-ai-env.sh"
   sh -n "$staged/scripts/reload-nginx-after-cert-renewal.sh"
-  awk '
-    /^[[:space:]]*(#|$)/ { next }
-    !/^[A-Za-z_][A-Za-z0-9_]*=/ { exit 1 }
-    { key=$0; sub(/=.*/, "", key); if (seen[key]++) exit 1 }
-  ' "$staged/env/.env.server.template" || fail 'Invalid or duplicate environment template entry.'
 
   awk -F= '
     $1 == "AI_ENV_FILE" { count++; if (substr($0, index($0, "=")+1) != "./env/.env.ai") exit 1 }
@@ -186,7 +180,7 @@ validate_release() {
   CHECK_CONTAINER=''
   printf '%s\n' "$nginx_image" > "$WORK/nginx-image"
   rm -- "$config" "$WORK/compose-error.log" "$WORK/nginx-check.log"
-  printf '%s\n' 'Shell, environment template, Compose, bind mounts and Nginx checks passed.' > "$WORK/validation.txt"
+  printf '%s\n' 'Shell, Compose, bind mounts and Nginx checks passed.' > "$WORK/validation.txt"
 }
 
 validate_release

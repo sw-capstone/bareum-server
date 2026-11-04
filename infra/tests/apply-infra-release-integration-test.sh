@@ -46,7 +46,6 @@ openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj /CN=api.bareum.site \
 cp "$LETSENCRYPT_DIR/live/api.bareum.site/fullchain.pem" "$BAREUM_ROOT/infra/certs/rds-ca.pem"
 cp "$SOURCE_DIR/nginx/default.conf" "$BAREUM_ROOT/infra/nginx/default.conf"
 cp "$SOURCE_DIR/scripts/"{deploy.sh,prepare-server-env.sh,prepare-ai-env.sh,reload-nginx-after-cert-renewal.sh} "$BAREUM_ROOT/infra/scripts/"
-cp "$SOURCE_DIR/env/.env.server.template" "$BAREUM_ROOT/infra/env/"
 printf 'DB_PASSWORD=integration-secret\n' > "$BAREUM_ROOT/infra/env/.env.server"
 printf 'BAREUM_AI_INTERNAL_API_TOKEN=old-integration-secret\n' > "$BAREUM_ROOT/infra/env/.env.ai"
 cat > "$BAREUM_ROOT/infra/env/.env.deploy" <<ENV
@@ -93,7 +92,8 @@ cat > "$WORK/candidate/scripts/prepare-server-env.sh" <<'SCRIPT'
 #!/usr/bin/env bash
 set -euo pipefail
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-cp "$script_dir/../env/.env.server.template" "$script_dir/../env/.env.server"
+# 실제 운영값이 아닌 컨테이너 배포 검증용 가짜 env다.
+printf 'SERVER_PORT=8080\nTEST_RELEASE=%s\n' "${SERVER_ENV_VERSION:-initial}" > "$script_dir/../env/.env.server"
 chmod 600 "$script_dir/../env/.env.server"
 SCRIPT
 export CANDIDATE="$WORK/candidate"
@@ -182,7 +182,7 @@ printf 'PASS: initially absent AI env generated before real Compose validation; 
 
 baseline="$WORK/rollback-baseline"
 mkdir -p "$baseline/infra"
-files=(docker-compose.yml nginx/default.conf scripts/deploy.sh scripts/prepare-server-env.sh scripts/prepare-ai-env.sh env/.env.server.template)
+files=(docker-compose.yml nginx/default.conf scripts/deploy.sh scripts/prepare-server-env.sh scripts/prepare-ai-env.sh)
 for file in "${files[@]}" env/.env.server env/.env.ai; do
   mkdir -p "$(dirname "$baseline/infra/$file")"
   cp -p "$BAREUM_ROOT/infra/$file" "$baseline/infra/$file"
@@ -202,7 +202,7 @@ mv "$WORK/failing-compose.yml" "$CANDIDATE/docker-compose.yml"
 awk '{sub("proxy_pass http://spring_backend;", "default_type application/json; return 200 '\''{\"status\":\"unhealthy\"}'\'';"); print}' \
   "$CANDIDATE/nginx/default.conf" > "$WORK/failing-nginx.conf"
 mv "$WORK/failing-nginx.conf" "$CANDIDATE/nginx/default.conf"
-printf '\nTEST_RELEASE=rollback-candidate\n' >> "$CANDIDATE/env/.env.server.template"
+export SERVER_ENV_VERSION=rollback-candidate
 printf '\n# rollback candidate hook\n' >> "$CANDIDATE/scripts/reload-nginx-after-cert-renewal.sh"
 : > "$DOCKER_EVENTS"
 result=0

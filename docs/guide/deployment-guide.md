@@ -37,7 +37,6 @@ develop에 병합
 | `infra/scripts/deploy.sh` | `/opt/bareum/infra/scripts/deploy.sh` |
 | `infra/scripts/prepare-server-env.sh` | `/opt/bareum/infra/scripts/prepare-server-env.sh` |
 | `infra/scripts/prepare-ai-env.sh` | `/opt/bareum/infra/scripts/prepare-ai-env.sh` |
-| `infra/env/.env.server.template` | `/opt/bareum/infra/env/.env.server.template` |
 | `infra/scripts/reload-nginx-after-cert-renewal.sh` | `/etc/letsencrypt/renewal-hooks/deploy/reload-nginx-after-cert-renewal.sh` |
 
 `infra/` 전체를 복사하지 않는다. 반영 대상을 추가할 때는 준비·설치·백업·복구 목록과 테스트도 함께 수정한다.
@@ -49,14 +48,14 @@ develop에 병합
 | 배포 연결 | GitHub 변수 `EC2_INSTANCE_ID`, `AWS_ROLE_ARN`으로 대상 EC2와 OIDC 역할을 지정한다. Actions는 SSM 명령 전송·결과 조회 권한을 사용한다. |
 | 이미지·파일 접근 | EC2는 GHCR 이미지 읽기 인증과 GitHub 원본 파일·AWS 접근, Docker·배포 파일 접근 권한을 사용한다. |
 | 배포 환경변수 | `/opt/bareum/infra/env/.env.deploy`에 이미지와 경로를 관리한다. `SERVER_ENV_FILE=./env/.env.server`를 사용하며, 형식은 [예시 파일](../../infra/env/.env.deploy.example)을 참고한다. |
-| 서버 환경변수 | Parameter Store의 `/bareum/dev/server/` 아래 DB·이메일 설정 11개와 템플릿의 일반 설정을 합쳐 `.env.server`를 생성한다. 필수 파라미터와 검증 기준은 아래 표를 따른다. |
+| 서버 환경변수 | Parameter Store의 `/bareum/dev/server/env` 하나에 일반 설정과 비밀값을 포함한 env 전체를 `SecureString`으로 저장한다. 조회와 검증 후 `.env.server`를 교체한다. |
 | AI 환경변수 | Parameter Store의 `/bareum/dev/ai/env`에 완성된 AI env 파일 전체를 `SecureString`으로 저장한다. 배포 시 조회·검증한 뒤 `.env.ai`를 생성한다. |
 | HTTPS 인증서 | `/etc/letsencrypt/live/api.bareum.site/`에 인증서·개인 키를 보관하고, `/var/www/certbot`을 도메인 인증 경로로 사용한다. |
 | RDS 인증서 | `.env.deploy`의 `RDS_CA_FILE`이 EC2의 CA 파일 경로를 지정한다. |
 
 배포 스크립트는 Linux의 Bash·Docker Compose·AWS CLI와 `curl`, `jq`, `flock`, GNU coreutils를 사용하며, 기존 Server·Nginx가 정상 동작하는 상태에서 실행한다.
 
-앱 비밀값은 Git에 넣지 않는다. Server 배포 시 [서버 환경변수 생성 스크립트](../../infra/scripts/prepare-server-env.sh)가 템플릿과 Parameter Store 값으로 `.env.server`를 다시 생성한다. 템플릿에 없는 수동 추가 값은 유지되지 않는다. AI 환경파일도 아래 방식으로 자동 생성한다. 인증서·개인 키와 RDS CA는 배포 파일로 덮어쓰지 않는다.
+앱 비밀값은 Git에 넣지 않는다. Server 배포 시 [서버 환경변수 생성 스크립트](../../infra/scripts/prepare-server-env.sh)가 단일 SSM env를 검증한 뒤 원문 그대로 `.env.server`에 저장한다. 파일을 실행하거나 변수를 치환하지 않는다. EC2에서 직접 추가한 값은 다음 배포에 덮어쓰므로 실제 설정은 SSM 원본에서 변경한다. `.env.deploy`는 EC2에 미리 준비하는 별도 파일이며 Parameter Store에서 자동 생성하지 않는다. 배포 스크립트는 대상 서비스의 이미지 주소만 갱신한다. 인증서, 개인 키와 RDS CA는 배포 파일로 덮어쓰지 않는다.
 
 ### AI 환경파일 자동 생성
 
@@ -88,61 +87,40 @@ bash infra/tests/apply-infra-release-integration-test.sh
 
 CI는 AI env가 없는 초기 상태, 필수값·저장 유형·구문 오류, 조회 실패 시 기존 파일 보존, 값과 파일 권한, 배포 실패 시 복구를 검사한다. 실제 Compose·컨테이너 검사도 처음에는 `.env.ai`가 없는 상태에서 릴리스를 적용하고, AI 단독 배포의 환경변수 주입과 파일이 없던 상태의 복구를 확인한다. AWS 응답은 모의하며 컨테이너는 Nginx 테스트 이미지를 사용한다. 실제 AWS 권한·AI 이미지의 파싱 동작·S3 접근은 별도 배포 확인 대상이다.
 
-### Parameter Store와 템플릿의 관리 범위
+### 서버 환경파일 자동 생성과 검증
 
-아래 13개 파라미터를 `ap-northeast-2` 리전의 `/bareum/dev/server/` 아래에 등록한다. 예를 들어 SMTP 비밀번호의 전체 경로는 `/bareum/dev/server/SPRING_MAIL_PASSWORD`다. 실제 값은 저장소·PR·로그에 남기지 않는다.
+`ap-northeast-2`의 `/bareum/dev/server/env`에 `KEY=value` 형식의 서버 env 전체를 하나의 `SecureString`으로 등록한다. JSON이나 키별 파라미터가 아니다. 서버 포트, SMTP 보안 옵션, 타임아웃, 발송 제한과 로그인 정책 등 일반 설정도 같은 파일에 넣는다. `env/local`의 로컬용 파일과는 별도로 관리한다.
 
-| 파라미터 이름 | 유형 | 용도·검증 기준 |
-| --- | --- | --- |
-| `DB_URL` | `String` | RDS JDBC URL. `sslmode=verify-full&sslrootcert=/etc/ssl/certs/rds-ca.pem`을 포함한 TLS 연결을 사용한다. |
-| `DB_USERNAME` | `String` | DB 접속 계정 |
-| `DB_PASSWORD` | `SecureString` | DB 접속 비밀번호 |
-| `EMAIL_VERIFICATION_HASH_SECRET` | `SecureString` | 독립적으로 생성한 최소 32바이트 난수의 Base64 문자열 |
-| `EMAIL_VERIFICATION_OUTBOX_ENCRYPTION_KEY` | `SecureString` | 해시 키와 별도로 생성한 정확히 32바이트 난수의 Base64 문자열 |
-| `SPRING_MAIL_PASSWORD` | `SecureString` | SMTP 비밀번호 또는 앱 비밀번호 |
-| `SPRING_MAIL_HOST` | `String` | 담당자가 확정한 SMTP 호스트 |
-| `SPRING_MAIL_USERNAME` | `String` | SMTP 인증 계정 |
-| `EMAIL_VERIFICATION_MAIL_FROM` | `String` | 제공자에서 승인한 발신 주소 |
-| `EMAIL_VERIFICATION_MAX_VERIFICATION_ATTEMPTS` | `String` | 인증번호 확인 실패 횟수 한도. 양의 정수이며 Java Integer 범위. 개발 적용값 5 |
-| `EMAIL_VERIFICATION_PASSWORD_RESET_VERIFICATION_TTL_SECONDS` | `String` | 재설정 완료 증명 유효기간(초). 양의 정수이며 Java Long 범위. 개발 적용값 600 |
-| `LOGIN_JWT_SIGNING_KEY` | `SecureString` | 최소 32바이트 독립 난수의 Base64 문자열. Google Client ID와 별개인 서버 서명 키 |
-| `LOGIN_ALLOWED_ORIGINS` | `String` | 운영·develop의 정확한 HTTPS Origin을 쉼표로 구분. 경로·와일드카드·중복 없이 지정 |
+EC2 역할에는 이 경로에 대한 `ssm:GetParameter` 권한이 필요하다. 고객 관리형 KMS 키를 사용한다면 해당 키의 `kms:Decrypt` 권한과 키 정책도 확인한다. GitHub Actions의 배포 역할은 EC2에서 실제 파라미터를 읽는 역할과 구분한다.
 
-EC2 역할이 위 13개 경로에 `ssm:GetParameters`를 수행하고 `SecureString`을 복호화할 수 있어야 한다. 고객 관리형 KMS 키를 사용한다면 해당 키의 `kms:Decrypt` 권한과 키 정책도 확인한다. Actions의 배포 역할과 EC2에서 파라미터를 조회하는 역할을 구분한다.
+기존 중요 키의 검증은 유지한다. 아래 항목은 모두 존재해야 하며 공백만 있는 값을 허용하지 않는다. 파일 전체가 `SecureString`이므로 개별 키의 SSM 유형을 따로 검사하지 않는다.
 
-신규 두 확인 정책값은 Parameter Store에서 관리하며 템플릿에 중복 정의하지 않는다. 조회 목록은 총 13개이므로 요청당 최대 10개씩 나누고, 각 배치의 누락·중복·예상하지 않은 이름을 검사한다. 배치 하나라도 실패하면 기존 환경 파일을 유지한다.
-
-develop 병합은 자동 배포를 시작하므로 신규 로그인 키(SecureString)·허용 Origin(String)의 등록과 EC2 조회·복호화 권한을 #37 병합 전에 확인해야 한다. 기존 확인 정책 두 값도 유지한다. 기존 SecureString의 복호화 권한도 유지한다. 문서·모의 테스트·CI 통과만으로 실제 AWS 등록이나 배포 적용을 완료 처리하지 않는다.
-
-스크립트는 파라미터 누락·중복·공백만 있는 값·개행·널 문자, 비밀값 5개의 `SecureString` 여부, 해시·Outbox·JWT 키의 Base64 형식과 바이트 길이, 확인 정책 두 값의 String 유형·양의 정수·Java 숫자 범위, 허용 Origin의 String 유형·HTTPS 주소 형식을 검사한다. 검증 실패 시 기존 `.env.server`를 유지하고 배포를 중단한다. 성공 시에만 권한 `600`으로 교체하며 임시 파일은 정리한다. 생성되는 파일은 Compose의 `format: raw`로 전달하므로 값에 따옴표를 덧붙이지 않는다.
-
-[`.env.server.template`](../../infra/env/.env.server.template)은 다음 일반 설정을 관리한다. SMTP 제공자·계정의 실제 값과 비밀키는 템플릿에 넣지 않는다.
-
-| 설정 | 현재 값 |
+| 필수 키 | 용도와 검증 기준 |
 | --- | --- |
-| Outbox 활성화·키 ID | `EMAIL_VERIFICATION_OUTBOX_ENABLED=true`, `EMAIL_VERIFICATION_OUTBOX_KEY_ID=v1` |
-| SMTP 포트·보안 | 587, SMTP AUTH·STARTTLS 활성화·STARTTLS 필수·서버 인증서 호스트 검증 |
-| SMTP 연결·읽기·쓰기 타임아웃 | 각각 5000ms |
-| SIGNUP·PASSWORD_RESET 인증번호 유효기간 | 각각 300초 |
-| 최소 발송 간격·발송 제한 | 60초, 최근 1시간 5회, 최근 24시간 20회 |
-| 로그인 Access·최대 세션 | 900초, 최초 로그인부터 28800초 |
-| 로그인 쿠키 | Secure=true, SameSite=None |
-| 이메일별 로그인 요청 제한 | 최근 집계 창 60초당 10회 |
+| `SERVER_PORT` | Nginx upstream과 헬스체크에 맞춰 `8080` 사용 |
+| `DB_URL`, `DB_USERNAME`, `DB_PASSWORD` | DB 연결 정보. RDS URL은 기존 `sslmode=verify-full&sslrootcert=/etc/ssl/certs/rds-ca.pem` TLS 설정을 유지 |
+| `EMAIL_VERIFICATION_HASH_SECRET` | 최소 32바이트 난수의 Base64 문자열 |
+| `EMAIL_VERIFICATION_OUTBOX_ENCRYPTION_KEY` | 정확히 32바이트 난수의 Base64 문자열 |
+| `SPRING_MAIL_HOST`, `SPRING_MAIL_USERNAME`, `SPRING_MAIL_PASSWORD`, `EMAIL_VERIFICATION_MAIL_FROM` | SMTP 연결, 인증과 발신 정보 |
+| `EMAIL_VERIFICATION_MAX_VERIFICATION_ATTEMPTS` | 양의 정수이며 Java Integer 범위 |
+| `EMAIL_VERIFICATION_PASSWORD_RESET_VERIFICATION_TTL_SECONDS` | 양의 정수이며 Java Long 범위 |
+| `LOGIN_JWT_SIGNING_KEY` | 최소 32바이트 난수의 Base64 문자열 |
+| `LOGIN_ALLOWED_ORIGINS` | 정확한 HTTPS Origin을 쉼표로 구분. 경로, 와일드카드, 중복과 잘못된 포트를 거부 |
 
-기간·발송 제한은 개발 서버의 팀 미확정 임시 정책이다. 팀 확정 시 템플릿과 프론트 안내를 함께 검토한다. SMTP 제공자가 587/STARTTLS 구성을 지원하는지도 확인한다. Outbox는 미처리 작업이 있는 상태의 키 교체를 지원하지 않으므로, 대기 작업이 모두 종료되고 암호문이 제거된 뒤 암호화 키와 키 ID를 함께 교체한다.
+목록에 없는 새 키도 허용하고 값은 그대로 전달한다. 일반 환경변수 추가나 값 변경에는 조회 목록이나 검증 코드 수정이 필요하지 않다. 새 항목을 배포 단계의 필수 검증 대상으로 삼으려는 경우에만 검증 규칙과 테스트를 함께 바꾼다. 애플리케이션의 기존 설정 검사와 오류 처리 시점은 변경하지 않는다.
 
-env v3는 기존 서버·메일·확인 설정에 로그인 8개를 포함한 전체본이다. 이 중 로그인 키·허용 주소는 SSM, 나머지 6개는 템플릿에서 관리한다. #63의 환경파일 통합 전까지 이 방식을 유지하며 동일 변수를 양쪽에 정의하지 않는다.
+빈 줄과 주석은 허용하지만 중복 키, 잘못된 `KEY=value` 구문, CR과 NUL 문자는 거부한다. Compose의 `format: raw`로 전달하므로 값을 감싸는 따옴표를 덧붙이거나 변수 치환을 기대하지 않는다. 조회나 검증 실패 시 기존 `.env.server`를 보존하며, 성공했을 때만 권한 `600`인 임시 파일을 같은 파일시스템에서 교체한다. 값과 AWS 오류 원문은 출력하지 않고 임시 파일은 정리한다. 출력 경로를 명시해 후보 파일만 생성할 수도 있다.
 
 ### 환경변수 생성·바인딩 테스트
 
-CI는 아래 환경변수 생성 테스트를 실행한다. 실제 생성 스크립트와 템플릿을 임시 디렉터리에서 사용하고 AWS CLI 응답만 모의하므로 실제 AWS 자격증명은 필요하지 않다.
+CI는 아래 환경변수 생성 테스트를 실행한다. 실제 생성 스크립트를 임시 디렉터리에서 사용하고 AWS CLI 응답은 가짜 env로 모의하므로 실제 AWS 자격증명은 필요하지 않다.
 
 ```bash
 bash infra/tests/prepare-server-env-test.sh
 ./gradlew --no-daemon test --tests com.bareum.server.domain.auth.config.SmtpConfigurationTests --tests com.bareum.server.domain.auth.config.EmailVerificationPropertiesTests
 ```
 
-생성 테스트는 정상 생성, 조회 대상, 특수문자 보존, 중복 제거, 필수값·키·저장 유형 검증, 실패 시 기존 파일 보존과 권한·임시 파일 정리를 검사한다. SMTP 테스트는 배포 템플릿의 실제 환경변수 이름으로 연결·인증·TLS·타임아웃 속성 바인딩을 확인한다. 실제 메일 제공자 연결과 수신 검증은 별도로 수행한다.
+생성 테스트는 단일 조회, 원문과 특수문자 보존, 새 키 허용, 중복 키 거부, 필수값과 값 형식 검사, 실패 시 기존 파일 보존, 권한과 임시 파일 정리를 검사한다. SMTP 테스트는 가짜 설정을 실제 환경변수 이름으로 공급해 연결, 인증, TLS와 타임아웃 속성 바인딩을 확인한다. 실제 메일 제공자 연결과 수신 검증은 별도로 수행한다.
 
 ## 3. 자동 배포 결과 확인
 
