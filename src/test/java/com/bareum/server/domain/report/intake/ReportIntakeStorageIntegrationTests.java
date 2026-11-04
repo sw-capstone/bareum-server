@@ -2,6 +2,8 @@ package com.bareum.server.domain.report.intake;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import java.time.Clock;
+import java.time.ZoneOffset;
 import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
@@ -17,12 +19,14 @@ import com.bareum.server.domain.report.entity.Report;
 import com.bareum.server.domain.report.entity.ReportIntakeRequest;
 import com.bareum.server.domain.report.entity.ReportParseAttempt;
 import com.bareum.server.domain.report.enums.ExtractionQuality;
+import com.bareum.server.domain.report.job.ReportIntakeRetentionJob;
 import com.bareum.server.domain.report.repository.ReportIntakeRequestRepository;
+import com.bareum.server.domain.report.service.command.ReportIntakeCommandService;
 
 import jakarta.persistence.EntityManager;
 import tools.jackson.databind.json.JsonMapper;
 
-/** 실제 DB에서 접수 기록의 저장 제약을 검증한다. */
+/** 실제 DB에서 접수 기록의 저장 제약과 만료 기록 정리를 검증한다. */
 @SpringBootTest
 @Transactional
 class ReportIntakeStorageIntegrationTests {
@@ -32,6 +36,8 @@ class ReportIntakeStorageIntegrationTests {
 	private JdbcTemplate jdbc;
 	@Autowired
 	private ReportIntakeRequestRepository requests;
+	@Autowired
+	private ReportIntakeCommandService commands;
 	private final JsonMapper mapper = JsonMapper.builder().build();
 
 	@Test
@@ -131,6 +137,62 @@ class ReportIntakeStorageIntegrationTests {
 	}
 
 	@Test
+	void retentionJobUsesCompletionTimeAndPreservesProcessingAndUncollectedOrphans() {
+		Member member = persistMember();
+		var expired = terminalRequest(member);
+		var processing = IntakeFixtures.request(member);
+		var orphan = terminalRequest(member);
+		// Even a crash before cleanup scheduling must not lose the planned S3 key.
+		var planned = IntakeFixtures.request(member);
+		planned.assignSourceKey("reports/uncertain-upload.pdf");
+		planned.complete(500, mapper.createObjectNode(), IntakeFixtures.NOW.plusSeconds(1));
+		var collecting = IntakeFixtures.request(member);
+		collecting.assignSourceKey("reports/orphan.pdf");
+		collecting.complete(500, mapper.createObjectNode(), IntakeFixtures.NOW.plusSeconds(1));
+		collecting.scheduleOrphanCleanup(IntakeFixtures.NOW.plusSeconds(2));
+		for (var request : new ReportIntakeRequest[] {expired, processing, orphan, planned, collecting}) {
+			entities.persist(request);
+		}
+		entities.flush();
+		var beforeExpiry = new ReportIntakeRetentionJob(commands,
+				Clock.fixed(IntakeFixtures.NOW.plusSeconds(86_400), ZoneOffset.UTC));
+		assertEquals(0, beforeExpiry.purgeExpiredRequests());
+		var atExpiry = new ReportIntakeRetentionJob(commands,
+				Clock.fixed(IntakeFixtures.NOW.plusSeconds(86_401), ZoneOffset.UTC));
+		assertEquals(2, atExpiry.purgeExpiredRequests());
+		assertEquals(3, jdbc.queryForObject("SELECT count(*) FROM report_intake_request WHERE member_id = ?",
+				Integer.class, member.getId()));
+		collecting.markOrphanDeleted(IntakeFixtures.NOW.plusSeconds(3));
+		entities.flush();
+		assertEquals(1, atExpiry.purgeExpiredRequests());
+	}
+
+	@Test
+	void retentionPreservesAttachedReportsWithPendingSourceDeletion() {
+		Member member = persistMember();
+		Report report = persistReport(member);
+		var attempt = ReportParseAttempt.request(report);
+		attempt.start(IntakeFixtures.NOW);
+		attempt.fail("PARSER_FAILED", IntakeFixtures.NOW.plusSeconds(1));
+		entities.persist(attempt);
+		var request = IntakeFixtures.request(member);
+		request.assignSourceKey(report.getSourceObjectKey());
+		request.recordUploadedSource(IntakeFixtures.source(report.getSourceObjectKey()));
+		request.attachAttempt(attempt);
+		request.complete(500, mapper.createObjectNode(), IntakeFixtures.NOW.plusSeconds(2));
+		report.scheduleSourceCleanup(IntakeFixtures.NOW.plusSeconds(2));
+		entities.persist(request);
+		entities.flush();
+		var now = IntakeFixtures.NOW.plusSeconds(90_000);
+		var job = new ReportIntakeRetentionJob(commands, Clock.fixed(now, ZoneOffset.UTC));
+		assertEquals(0, job.purgeExpiredRequests());
+		report.markSourceDeleted(now);
+		entities.flush();
+		assertEquals(1, job.purgeExpiredRequests());
+		assertEquals(1, jdbc.queryForObject("SELECT count(*) FROM report WHERE id = ?", Integer.class, report.getId()));
+	}
+
+	@Test
 	void databaseRejectsTwoActiveAttemptsForTheSameReport() {
 		var report = persistReport(persistMember());
 		entities.persist(ReportParseAttempt.request(report));
@@ -164,4 +226,9 @@ class ReportIntakeStorageIntegrationTests {
 		return report;
 	}
 
+	private ReportIntakeRequest terminalRequest(Member member) {
+		var request = IntakeFixtures.request(member);
+		request.complete(500, mapper.createObjectNode(), IntakeFixtures.NOW.plusSeconds(1));
+		return request;
+	}
 }
