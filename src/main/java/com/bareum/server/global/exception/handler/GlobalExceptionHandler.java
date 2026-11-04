@@ -33,6 +33,8 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.ServletWebRequest;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.MultipartException;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
 import com.bareum.server.global.exception.BusinessException;
@@ -50,6 +52,24 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
+	@Override
+	protected @Nullable ResponseEntity<Object> handleMaxUploadSizeExceededException(
+		MaxUploadSizeExceededException exception,
+		HttpHeaders headers,
+		HttpStatusCode status,
+		WebRequest request
+	) {
+		return createRequestErrorResponse(exception, CommonErrorCode.REQUEST_TOO_LARGE, headers, status, request);
+	}
+
+	@ExceptionHandler(MultipartException.class)
+	public ResponseEntity<ProblemDetail>
+			handleMultipartException(MultipartException exception, HttpServletRequest request) {
+		return ResponseEntity.badRequest()
+				.body(ProblemDetailFactory.create(
+						CommonErrorCode.INVALID_REQUEST_BODY, CommonErrorCode.INVALID_REQUEST_BODY.getMessage(),
+						request));
+	}
 
 	/**
 	 * 업무 예외를 에러 코드와 안내 메시지로 응답하고, 지정된 수준으로 로그를 기록

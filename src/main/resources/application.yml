@@ -1,6 +1,11 @@
 spring:
   application:
     name: bareum-server
+  servlet:
+    multipart:
+      max-file-size: 20000000B
+      max-request-size: 21000000B
+      file-size-threshold: 0B
   mail:
     properties:
       "[mail.smtp.connectiontimeout]": ${SMTP_CONNECTION_TIMEOUT_MS:5000}
