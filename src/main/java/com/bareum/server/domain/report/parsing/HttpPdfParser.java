@@ -34,7 +34,7 @@ public final class HttpPdfParser implements PdfParser {
 
 	@Override
 	public PdfParseResponse parse(PdfParseRequest request) {
-		// TODO(#53): 접수 서비스에서 호출하고 동시 호출 제한과 새 시도 생성, 상태 저장을 연결한다.
+		// 동시 호출 제한과 새 시도를 통한 재시도는 접수 서비스에서 제어한다.
 		// 자동 재전송은 하지 않는다. 호출 시간 초과만으로 원격 파싱 종료를 단정할 수 없다.
 		if (client.followRedirects() != HttpClient.Redirect.NEVER) {
 			throw new IllegalArgumentException("PDF 파싱 클라이언트는 리다이렉트를 허용하지 않습니다.");
