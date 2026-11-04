@@ -24,7 +24,8 @@ import com.bareum.server.global.security.handler.SecurityProblemWriter;
 
 @Configuration
 @EnableConfigurationProperties({
-	LoginProperties.class, com.bareum.server.domain.auth.config.LoginJwtProperties.class
+	LoginProperties.class, com.bareum.server.domain.auth.config.LoginJwtProperties.class,
+	com.bareum.server.domain.auth.config.TokenRenewProperties.class
 })
 @org.springframework.scheduling.annotation.EnableScheduling
 public class SecurityConfig {
@@ -76,6 +77,8 @@ public class SecurityConfig {
 				.logout(c -> c.disable())
 				.csrf(
 						c -> c.csrfTokenRepository(csrfRepository)
+								.csrfTokenRequestHandler(
+										new com.bareum.server.global.security.HeaderOnlyCsrfTokenRequestHandler())
 								.ignoringRequestMatchers(
 										"/api/v1/auth/login/email",
 										"/api/v1/auth/signup",
@@ -101,6 +104,7 @@ public class SecurityConfig {
 								.permitAll()
 								.requestMatchers(
 										HttpMethod.POST,
+										"/api/v1/auth/token/renew",
 										"/api/v1/auth/login/email",
 										"/api/v1/auth/signup",
 										"/api/v1/auth/email-verification",
@@ -110,6 +114,7 @@ public class SecurityConfig {
 								.requestMatchers(
 										HttpMethod.GET,
 										"/health",
+										"/api/v1/auth/csrf",
 										"/api/v1/auth/email/availability",
 										"/api/v1/terms",
 										"/api/v1/auth/email-verification/deliveries/*",
