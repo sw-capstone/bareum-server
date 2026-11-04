@@ -143,6 +143,6 @@ class S3ReportSourceStoreTests {
 
 	private ReportUploadProperties properties() {
 		return new ReportUploadProperties("fixture-bucket", "ap-northeast-2", "reports/",
-				"http://127.0.0.1/internal/v1/pdf-parses", "fixture-token", 600, 310, 30);
+				"http://127.0.0.1/internal/v1/pdf-parses", "fixture-token", 600, 310, 30, 300);
 	}
 }

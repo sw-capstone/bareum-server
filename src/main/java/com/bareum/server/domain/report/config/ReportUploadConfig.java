@@ -7,10 +7,12 @@ import java.time.Duration;
 
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Lazy;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 
 import com.bareum.server.domain.report.parsing.HttpPdfParser;
 import com.bareum.server.domain.report.parsing.PdfParser;
@@ -27,6 +29,16 @@ import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 @Configuration(proxyBeanMethods = false)
 @EnableConfigurationProperties(ReportUploadProperties.class)
 public class ReportUploadConfig {
+	/** 원본 삭제 지연이 접수 복구와 다른 예약 작업을 막지 않도록 전용 스케줄러를 등록한다. */
+	@Bean(defaultCandidate = false)
+	@ConditionalOnProperty(name = "report.intake.maintenance-enabled", havingValue = "true", matchIfMissing = true)
+	public ThreadPoolTaskScheduler reportIntakeScheduler() {
+		var scheduler = new ThreadPoolTaskScheduler();
+		scheduler.setPoolSize(2);
+		scheduler.setThreadNamePrefix("report-intake-maintenance-");
+		return scheduler;
+	}
+
 	@Bean
 	@Lazy
 	public S3Client reportS3Client(ReportUploadProperties properties) {
@@ -70,10 +82,10 @@ public class ReportUploadConfig {
 
 	@Bean
 	public PdfParser pdfParser(@Qualifier("reportPdfHttpClient") HttpClient client, ReportUploadProperties properties) {
-		return request -> {
+		return (request, remaining) -> {
 			properties.requireConfigured();
 			return new HttpPdfParser(client, URI.create(properties.parserEndpoint()), properties.parserToken(),
-					Duration.ofSeconds(properties.parserTimeoutSeconds())).parse(request);
+					Duration.ofSeconds(properties.parserTimeoutSeconds())).parse(request, remaining);
 		};
 	}
 }

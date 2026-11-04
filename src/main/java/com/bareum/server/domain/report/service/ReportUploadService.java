@@ -1,7 +1,6 @@
 package com.bareum.server.domain.report.service;
 
 import java.time.Duration;
-import java.time.ZoneOffset;
 import java.util.UUID;
 
 import org.springframework.stereotype.Service;
@@ -18,9 +17,7 @@ import com.bareum.server.domain.report.exception.ReportException;
 import com.bareum.server.domain.report.intake.PdfUploadValidator;
 import com.bareum.server.domain.report.intake.ReportIntakePolicy;
 import com.bareum.server.domain.report.intake.ReportIntakeResult;
-import com.bareum.server.domain.report.parsing.PdfParseRequest;
 import com.bareum.server.domain.report.parsing.PdfParseResponse;
-import com.bareum.server.domain.report.parsing.PdfParser;
 import com.bareum.server.domain.report.service.command.ReportIntakeCommandService;
 import com.bareum.server.domain.report.service.query.ReportIntakeQueryService;
 import com.bareum.server.domain.report.source.ReportSourceStore;
@@ -35,7 +32,7 @@ import lombok.extern.slf4j.Slf4j;
 public class ReportUploadService {
 	private final PdfUploadValidator validator;
 	private final ReportSourceStore sources;
-	private final PdfParser parser;
+	private final ReportParsingService parsing;
 	private final PdfBodyConverter converter;
 	private final ReportIntakeQueryService queries;
 	private final ReportIntakeCommandService commands;
@@ -59,11 +56,8 @@ public class ReportUploadService {
 			var source = sources.upload(reservation.objectKey(), pdf);
 			commands.recordSource(reservation.requestId(), source);
 			var work = commands.startParsing(reservation.requestId(), type, source);
-			var download = sources.presign(source);
-			var request = new PdfParseRequest(work.reportId(), work.attemptId(), new PdfParseRequest.Source(
-					source.objectKey(), source.originalFilename(), source.sizeBytes(), source.sha256(),
-					download.url(), download.expiresAt().atOffset(ZoneOffset.UTC)));
-			var response = parser.parse(request);
+			var parsed = parsing.parse(work, source);
+			var response = parsed.response();
 			if (response instanceof PdfParseResponse.Failed failed) {
 				return commands.fail(reservation.requestId(), mapError(failed.error().code()),
 						failed.error().code().name(),
@@ -79,12 +73,16 @@ public class ReportUploadService {
 				throw new ReportException(ReportErrorCode.PAGE_LIMIT_EXCEEDED);
 			}
 			var body = converter.convertParsed(succeeded.parsed().toString());
-			return commands.complete(work, body, succeeded.extractionQuality());
+			return commands.complete(parsed.work(), body, succeeded.extractionQuality());
 		} catch (ReportException exception) {
 			var code = (ReportErrorCode)exception.getBaseErrorCode();
 			boolean uncertain = code == ReportErrorCode.PDF_PARSE_REQUEST_TIMEOUT
 					|| code == ReportErrorCode.PDF_PARSE_CONNECTION_FAILED
 					|| code == ReportErrorCode.PDF_PARSE_REQUEST_INTERRUPTED;
+			uncertain |= code == ReportErrorCode.INTAKE_PROCESSING_TIMEOUT
+					|| code == ReportErrorCode.SOURCE_STORAGE_FAILED
+					|| code == ReportErrorCode.INVALID_PARSE_RESPONSE_FORMAT
+					|| code == ReportErrorCode.INVALID_PARSE_ERROR_RESPONSE;
 			return commands.fail(reservation.requestId(), code, code.getCode(),
 					uncertain ? uncertainCleanupDelay() : Duration.ZERO);
 		} catch (RuntimeException exception) {
@@ -96,7 +94,7 @@ public class ReportUploadService {
 	}
 
 	private Duration uncertainCleanupDelay() {
-		return Duration.ofSeconds(properties.parserTimeoutSeconds() + 60L);
+		return properties.uncertainCleanupDelay();
 	}
 
 	private static ReportErrorCode mapError(PdfParseErrorCode code) {

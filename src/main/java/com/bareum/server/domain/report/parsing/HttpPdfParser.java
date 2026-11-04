@@ -32,18 +32,26 @@ public final class HttpPdfParser implements PdfParser {
 			.disable(MapperFeature.ALLOW_COERCION_OF_SCALARS)
 			.build();
 
-	@Override
 	public PdfParseResponse parse(PdfParseRequest request) {
-		// 동시 호출 제한과 새 시도를 통한 재시도는 접수 서비스에서 제어한다.
+		return parse(request, timeout);
+	}
+
+	/** 설정된 대기시간과 접수의 남은 기한 중 짧은 시간 안에서 AI를 호출하고 응답 계약을 검증한다. */
+	@Override
+	public PdfParseResponse parse(PdfParseRequest request, Duration remaining) {
+		// 새 시도를 통한 재시도는 접수 서비스에서 제어한다.
 		// 자동 재전송은 하지 않는다. 호출 시간 초과만으로 원격 파싱 종료를 단정할 수 없다.
 		if (client.followRedirects() != HttpClient.Redirect.NEVER) {
 			throw new IllegalArgumentException("PDF 파싱 클라이언트는 리다이렉트를 허용하지 않습니다.");
+		}
+		if (remaining.isZero() || remaining.isNegative()) {
+			throw new ReportException(ReportErrorCode.INTAKE_PROCESSING_TIMEOUT);
 		}
 		// 현재 PDF 파싱 호출은 HTTP/1.1을 유지한다.
 		// 통신 병목이 확인되면 AI 서버와 프록시 설정을 함께 맞춰 HTTP/2 전환을 검토한다.
 		HttpRequest httpRequest = HttpRequest.newBuilder(endpoint)
 				.version(HttpClient.Version.HTTP_1_1)
-				.timeout(timeout)
+				.timeout(remaining.compareTo(timeout) < 0 ? remaining : timeout)
 				.header("Authorization", "Bearer " + token)
 				.header("Content-Type", "application/json")
 				.header("Accept", "application/json")

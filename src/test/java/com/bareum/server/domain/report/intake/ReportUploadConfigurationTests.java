@@ -23,7 +23,8 @@ class ReportUploadConfigurationTests {
 					assertNotNull(context.getBean(ReportSourceStore.class));
 					var parser = context.getBean(PdfParser.class);
 					assertEquals(ReportErrorCode.UPLOAD_NOT_CONFIGURED,
-							assertThrows(ReportException.class, () -> parser.parse(null)).getBaseErrorCode());
+							assertThrows(ReportException.class,
+									() -> parser.parse(null, java.time.Duration.ofSeconds(5))).getBaseErrorCode());
 				});
 	}
 
@@ -38,6 +39,6 @@ class ReportUploadConfigurationTests {
 
 	private ReportUploadProperties properties(int signed, int parser, int storage) {
 		return new ReportUploadProperties("fixture-bucket", "ap-northeast-2", "reports/",
-				"http://127.0.0.1/internal/v1/pdf-parses", "fixture-token", signed, parser, storage);
+				"http://127.0.0.1/internal/v1/pdf-parses", "fixture-token", signed, parser, storage, 300);
 	}
 }

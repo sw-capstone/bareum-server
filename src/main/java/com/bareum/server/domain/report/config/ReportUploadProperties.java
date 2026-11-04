@@ -1,6 +1,7 @@
 package com.bareum.server.domain.report.config;
 
 import java.net.URI;
+import java.time.Duration;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.DefaultValue;
@@ -18,7 +19,8 @@ public record ReportUploadProperties(
 	String parserToken,
 	@DefaultValue("600") int signedUrlSeconds,
 	@DefaultValue("310") int parserTimeoutSeconds,
-	@DefaultValue("30") int storageTimeoutSeconds
+	@DefaultValue("30") int storageTimeoutSeconds,
+	@DefaultValue("300") int remoteExecutionTimeoutSeconds
 ) {
 	public void requireConfigured() {
 		// AI와 같은 virtual-hosted HTTPS 주소를 사용하므로 점이 있는 버킷명은 받지 않는다.
@@ -28,7 +30,7 @@ public record ReportUploadProperties(
 				|| parserToken == null || parserToken.isBlank()
 				|| parserToken.chars().anyMatch(c -> Character.isISOControl(c) || Character.isWhitespace(c))
 				|| parserTimeoutSeconds < 1 || parserTimeoutSeconds > 320
-				|| storageTimeoutSeconds < 1 || storageTimeoutSeconds > 30
+				|| storageTimeoutSeconds < 1 || storageTimeoutSeconds > 30 || remoteExecutionTimeoutSeconds < 1
 				|| signedUrlSeconds < parserTimeoutSeconds + 30 || signedUrlSeconds > 3600) {
 			throw new ReportException(ReportErrorCode.UPLOAD_NOT_CONFIGURED);
 		}
@@ -47,5 +49,13 @@ public record ReportUploadProperties(
 	@Override
 	public String toString() {
 		return "ReportUploadProperties[credentials=REDACTED]";
+	}
+
+	public Duration processingTimeout() {
+		return Duration.ofSeconds(storageTimeoutSeconds + (long)parserTimeoutSeconds);
+	}
+
+	public Duration uncertainCleanupDelay() {
+		return Duration.ofSeconds(Math.max(parserTimeoutSeconds, remoteExecutionTimeoutSeconds) + 60L);
 	}
 }

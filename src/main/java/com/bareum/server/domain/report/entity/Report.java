@@ -177,4 +177,20 @@ public class Report extends BaseTimeEntity {
 			throw new ReportException(ReportErrorCode.INTAKE_CANCELLED);
 		}
 	}
+
+	/** 접수가 취소됐거나 원본이 삭제 또는 정리 대상으로 확정됐다면 새 파싱을 막는다. */
+	public void requireSourceAvailable() {
+		requireActiveIntake();
+		if (inputMethod == InputMethod.FILE && (sourceDeletedAt != null || sourceCleanupAfter != null)) {
+			throw new ReportException(ReportErrorCode.INVALID_SOURCE_DELETION);
+		}
+	}
+
+	/** 정리할 원본의 누락된 버전을 기록하고 이미 기록한 버전과의 충돌을 검사한다. */
+	public void recoverSourceVersion(String versionId) {
+		if (versionId == null || sourceVersionId != null && !sourceVersionId.equals(versionId)) {
+			throw new ReportException(ReportErrorCode.INVALID_SOURCE_DELETION);
+		}
+		sourceVersionId = versionId;
+	}
 }

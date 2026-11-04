@@ -66,6 +66,9 @@ public class ReportIntakeRequest extends BaseTimeEntity {
 	@Column(name = "requested_at", nullable = false)
 	private Instant requestedAt;
 
+	@Column(name = "processing_deadline_at", nullable = false)
+	private Instant processingDeadlineAt;
+
 	@ManyToOne(fetch = FetchType.LAZY)
 	@JoinColumn(name = "report_id")
 	private Report report;
@@ -99,10 +102,21 @@ public class ReportIntakeRequest extends BaseTimeEntity {
 	@Column(name = "expires_at")
 	private Instant expiresAt;
 
-	private ReportIntakeRequest(Member member, UUID requestKey, String fingerprint, Instant requestedAt) {
+	/** 사용자와 멱등 키, 요청 지문과 처리 기한을 검증하고 접수를 처리 중 상태로 생성한다. */
+	private ReportIntakeRequest(
+		Member member,
+		UUID requestKey,
+		String fingerprint,
+		Instant requestedAt,
+		Instant deadline
+	) {
 		this.member = Objects.requireNonNull(member, "member");
 		this.requestKey = Objects.requireNonNull(requestKey, "requestKey");
 		this.requestedAt = Objects.requireNonNull(requestedAt, "requestedAt");
+		if (deadline == null || !deadline.isAfter(requestedAt)) {
+			throw new ReportException(ReportErrorCode.INVALID_INTAKE_STATE);
+		}
+		processingDeadlineAt = deadline;
 		if (fingerprint == null || !fingerprint.matches("[a-fA-F0-9]{64}")) {
 			throw new ReportException(ReportErrorCode.INVALID_INTAKE_RESULT);
 		}
@@ -111,7 +125,30 @@ public class ReportIntakeRequest extends BaseTimeEntity {
 	}
 
 	public static ReportIntakeRequest reserve(Member member, UUID key, String fingerprint, Instant requestedAt) {
-		return new ReportIntakeRequest(member, key, fingerprint, requestedAt);
+		return reserve(member, key, fingerprint, requestedAt,
+				requestedAt.plus(ReportIntakePolicy.DEFAULT_PROCESSING_TIMEOUT));
+	}
+
+	public static ReportIntakeRequest
+			reserve(Member member, UUID key, String fingerprint, Instant requestedAt, Instant deadline) {
+		return new ReportIntakeRequest(member, key, fingerprint, requestedAt, deadline);
+	}
+
+	/** 접수가 처리 중이고 최초 처리 기한이 지나지 않았는지 검사한다. */
+	public void requireProcessingAt(Instant now) {
+		requireProcessing();
+		if (!now.isBefore(processingDeadlineAt)) {
+			throw new ReportException(ReportErrorCode.INTAKE_PROCESSING_TIMEOUT);
+		}
+	}
+
+	/** 보고서 생성 전에 실패한 접수의 원본 버전을 복구하고 기존 버전과의 충돌을 검사한다. */
+	public void recoverSourceVersion(String versionId) {
+		if (status != ReportIntakeStatus.FAILED || report != null || sourceCleanupAfter == null
+				|| versionId == null || sourceVersionId != null && !sourceVersionId.equals(versionId)) {
+			throw new ReportException(ReportErrorCode.INVALID_SOURCE_DELETION);
+		}
+		sourceVersionId = versionId;
 	}
 
 	public void requireMatchingFingerprint(String fingerprint) {

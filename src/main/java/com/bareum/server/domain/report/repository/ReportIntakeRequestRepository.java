@@ -1,6 +1,7 @@
 package com.bareum.server.domain.report.repository;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -11,6 +12,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import com.bareum.server.domain.report.entity.ReportIntakeRequest;
+import com.bareum.server.domain.report.enums.ReportIntakeStatus;
 
 import jakarta.persistence.LockModeType;
 
@@ -25,6 +27,23 @@ public interface ReportIntakeRequestRepository extends JpaRepository<ReportIntak
 	@Lock(LockModeType.PESSIMISTIC_WRITE)
 	@Query("select r from ReportIntakeRequest r where r.member.id = :memberId and r.requestKey = :requestKey")
 	Optional<ReportIntakeRequest> findForUpdate(@Param("memberId") Long memberId, @Param("requestKey") UUID key);
+
+	@Query(value = """
+			SELECT id FROM report_intake_request
+			WHERE status = 'PROCESSING' AND processing_deadline_at <= :now AND id > :afterId
+			ORDER BY id LIMIT :batchSize
+			""", nativeQuery = true)
+	List<Long> findExpiredProcessingIds(Instant now, long afterId, int batchSize);
+
+	@Query(value = """
+			SELECT id FROM report_intake_request
+			WHERE status = 'FAILED' AND report_id IS NULL AND source_object_key IS NOT NULL
+			  AND source_deleted_at IS NULL AND source_cleanup_after <= :now AND id > :afterId
+			ORDER BY id LIMIT :batchSize
+			""", nativeQuery = true)
+	List<Long> findOrphanCleanupIds(Instant now, long afterId, int batchSize);
+
+	boolean existsByReportIdAndStatus(Long reportId, ReportIntakeStatus status);
 
 	@Modifying
 	@Query(value = """

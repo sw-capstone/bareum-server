@@ -181,6 +181,27 @@ class HttpPdfParserTests {
 		assertTrue(api.calls.get() <= 1);
 	}
 
+	/** HTTP 호출이 기본 대기시간보다 짧은 접수의 남은 기한을 적용하는지 검증한다. */
+	@Test
+	void usesTheRemainingIntakeBudgetInsteadOfResettingTheConfiguredTimeout() {
+		api.hold = true;
+		var before = System.nanoTime();
+		var error = assertThrows(ReportException.class,
+				() -> parser.parse(PdfApiFixture.request(), Duration.ofMillis(200)));
+		assertEquals(ReportErrorCode.PDF_PARSE_REQUEST_TIMEOUT, error.getBaseErrorCode());
+		assertTrue(Duration.ofNanos(System.nanoTime() - before).compareTo(Duration.ofSeconds(2)) < 0);
+		assertTrue(api.calls.get() <= 1);
+	}
+
+	/** 접수 기한이 이미 지났으면 AI로 HTTP 요청을 보내지 않는지 검증한다. */
+	@Test
+	void expiredBudgetDoesNotSendAnHttpRequest() {
+		var error = assertThrows(ReportException.class,
+				() -> parser.parse(PdfApiFixture.request(), Duration.ZERO));
+		assertEquals(ReportErrorCode.INTAKE_PROCESSING_TIMEOUT, error.getBaseErrorCode());
+		assertEquals(0, api.calls.get());
+	}
+
 	@Test
 	void restoresInterruptedFlag() throws Exception {
 		api.hold = true;

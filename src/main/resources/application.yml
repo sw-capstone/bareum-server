@@ -73,6 +73,8 @@ auth:
       enabled: ${EMAIL_VERIFICATION_OUTBOX_ENABLED:true}
 
 report:
+  intake:
+    maintenance-enabled: ${REPORT_INTAKE_MAINTENANCE_ENABLED:true}
   upload:
     bucket: ${REPORT_SOURCE_BUCKET:}
     region: ${REPORT_SOURCE_REGION:ap-northeast-2}
@@ -81,6 +83,7 @@ report:
     parser-token: ${BAREUM_AI_INTERNAL_API_TOKEN:}
     signed-url-seconds: ${REPORT_SOURCE_SIGNED_URL_SECONDS:600}
     parser-timeout-seconds: ${REPORT_PDF_PARSER_TIMEOUT_SECONDS:310}
+    remote-execution-timeout-seconds: ${REPORT_PDF_REMOTE_EXECUTION_TIMEOUT_SECONDS:300}
     storage-timeout-seconds: ${REPORT_SOURCE_TIMEOUT_SECONDS:30}
   segmentation:
     model-path: ${KIWI_MODEL_PATH:build/kiwi/models/cong/base}
