@@ -1,0 +1,143 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/sw-capstone/bareum-server/raw/develop/packages/contracts/report-intake/1.0.0/success.schema.json",
+  "title": "ReportUploadResponse",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "reportId",
+    "contentId",
+    "parseAttemptId",
+    "parseStatus",
+    "extractionQuality",
+    "warnings",
+    "sourceExpiresAt"
+  ],
+  "properties": {
+    "reportId": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9223372036854775807
+    },
+    "contentId": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9223372036854775807
+    },
+    "parseAttemptId": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9223372036854775807
+    },
+    "parseStatus": {
+      "const": "SUCCEEDED"
+    },
+    "extractionQuality": {
+      "enum": [
+        "COMPLETE",
+        "PARTIAL"
+      ]
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/warning"
+      }
+    },
+    "sourceExpiresAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "$defs": {
+    "warning": {
+      "type": "object",
+      "properties": {
+        "stage": {
+          "type": "string",
+          "minLength": 1,
+          "description": "extraction·composition·segmentation 등 경고 발생 단계."
+        },
+        "code": {
+          "type": "string",
+          "minLength": 1,
+          "description": "발생 단계의 경고 코드. 새로운 경고도 보존할 수 있도록 목록을 닫지 않는다."
+        },
+        "target": {
+          "$ref": "#/$defs/warningTarget"
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "stage",
+        "code",
+        "target",
+        "message"
+      ],
+      "additionalProperties": false
+    },
+    "warningTarget": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "document"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "page"
+            },
+            "page": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "required": [
+            "type",
+            "page"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "enum": [
+                "block",
+                "cell",
+                "unit",
+                "section"
+              ]
+            },
+            "id": {
+              "$ref": "#/$defs/uuid"
+            }
+          },
+          "required": [
+            "type",
+            "id"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "uuid": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Spring이 발급하는 본문 내부 UUID. 파서 ID는 sourceRefs에 별도로 보존한다."
+    }
+  },
+  "$comment": "REPORT-002. S3 저장, 파싱, 공통 본문과 이력 저장이 완료된 응답. 경고 형식은 공통 본문 1.0.0과 동일하다."
+}

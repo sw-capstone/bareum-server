@@ -31,6 +31,7 @@ import lombok.NoArgsConstructor;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.node.JsonNodeFactory;
 
+/** 보고서의 개별 파싱 시도와 처리 상태, 생성된 본문과 오류를 저장한다. */
 @Entity
 @Table(name = "report_parse_attempt")
 @Getter
@@ -56,7 +57,7 @@ public class ReportParseAttempt extends BaseTimeEntity {
 	@ColumnDefault("'[]'::jsonb")
 	private JsonNode extractionWarnings;
 
-	@Column(name = "error_code", nullable = true, length = 30)
+	@Column(name = "error_code", nullable = true, length = 64)
 	private String errorCode;
 
 	@Column(name = "started_at", nullable = true)
@@ -75,6 +76,7 @@ public class ReportParseAttempt extends BaseTimeEntity {
 
 	private ReportParseAttempt(Report report) {
 		Objects.requireNonNull(report, "report");
+		report.requireActiveIntake();
 		this.processStatus = ParseStatus.PENDING;
 		this.extractionWarnings = JsonNodeFactory.instance.arrayNode();
 		this.report = report;

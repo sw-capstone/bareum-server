@@ -1,0 +1,296 @@
+{
+  "openapi": "3.1.1",
+  "info": {
+    "title": "보고서 접수 및 원본 삭제 계약",
+    "version": "1.0.0",
+    "description": "#53의 공개 계약. 동기 접수와 삭제 요청 등록을 제공한다. 실제 원본 삭제 작업은 수명 관리 단계에서 연결한다."
+  },
+  "servers": [
+    {
+      "url": "/api/v1"
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  },
+  "paths": {
+    "/reports": {
+      "post": {
+        "operationId": "uploadReport",
+        "summary": "PDF 보고서 동기 접수",
+        "description": "원본 S3 저장, 파싱, 공통 본문과 파싱 이력 저장이 끝난 뒤 응답한다. PARTIAL도 성공이며 경고를 반환한다. 분석은 별도 요청한다.",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "description": "같은 접수의 재전송은 같은 UUID를 사용한다. 새 접수는 새 UUID를 사용한다.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "file",
+                  "reportType"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "비어 있지 않은 PDF 원본 1개. 중복 파일 파트는 허용하지 않는다.",
+                    "x-max-size-bytes": 20000000,
+                    "x-max-page-count": 60
+                  },
+                  "reportType": {
+                    "type": "string",
+                    "enum": [
+                      "PLAN",
+                      "RESULT"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "접수와 본문 저장 완료",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./success.schema.json"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "필수값, 파일 개수, 문서 유형 또는 UUID 요청 키 오류",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./failure.schema.json"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "인증 실패",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./failure.schema.json"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "동일 요청 처리 중, 요청 지문 충돌 또는 취소한 접수",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./failure.schema.json"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "20,000,000바이트 초과",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./failure.schema.json"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "미지원 파일 형식",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./failure.schema.json"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "60페이지 초과, 손상, 암호화 또는 추출 가능한 본문 없음",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./failure.schema.json"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "파서 내부 오류 또는 저장 실패",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./failure.schema.json"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "외부 통신 실패",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./failure.schema.json"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "처리 용량 부족",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./failure.schema.json"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "응답 시간 초과",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./failure.schema.json"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/reports/{reportId}/source": {
+      "delete": {
+        "operationId": "deleteReportSource",
+        "summary": "미사용 접수 취소와 원본 삭제 요청",
+        "description": "본인 소유의 파일 접수만 대상이다. 파싱 중이거나 분석 이력이 있으면 409로 거절한다. 삭제 요청은 접수 취소와 함께 저장한다. 취소된 접수로 분석하거나 완료 응답을 재사용할 수 없다. 본문과 파싱 이력은 유지한다.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "reportId",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9223372036854775807
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "삭제 요청 등록 또는 삭제 대기 중",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./source-deletion.schema.json"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "실제 삭제 완료"
+          },
+          "400": {
+            "description": "보고서 식별자 형식 오류",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./failure.schema.json"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "인증 실패",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./failure.schema.json"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "파싱 중이거나 분석을 시작한 보고서",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./failure.schema.json"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "대상이 없거나 다른 사용자 소유",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./failure.schema.json"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "x-server-policy": {
+    "maxFileSizeBytes": 20000000,
+    "maxPageCount": 60,
+    "sourceRetentionDays": 30,
+    "idempotencyRetentionHoursAfterCompletion": 24,
+    "idempotencyCleanupIntervalSeconds": 3600,
+    "idempotencyScope": [
+      "memberId",
+      "requestKey"
+    ],
+    "fingerprintInputs": [
+      "reportType",
+      "originalFilename",
+      "sizeBytes",
+      "sha256"
+    ],
+    "activeDuplicateStatus": 409,
+    "differentPayloadStatus": 409,
+    "cancelledIntakeStatus": 409,
+    "expiredKeyBehavior": "정리 작업으로 기록이 삭제되면 같은 키도 새 요청으로 처리될 수 있다.",
+    "maxAdditionalParseAttempts": 1,
+    "retryableParserErrors": [
+      "SOURCE_URL_EXPIRED",
+      "SOURCE_DOWNLOAD_TEMPORARY_FAILURE",
+      "CAPACITY_EXCEEDED"
+    ],
+    "automaticRetryForTransportTimeout": false,
+    "automaticRetryForParserTimeout": false,
+    "retryDeadline": "접수 전체의 남은 시간 한도 안에서만 재시도한다.",
+    "cleanup": "최종 실패 또는 사용자 삭제 원본은 안전한 시점 이후 삭제한다. 실패 시 작업을 유지하고 재시도하며 실제 삭제 완료 후에만 시각을 기록한다. 진행 중이거나 정리할 원본이 남은 멱등 기록은 만료돼도 삭제하지 않는다.",
+    "sourceVersioning": "버전 관리 버킷은 업로드 응답의 versionId를 저장해 해당 버전을 삭제한다."
+  }
+}

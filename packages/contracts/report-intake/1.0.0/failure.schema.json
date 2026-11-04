@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/sw-capstone/bareum-server/raw/develop/packages/contracts/report-intake/1.0.0/failure.schema.json",
+  "title": "ReportIntakeProblemDetail",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "title",
+    "status",
+    "detail",
+    "instance",
+    "code"
+  ],
+  "properties": {
+    "type": {
+      "type": "string",
+      "format": "uri-reference"
+    },
+    "title": {
+      "type": "string"
+    },
+    "status": {
+      "type": "integer",
+      "minimum": 400,
+      "maximum": 599
+    },
+    "detail": {
+      "type": "string"
+    },
+    "instance": {
+      "type": "string",
+      "format": "uri-reference"
+    },
+    "code": {
+      "type": "string",
+      "pattern": "^[A-Z]+-[0-9]{4}$"
+    },
+    "reportId": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 1,
+      "maximum": 9223372036854775807
+    },
+    "parseAttemptId": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 1,
+      "maximum": 9223372036854775807
+    },
+    "errors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "field",
+          "message"
+        ],
+        "properties": {
+          "field": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "$comment": "기존 application/problem+json 형식을 유지한다. 이미 생성된 보고서와 시도 식별자는 선택적으로 포함한다."
+}

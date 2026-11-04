@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/sw-capstone/bareum-server/raw/develop/packages/contracts/report-intake/1.0.0/source-deletion.schema.json",
+  "title": "SourceDeletionResponse",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "reportId",
+    "sourceDeletionStatus"
+  ],
+  "properties": {
+    "reportId": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9223372036854775807
+    },
+    "sourceDeletionStatus": {
+      "const": "PENDING"
+    }
+  },
+  "$comment": "삭제 요청 접수의 202 응답. 실제 삭제 완료 대상의 반복 요청은 204이며 본문이 없다."
+}
