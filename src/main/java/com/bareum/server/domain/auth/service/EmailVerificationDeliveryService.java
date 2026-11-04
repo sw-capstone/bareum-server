@@ -19,11 +19,11 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class EmailVerificationDeliveryService {
 	private final EmailOutboxQueryRepository queries;
-	private final Clock emailVerificationClock;
+	private final Clock clock;
 
 	@Transactional(readOnly = true)
 	public Optional<EmailVerificationDeliveryResponse> status(UUID requestId) {
-		Instant now = emailVerificationClock.instant();
+		Instant now = clock.instant();
 		return queries.findDelivery(requestId).map(snapshot -> response(snapshot, now));
 	}
 

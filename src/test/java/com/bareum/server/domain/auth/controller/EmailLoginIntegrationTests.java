@@ -106,7 +106,7 @@ class EmailLoginIntegrationTests {
 	@Autowired
 	private JsonMapper mapper;
 
-	@MockitoBean(name = "loginClock")
+	@MockitoBean
 	private Clock clock;
 
 	@BeforeEach

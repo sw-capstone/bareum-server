@@ -5,19 +5,19 @@ import static org.junit.jupiter.api.Assertions.*;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
-import com.bareum.server.domain.report.config.ReportIntakeConfig;
 import com.bareum.server.domain.report.config.ReportUploadConfig;
 import com.bareum.server.domain.report.config.ReportUploadProperties;
 import com.bareum.server.domain.report.exception.ReportErrorCode;
 import com.bareum.server.domain.report.exception.ReportException;
 import com.bareum.server.domain.report.parsing.PdfParser;
 import com.bareum.server.domain.report.source.ReportSourceStore;
+import com.bareum.server.global.config.TimeConfig;
 
 /** 외부 연결 설정의 누락 처리와 제한값 검증을 확인한다. */
 class ReportUploadConfigurationTests {
 	@Test
 	void missingDeploymentSettingsKeepContextAvailableAndRejectOnlyUploads() {
-		new ApplicationContextRunner().withUserConfiguration(ReportUploadConfig.class, ReportIntakeConfig.class)
+		new ApplicationContextRunner().withUserConfiguration(ReportUploadConfig.class, TimeConfig.class)
 				.run(context -> {
 					assertNull(context.getStartupFailure());
 					assertNotNull(context.getBean(ReportSourceStore.class));

@@ -4,7 +4,6 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.ResponseCookie;
 import org.springframework.stereotype.Component;
 
@@ -17,7 +16,7 @@ public class LoginCookieFactory {
 	private final LoginProperties properties;
 	private final Clock clock;
 
-	public LoginCookieFactory(LoginProperties properties, @Qualifier("loginClock") Clock clock) {
+	public LoginCookieFactory(LoginProperties properties, Clock clock) {
 		this.properties = properties;
 		this.clock = clock;
 	}

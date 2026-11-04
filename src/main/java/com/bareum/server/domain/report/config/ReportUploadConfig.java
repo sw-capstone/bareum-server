@@ -55,7 +55,7 @@ public class ReportUploadConfig {
 		ObjectProvider<S3Client> clients,
 		ObjectProvider<S3Presigner> presigners,
 		ReportUploadProperties properties,
-		@Qualifier("reportIntakeClock") Clock clock
+		Clock clock
 	) {
 		return new S3ReportSourceStore(clients::getObject, presigners::getObject, properties, clock);
 	}

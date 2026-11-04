@@ -51,7 +51,7 @@ class EmailVerificationConfirmServiceIntegrationTests {
 	private EmailVerificationProperties properties;
 	@Autowired
 	private JdbcTemplate jdbc;
-	@MockitoBean(name = "emailVerificationClock")
+	@MockitoBean
 	private Clock clock;
 
 	@BeforeEach

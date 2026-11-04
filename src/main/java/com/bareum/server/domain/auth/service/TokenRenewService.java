@@ -3,7 +3,6 @@ package com.bareum.server.domain.auth.service;
 import java.time.Clock;
 import java.time.Instant;
 
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,7 +33,7 @@ public class TokenRenewService {
 		LoginJwtService jwt,
 		LoginProperties login,
 		TokenRenewProperties policy,
-		@Qualifier("loginClock") Clock clock
+		Clock clock
 	) {
 		this.sessions = sessions;
 		this.repository = repository;

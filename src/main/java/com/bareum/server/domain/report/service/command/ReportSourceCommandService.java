@@ -3,7 +3,6 @@ package com.bareum.server.domain.report.service.command;
 import java.time.Clock;
 import java.util.List;
 
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,7 +24,7 @@ public class ReportSourceCommandService {
 	public ReportSourceCommandService(
 		ReportRepository reports,
 		ReportParseAttemptRepository attempts,
-		@Qualifier("reportIntakeClock") Clock clock
+		Clock clock
 	) {
 		this.reports = reports;
 		this.attempts = attempts;

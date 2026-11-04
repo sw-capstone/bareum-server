@@ -5,7 +5,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
 
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -52,7 +51,7 @@ public class ReportIntakeCommandService {
 		ReportRepository reports,
 		ReportParseAttemptRepository attempts,
 		ReportContentRepository contents,
-		@Qualifier("reportIntakeClock") Clock clock
+		Clock clock
 	) {
 		this.members = members;
 		this.requests = requests;

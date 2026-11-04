@@ -42,7 +42,7 @@ public class EmailOutboxWorker {
 		EmailVerificationAccountValidator accounts,
 		EmailVerificationMailSender mailSender,
 		EmailOutboxCipher cipher,
-		Clock emailVerificationClock,
+		Clock clock,
 		PlatformTransactionManager transactionManager
 	) {
 		this.properties = properties;
@@ -52,7 +52,7 @@ public class EmailOutboxWorker {
 		this.accounts = accounts;
 		this.mailSender = mailSender;
 		this.cipher = cipher;
-		this.clock = emailVerificationClock;
+		this.clock = clock;
 		this.transaction = new TransactionTemplate(transactionManager);
 		transaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
 		transaction.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);

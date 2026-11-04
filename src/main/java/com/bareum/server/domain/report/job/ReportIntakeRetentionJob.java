@@ -2,7 +2,6 @@ package com.bareum.server.domain.report.job;
 
 import java.time.Clock;
 
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -17,7 +16,7 @@ public class ReportIntakeRetentionJob {
 
 	public ReportIntakeRetentionJob(
 		ReportIntakeCommandService commands,
-		@Qualifier("reportIntakeClock") Clock clock
+		Clock clock
 	) {
 		this.commands = commands;
 		this.clock = clock;

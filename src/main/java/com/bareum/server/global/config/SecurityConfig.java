@@ -1,6 +1,5 @@
 package com.bareum.server.global.config;
 
-import java.time.Clock;
 import java.util.List;
 
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -28,13 +27,7 @@ import com.bareum.server.global.security.handler.SecurityProblemWriter;
 	LoginProperties.class, com.bareum.server.domain.auth.config.LoginJwtProperties.class,
 	com.bareum.server.domain.auth.config.TokenRenewProperties.class
 })
-@org.springframework.scheduling.annotation.EnableScheduling
 public class SecurityConfig {
-	@Bean
-	public Clock loginClock() {
-		return Clock.systemUTC();
-	}
-
 	@Bean
 	public UrlBasedCorsConfigurationSource corsConfigurationSource(LoginProperties properties) {
 		var cors = new CorsConfiguration();

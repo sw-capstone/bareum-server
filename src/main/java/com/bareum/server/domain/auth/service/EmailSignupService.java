@@ -40,7 +40,7 @@ public class EmailSignupService {
 	private final MemberRepository memberRepository;
 	private final SignupTermConsentValidator termValidator;
 	private final MemberTermRepository memberTermRepository;
-	private final Clock emailVerificationClock;
+	private final Clock clock;
 
 	@Transactional
 	public EmailSignupResponse signup(EmailSignupRequest request) {
@@ -55,14 +55,14 @@ public class EmailSignupService {
 		EmailVerification verification = verificationRepository
 				.findFirstByEmailIgnoreCaseAndPurposeOrderByIdDesc(request.email(), VerificationPurpose.SIGNUP)
 				.orElseThrow(() -> new AuthException(AuthErrorCode.EMAIL_VERIFICATION_INVALID));
-		Instant now = emailVerificationClock.instant();
+		Instant now = clock.instant();
 		validateProof(request.verificationToken(), verification, now);
 		if (memberRepository.existsByEmailIgnoreCase(request.email())) {
 			throw new AuthException(AuthErrorCode.EMAIL_ALREADY_REGISTERED);
 		}
 		List<ValidatedConsent> terms = termValidator.validate(request.agreements());
 		String passwordHash = passwordHashes.hash(request.password());
-		Instant completedAt = emailVerificationClock.instant();
+		Instant completedAt = clock.instant();
 		verification.consume(completedAt);
 		Member member = Member.createLocal(verification.getEmail(), request.name(), passwordHash);
 		try {
