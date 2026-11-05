@@ -3,7 +3,7 @@
   "enabledManagers": ["dockerfile"],
   "baseBranchPatterns": ["develop"],
   "timezone": "Asia/Seoul",
-  "schedule": ["* 9-12 * * 1"],
+  "schedule": ["* * * * 1"],
   "updateNotScheduled": false,
   "automerge": false,
   "semanticCommits": "enabled",
