@@ -290,6 +290,13 @@ class ReportUploadIntegrationTests {
 		assertEquals(0, API.calls.get());
 		assertEquals(0,
 				jdbc.queryForObject("SELECT count(*) FROM report WHERE member_id=?", Integer.class, member.getId()));
+		doAnswer(i -> {
+			PreparedPdf pdf = i.getArgument(1);
+			return new UploadedReportFile(FileFormat.PDF, i.getArgument(0), pdf.filename(), pdf.sizeBytes(),
+					pdf.sha256(), "version-fixture", Instant.now());
+		}).when(sources).upload(anyString(), any());
+		var next = upload(UUID.randomUUID(), "PLAN", "report.pdf", PDF, 1, token);
+		assertEquals(201, next.statusCode(), next.body());
 	}
 
 	@Test
@@ -356,6 +363,49 @@ class ReportUploadIntegrationTests {
 		assertEquals(1, API.calls.get());
 	}
 
+	/** 서로 다른 접수의 동시 실행을 S3 저장 전에 거절하고 거절된 키를 나중에 재사용하는지 검증한다. */
+	@Test
+	void rejectsConcurrentNewIntakesBeforeReservationAndStorageButAllowsTheSameKeyLater() throws Exception {
+		UUID completedKey = UUID.randomUUID();
+		var completed = upload(completedKey, "PLAN", "report.pdf", PDF, 1, token);
+		assertEquals(201, completed.statusCode(), completed.body());
+		API.reset();
+		API.hold = true;
+		UUID runningKey = UUID.randomUUID();
+		UUID rejectedKey = UUID.randomUUID();
+		var running = CompletableFuture.supplyAsync(() -> {
+			try {
+				return upload(runningKey, "PLAN", "report.pdf", PDF, 1, token);
+			} catch (Exception exception) {
+				throw new RuntimeException(exception);
+			}
+		});
+		try {
+			assertTrue(API.entered.await(5, TimeUnit.SECONDS));
+			var rejected = upload(rejectedKey, "PLAN", "report.pdf", PDF, 1, token);
+			assertEquals(503, rejected.statusCode(), rejected.body());
+			assertEquals("REPORT-0053", json(rejected).get("code").asString());
+			assertEquals(0, jdbc.queryForObject(
+					"SELECT count(*) FROM report_intake_request WHERE member_id=? AND request_key=?",
+					Integer.class, member.getId(), rejectedKey));
+			var replayed = upload(completedKey, "PLAN", "report.pdf", PDF, 1, token);
+			assertEquals(201, replayed.statusCode(), replayed.body());
+			assertEquals(json(completed), json(replayed));
+			assertEquals(409, upload(runningKey, "PLAN", "report.pdf", PDF, 1, token).statusCode());
+			assertEquals(409, upload(completedKey, "RESULT", "report.pdf", PDF, 1, token).statusCode());
+			assertEquals(1, API.calls.get());
+			verify(sources, times(2)).upload(anyString(), any());
+		} finally {
+			API.release.countDown();
+			running.get(5, TimeUnit.SECONDS);
+		}
+		assertEquals(201, running.get().statusCode());
+		var retried = upload(rejectedKey, "PLAN", "report.pdf", PDF, 1, token);
+		assertEquals(201, retried.statusCode(), retried.body());
+		assertEquals(2, API.calls.get());
+		verify(sources, times(3)).upload(anyString(), any());
+	}
+
 	/** 헤더 수신 후 본문이 멈추면 504와 실패 이력을 남기고 다음 접수도 정상 처리하는지 검증한다. */
 	@ParameterizedTest
 	@ValueSource(ints = {0, 1})
@@ -392,6 +442,18 @@ class ReportUploadIntegrationTests {
 		var next = upload(UUID.randomUUID(), "PLAN", "report.pdf", PDF, 1, token);
 		assertEquals(201, next.statusCode(), next.body());
 		assertEquals(2, API.calls.get());
+	}
+
+	/** 파싱 실패로 접수가 끝나도 처리 자리를 반환해 다음 신규 접수를 허용하는지 검증한다. */
+	@ParameterizedTest
+	@CsvSource({"PDF_CORRUPTED,422", "PARSER_FAILED,500", "PARSER_TIMEOUT,504"})
+	void parserFailuresReleaseTheIntakePermit(PdfParseErrorCode error, int status) throws Exception {
+		API.error = error;
+		var failed = upload(UUID.randomUUID(), "PLAN", "report.pdf", PDF, 1, token);
+		assertEquals(status, failed.statusCode(), failed.body());
+		API.error = null;
+		var next = upload(UUID.randomUUID(), "PLAN", "report.pdf", PDF, 1, token);
+		assertEquals(201, next.statusCode(), next.body());
 	}
 
 	private HttpResponse<String> upload(UUID key, String type, String filename, byte[] bytes, int files, String access)

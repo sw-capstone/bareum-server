@@ -28,7 +28,7 @@
       "post": {
         "operationId": "uploadReport",
         "summary": "PDF 보고서 동기 접수",
-        "description": "원본 S3 저장, 파싱, 공통 본문과 파싱 이력 저장이 끝난 뒤 응답한다. PARTIAL도 성공이며 경고를 반환한다. 분석은 별도 요청한다.",
+        "description": "원본 S3 저장, 파싱, 공통 본문과 파싱 이력 저장이 끝난 뒤 응답한다. PARTIAL도 성공이며 경고를 반환한다. 분석은 별도 요청한다. Spring 인스턴스별 신규 접수 동시 처리 수를 제한한다. 제한 초과 시 S3 저장과 접수 기록 생성 없이 503을 반환하며 같은 멱등 키로 나중에 다시 접수할 수 있다. 완료된 멱등 결과 재사용은 처리 자리를 점유하지 않는다.",
         "parameters": [
           {
             "in": "header",
@@ -164,7 +164,7 @@
             }
           },
           "503": {
-            "description": "처리 용량 부족",
+            "description": "Spring 신규 접수 또는 AI 파싱 처리 용량 부족",
             "content": {
               "application/problem+json": {
                 "schema": {

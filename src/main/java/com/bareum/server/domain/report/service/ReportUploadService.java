@@ -15,6 +15,8 @@ import com.bareum.server.domain.report.enums.ReportType;
 import com.bareum.server.domain.report.exception.ReportErrorCode;
 import com.bareum.server.domain.report.exception.ReportException;
 import com.bareum.server.domain.report.intake.PdfUploadValidator;
+import com.bareum.server.domain.report.intake.PreparedPdf;
+import com.bareum.server.domain.report.intake.ReportIntakeLimiter;
 import com.bareum.server.domain.report.intake.ReportIntakePolicy;
 import com.bareum.server.domain.report.intake.ReportIntakeResult;
 import com.bareum.server.domain.report.parsing.PdfParseResponse;
@@ -37,6 +39,7 @@ public class ReportUploadService {
 	private final ReportIntakeQueryService queries;
 	private final ReportIntakeCommandService commands;
 	private final ReportUploadProperties properties;
+	private final ReportIntakeLimiter limiter;
 
 	@Transactional(propagation = Propagation.NOT_SUPPORTED)
 	public ReportIntakeResult upload(long memberId, UUID key, ReportType type, MultipartFile file) {
@@ -46,6 +49,20 @@ public class ReportUploadService {
 		if (replay.isPresent()) {
 			return replay.get();
 		}
+		if (!limiter.tryAcquire()) {
+			// 자리 확인 직전에 완료되거나 선점된 동일 요청은 기존 멱등 정책을 우선한다.
+			return queries.findReplay(memberId, key, fingerprint)
+					.orElseThrow(() -> new ReportException(ReportErrorCode.PDF_CAPACITY_EXCEEDED));
+		}
+		try {
+			return accept(memberId, key, type, pdf, fingerprint);
+		} finally {
+			limiter.release();
+		}
+	}
+
+	/** 확보한 처리 자리 안에서 접수를 선점하고 원본 저장부터 파싱 및 결과 저장까지 수행한다. */
+	private ReportIntakeResult accept(long memberId, UUID key, ReportType type, PreparedPdf pdf, String fingerprint) {
 		var reservation =
 				commands.reserve(memberId, key, fingerprint, sources.newObjectKey(memberId));
 		if (reservation.replay() != null) {

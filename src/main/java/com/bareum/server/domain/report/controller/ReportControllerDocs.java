@@ -36,7 +36,9 @@ public interface ReportControllerDocs {
 		description = "REPORT-002. PDF 1개와 PLAN 또는 RESULT를 받습니다. "
 				+ "20,000,000바이트와 60페이지 이내이며 S3 저장, 파싱, 본문과 이력 저장이 끝난 뒤 응답합니다. "
 				+ "PARTIAL도 성공이며 경고를 함께 반환합니다. 분석은 별도로 요청합니다. "
-				+ "같은 사용자와 Idempotency-Key의 재전송은 저장된 결과를 재사용하며, 결과는 완료 후 최소 24시간 보관합니다.")
+				+ "같은 사용자와 Idempotency-Key의 재전송은 저장된 결과를 재사용하며, 결과는 완료 후 최소 24시간 보관합니다. "
+				+ "신규 접수는 Spring 인스턴스별 동시 처리 수를 제한하며, 용량 초과 시 S3 저장과 접수 기록 생성 없이 503을 반환합니다. "
+				+ "이 경우 같은 멱등 키로 나중에 다시 접수할 수 있습니다.")
 	@PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
 	@ApiResponses({
 		@ApiResponse(responseCode = "201",

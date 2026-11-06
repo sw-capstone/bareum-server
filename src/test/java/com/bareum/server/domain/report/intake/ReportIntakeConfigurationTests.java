@@ -29,7 +29,7 @@ import com.bareum.server.domain.report.service.query.ReportMaintenanceQueryServi
 class ReportIntakeConfigurationTests {
 	private final ApplicationContextRunner context = new ApplicationContextRunner()
 			.withUserConfiguration(ReportUploadConfig.class, ReportMaintenanceQueryService.class,
-					ReportIntakeCommandService.class)
+					ReportIntakeCommandService.class, ReportIntakeLimiter.class)
 			.withBean(Clock.class, Clock::systemUTC)
 			.withBean(MemberRepository.class, () -> mock(MemberRepository.class))
 			.withBean(ReportRepository.class, () -> mock(ReportRepository.class))
@@ -53,7 +53,8 @@ class ReportIntakeConfigurationTests {
 				"REPORT_INTAKE_SOURCE_CLEANUP_INTERVAL_MS", "2500",
 				"REPORT_INTAKE_RETENTION_INTERVAL_MS", "3500",
 				"REPORT_INTAKE_MAINTENANCE_BATCH_SIZE", "7",
-				"REPORT_INTAKE_RETENTION_BATCH_SIZE", "13");
+				"REPORT_INTAKE_RETENTION_BATCH_SIZE", "13",
+				"REPORT_INTAKE_MAX_CONCURRENT_REQUESTS", "3");
 		context.withInitializer(ctx -> ctx.getEnvironment()
 				.getPropertySources()
 				.addFirst(new SystemEnvironmentPropertySource("intake-systemEnvironment", environment))).run(ctx -> {
@@ -62,6 +63,14 @@ class ReportIntakeConfigurationTests {
 					assertEquals(1500, settings.recoveryIntervalMs());
 					assertEquals(2500, settings.sourceCleanupIntervalMs());
 					assertEquals(3500, settings.retentionIntervalMs());
+					assertEquals(3, settings.maxConcurrentRequests());
+					var limiter = ctx.getBean(ReportIntakeLimiter.class);
+					for (int i = 0; i < 3; i++) {
+						assertTrue(limiter.tryAcquire());
+					}
+					assertFalse(limiter.tryAcquire());
+					limiter.release();
+					assertTrue(limiter.tryAcquire());
 					var queries = ctx.getBean(ReportMaintenanceQueryService.class);
 					var now = Instant.now();
 					queries.expiredRequests(now, 42);
@@ -82,7 +91,8 @@ class ReportIntakeConfigurationTests {
 		"REPORT_INTAKE_SOURCE_CLEANUP_INTERVAL_MS,0", "REPORT_INTAKE_SOURCE_CLEANUP_INTERVAL_MS,-1",
 		"REPORT_INTAKE_RETENTION_INTERVAL_MS,0", "REPORT_INTAKE_RETENTION_INTERVAL_MS,-1",
 		"REPORT_INTAKE_MAINTENANCE_BATCH_SIZE,0", "REPORT_INTAKE_MAINTENANCE_BATCH_SIZE,-1",
-		"REPORT_INTAKE_RETENTION_BATCH_SIZE,0", "REPORT_INTAKE_RETENTION_BATCH_SIZE,-1"})
+		"REPORT_INTAKE_RETENTION_BATCH_SIZE,0", "REPORT_INTAKE_RETENTION_BATCH_SIZE,-1",
+		"REPORT_INTAKE_MAX_CONCURRENT_REQUESTS,0", "REPORT_INTAKE_MAX_CONCURRENT_REQUESTS,-1"})
 	void rejectsInvalidOperationalEnvironment(String variable, String value) {
 		context.withInitializer(ctx -> ctx.getEnvironment()
 				.getPropertySources()
