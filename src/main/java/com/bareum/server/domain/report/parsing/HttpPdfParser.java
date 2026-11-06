@@ -8,6 +8,9 @@ import java.net.http.HttpResponse;
 import java.net.http.HttpTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import com.bareum.server.domain.report.exception.ReportErrorCode;
 import com.bareum.server.domain.report.exception.ReportException;
@@ -47,19 +50,19 @@ public final class HttpPdfParser implements PdfParser {
 		if (remaining.isZero() || remaining.isNegative()) {
 			throw new ReportException(ReportErrorCode.INTAKE_PROCESSING_TIMEOUT);
 		}
+		Duration budget = remaining.compareTo(timeout) < 0 ? remaining : timeout;
 		// 현재 PDF 파싱 호출은 HTTP/1.1을 유지한다.
 		// 통신 병목이 확인되면 AI 서버와 프록시 설정을 함께 맞춰 HTTP/2 전환을 검토한다.
 		HttpRequest httpRequest = HttpRequest.newBuilder(endpoint)
 				.version(HttpClient.Version.HTTP_1_1)
-				.timeout(remaining.compareTo(timeout) < 0 ? remaining : timeout)
+				.timeout(budget)
 				.header("Authorization", "Bearer " + token)
 				.header("Content-Type", "application/json")
 				.header("Accept", "application/json")
 				.POST(HttpRequest.BodyPublishers.ofString(mapper.writeValueAsString(request), StandardCharsets.UTF_8))
 				.build();
 		try {
-			HttpResponse<String> response = client.send(httpRequest,
-					HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+			HttpResponse<String> response = receive(httpRequest, budget);
 			String contentType = response.headers().firstValue("Content-Type").orElse("");
 			if (!contentType.split(";", 2)[0].strip().equalsIgnoreCase("application/json")) {
 				throw new ReportException(ReportErrorCode.INVALID_PARSE_RESPONSE_FORMAT);
@@ -78,6 +81,37 @@ public final class HttpPdfParser implements PdfParser {
 		} catch (JacksonException exception) {
 			// 응답이나 다운로드 URL이 예외 원문을 통해 로그에 노출되지 않도록 한다.
 			throw new ReportException(ReportErrorCode.INVALID_PARSE_RESPONSE_FORMAT);
+		}
+	}
+
+	/** 본문 수신 완료까지 하나의 기한으로 기다리고 시간 초과나 인터럽트 시 원래 HTTP 요청을 취소한다. */
+	private HttpResponse<String> receive(HttpRequest request, Duration budget)
+			throws IOException, InterruptedException {
+		long started = System.nanoTime();
+		var pending = client.sendAsync(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+		try {
+			long remainingNanos = budget.toNanos() - (System.nanoTime() - started);
+			if (remainingNanos <= 0) {
+				throw new TimeoutException();
+			}
+			return pending.get(remainingNanos, TimeUnit.NANOSECONDS);
+		} catch (TimeoutException exception) {
+			pending.cancel(true);
+			throw new HttpTimeoutException("PDF parsing response deadline exceeded");
+		} catch (InterruptedException exception) {
+			pending.cancel(true);
+			throw exception;
+		} catch (ExecutionException exception) {
+			if (exception.getCause() instanceof IOException failure) {
+				throw failure;
+			}
+			if (exception.getCause() instanceof RuntimeException failure) {
+				throw failure;
+			}
+			if (exception.getCause() instanceof Error failure) {
+				throw failure;
+			}
+			throw new IOException("PDF parsing exchange failed");
 		}
 	}
 

@@ -174,7 +174,7 @@
             }
           },
           "504": {
-            "description": "응답 시간 초과",
+            "description": "AI 응답 본문 수신을 포함한 대기시간 또는 접수 기한 초과",
             "content": {
               "application/problem+json": {
                 "schema": {

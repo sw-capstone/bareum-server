@@ -25,6 +25,9 @@ final class UploadParserFixture implements AutoCloseable {
 	volatile String quality = "COMPLETE";
 	volatile boolean wrongHash;
 	volatile boolean hold;
+	volatile boolean holdBody;
+	volatile int bodyPrefixBytes;
+	volatile CountDownLatch headersSent = new CountDownLatch(1);
 	volatile CountDownLatch entered = new CountDownLatch(1);
 	volatile CountDownLatch release = new CountDownLatch(1);
 	volatile ObjectNode received;
@@ -77,7 +80,20 @@ final class UploadParserFixture implements AutoCloseable {
 					exchange.getResponseHeaders().set("Content-Type", "application/json");
 					byte[] output = mapper.writeValueAsBytes(body);
 					exchange.sendResponseHeaders(status, output.length);
-					exchange.getResponseBody().write(output);
+					if (holdBody) {
+						exchange.getResponseBody().write(output, 0, bodyPrefixBytes);
+						exchange.getResponseBody().flush();
+						headersSent.countDown();
+						try {
+							release.await();
+						} catch (InterruptedException exception) {
+							Thread.currentThread().interrupt();
+							return;
+						}
+						exchange.getResponseBody().write(output, bodyPrefixBytes, output.length - bodyPrefixBytes);
+					} else {
+						exchange.getResponseBody().write(output);
+					}
 				}
 			});
 			server.start();
@@ -97,6 +113,9 @@ final class UploadParserFixture implements AutoCloseable {
 		quality = "COMPLETE";
 		wrongHash = false;
 		hold = false;
+		holdBody = false;
+		bodyPrefixBytes = 0;
+		headersSent = new CountDownLatch(1);
 		entered = new CountDownLatch(1);
 		release = new CountDownLatch(1);
 	}

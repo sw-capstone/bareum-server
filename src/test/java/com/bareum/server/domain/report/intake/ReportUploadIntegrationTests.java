@@ -56,7 +56,8 @@ import tools.jackson.databind.json.JsonMapper;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
 	properties = {
 		"auth.login.allowed-origins=https://web.example.invalid",
-		"report.upload.bucket=fixture-bucket", "report.upload.parser-token=fixture-token"
+		"report.upload.bucket=fixture-bucket", "report.upload.parser-token=fixture-token",
+		"report.upload.parser-timeout-seconds=2"
 	})
 class ReportUploadIntegrationTests {
 	private static final UploadParserFixture API = new UploadParserFixture();
@@ -353,6 +354,44 @@ class ReportUploadIntegrationTests {
 		}
 		assertEquals(201, running.get(10, TimeUnit.SECONDS).statusCode());
 		assertEquals(1, API.calls.get());
+	}
+
+	/** 헤더 수신 후 본문이 멈추면 504와 실패 이력을 남기고 다음 접수도 정상 처리하는지 검증한다. */
+	@ParameterizedTest
+	@ValueSource(ints = {0, 1})
+	void bodyTimeoutReturns504PreservesFailureAndAllowsTheNextIntake(int prefixBytes) throws Exception {
+		API.holdBody = true;
+		API.bodyPrefixBytes = prefixBytes;
+		UUID key = UUID.randomUUID();
+		var running = CompletableFuture.supplyAsync(() -> {
+			try {
+				return upload(key, "PLAN", "report.pdf", PDF, 1, token);
+			} catch (Exception exception) {
+				throw new RuntimeException(exception);
+			}
+		});
+		try {
+			assertTrue(API.headersSent.await(5, TimeUnit.SECONDS));
+			var response = running.get(5, TimeUnit.SECONDS);
+			assertEquals(504, response.statusCode(), response.body());
+			assertEquals("REPORT-0031", json(response).get("code").asString());
+			long report = json(response).get("reportId").asLong();
+			assertEquals("FAILED", jdbc.queryForObject(
+					"SELECT process_status FROM report_parse_attempt WHERE report_id=?", String.class, report));
+			assertNotNull(jdbc.queryForObject("SELECT source_cleanup_after FROM report WHERE id=?",
+					java.sql.Timestamp.class, report));
+			assertEquals(1, API.calls.get());
+		} finally {
+			API.release.countDown();
+			running.get(5, TimeUnit.SECONDS);
+		}
+		API.holdBody = false;
+		API.bodyPrefixBytes = 0;
+		assertEquals(504, upload(key, "PLAN", "report.pdf", PDF, 1, token).statusCode());
+		assertEquals(1, API.calls.get());
+		var next = upload(UUID.randomUUID(), "PLAN", "report.pdf", PDF, 1, token);
+		assertEquals(201, next.statusCode(), next.body());
+		assertEquals(2, API.calls.get());
 	}
 
 	private HttpResponse<String> upload(UUID key, String type, String filename, byte[] bytes, int files, String access)

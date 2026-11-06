@@ -1,8 +1,12 @@
 package com.bareum.server.domain.report.parsing;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
 
+import java.io.IOException;
 import java.net.http.HttpClient;
+import java.net.http.HttpResponse;
+import java.net.http.HttpTimeoutException;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -193,6 +197,57 @@ class HttpPdfParserTests {
 		assertTrue(api.calls.get() <= 1);
 	}
 
+	/** 헤더만 받거나 본문 일부를 받은 뒤 전송이 멈춰도 남은 접수 기한 안에서 종료하는지 검증한다. */
+	@ParameterizedTest
+	@ValueSource(ints = {0, 1})
+	void timesOutWhileReadingTheResponseBody(int prefixBytes) throws Exception {
+		api.holdBody = true;
+		api.bodyPrefixBytes = prefixBytes;
+		var running = CompletableFuture.supplyAsync(() -> assertThrows(ReportException.class,
+				() -> parser.parse(PdfApiFixture.request(), Duration.ofMillis(500))));
+		try {
+			assertTrue(api.headersSent.await(3, TimeUnit.SECONDS));
+			var failure = running.get(2, TimeUnit.SECONDS);
+			assertEquals(ReportErrorCode.PDF_PARSE_REQUEST_TIMEOUT, failure.getBaseErrorCode());
+			assertEquals(1, api.calls.get());
+		} finally {
+			api.release.countDown();
+		}
+	}
+
+	/** 대기시간 초과가 Future만 끝내는 대신 원래 HTTP 요청에도 취소를 전달하는지 검증한다. */
+	@Test
+	void cancelsTheOriginalExchangeWhenTheBodyDeadlineExpires() {
+		var pending = new CompletableFuture<HttpResponse<String>>();
+		var parser = parserWithPendingResponse(pending);
+		var failure = assertThrows(ReportException.class,
+				() -> parser.parse(PdfApiFixture.request(), Duration.ofMillis(50)));
+		assertEquals(ReportErrorCode.PDF_PARSE_REQUEST_TIMEOUT, failure.getBaseErrorCode());
+		assertTrue(pending.isCancelled());
+	}
+
+	/** 비동기 HTTP 실패의 원인을 풀어 기존 시간 초과와 연결 실패 오류를 유지하는지 검증한다. */
+	@ParameterizedTest
+	@ValueSource(booleans = {false, true})
+	void preservesTransportErrorsFromAsyncResponses(boolean timedOut) {
+		var pending = new CompletableFuture<HttpResponse<String>>();
+		pending.completeExceptionally(timedOut ? new HttpTimeoutException("fixture") : new IOException("fixture"));
+		var parser = parserWithPendingResponse(pending);
+		var failure = assertThrows(ReportException.class, () -> parser.parse(PdfApiFixture.request()));
+		assertEquals(timedOut ? ReportErrorCode.PDF_PARSE_REQUEST_TIMEOUT : ReportErrorCode.PDF_PARSE_CONNECTION_FAILED,
+				failure.getBaseErrorCode());
+		assertNull(failure.getCause());
+	}
+
+	/** HTTP Future의 취소와 예외 전달을 실제 어댑터에서 검사할 클라이언트를 준비한다. */
+	private HttpPdfParser parserWithPendingResponse(CompletableFuture<HttpResponse<String>> pending) {
+		var client = mock(HttpClient.class);
+		when(client.followRedirects()).thenReturn(HttpClient.Redirect.NEVER);
+		when(client.sendAsync(any(), org.mockito.ArgumentMatchers.<HttpResponse.BodyHandler<String>>any()))
+				.thenReturn(pending);
+		return new HttpPdfParser(client, api.endpoint(), "example-internal-token", Duration.ofSeconds(5));
+	}
+
 	/** 접수 기한이 이미 지났으면 AI로 HTTP 요청을 보내지 않는지 검증한다. */
 	@Test
 	void expiredBudgetDoesNotSendAnHttpRequest() {
@@ -202,9 +257,12 @@ class HttpPdfParserTests {
 		assertEquals(0, api.calls.get());
 	}
 
-	@Test
-	void restoresInterruptedFlag() throws Exception {
-		api.hold = true;
+	/** 헤더나 본문을 기다리는 도중 인터럽트되어도 호출자의 인터럽트 상태를 복원하는지 검증한다. */
+	@ParameterizedTest
+	@ValueSource(booleans = {false, true})
+	void restoresInterruptedFlag(boolean bodyStarted) throws Exception {
+		api.hold = !bodyStarted;
+		api.holdBody = bodyStarted;
 		CompletableFuture<Boolean> interrupted = new CompletableFuture<>();
 		Thread caller = Thread.ofVirtual().start(() -> {
 			try {
@@ -214,7 +272,7 @@ class HttpPdfParserTests {
 				interrupted.completeExceptionally(error);
 			}
 		});
-		assertTrue(api.entered.await(3, TimeUnit.SECONDS));
+		assertTrue((bodyStarted ? api.headersSent : api.entered).await(3, TimeUnit.SECONDS));
 		caller.interrupt();
 		assertTrue(interrupted.get(3, TimeUnit.SECONDS));
 	}
