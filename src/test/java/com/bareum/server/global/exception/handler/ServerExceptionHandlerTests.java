@@ -13,6 +13,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.ConversionNotSupportedException;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.test.web.servlet.MockMvc;
@@ -74,6 +75,13 @@ class ServerExceptionHandlerTests {
 	}
 
 	@Test
+	void databaseFailureOutsideAuthUsesCommonResponse() throws Exception {
+		mockMvc.perform(get("/test/database"))
+				.andExpect(status().isInternalServerError())
+				.andExpect(jsonPath("$.code").value("COMMON-0001"));
+	}
+
+	@Test
 	void returnValueValidationIsServerErrorWithoutValidationDetails() throws Exception {
 		mockMvc.perform(get("/test/return-validation"))
 				.andExpect(status().isInternalServerError())
@@ -114,6 +122,11 @@ class ServerExceptionHandlerTests {
 		@GetMapping("/test/illegal-argument")
 		ResponseEntity<TestResponse> illegalArgument() {
 			throw new IllegalArgumentException("internal-argument");
+		}
+
+		@GetMapping("/test/database")
+		ResponseEntity<TestResponse> database() {
+			throw new DataAccessResourceFailureException("private database failure");
 		}
 
 		@GetMapping("/test/return-validation")

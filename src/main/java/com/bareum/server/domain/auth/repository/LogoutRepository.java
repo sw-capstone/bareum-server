@@ -1,45 +1,34 @@
 package com.bareum.server.domain.auth.repository;
 
-import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.stereotype.Repository;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.Repository;
 
-import lombok.RequiredArgsConstructor;
+import com.bareum.server.domain.auth.entity.RefreshToken;
 
-@Repository
-@RequiredArgsConstructor
-public class LogoutRepository {
-	private final JdbcTemplate jdbc;
+import jakarta.persistence.LockModeType;
 
-	public Optional<Session> findForUpdate(long memberId, UUID family) {
-		return jdbc.query(
-				"SELECT id,refresh_token_hash,expires_at FROM refresh_token WHERE member_id=? AND jti=? FOR UPDATE",
-				(rs, n) -> new Session(rs.getLong(1), rs.getString(2), rs.getTimestamp(3).toInstant()),
-				memberId, family).stream().findFirst();
-	}
+public interface LogoutRepository extends Repository<RefreshToken, Long> {
+	@Lock(LockModeType.PESSIMISTIC_WRITE)
+	Optional<RefreshToken> findByMemberIdAndJti(long memberId, UUID jti);
 
-	public boolean wasConsumed(String hash, long sessionId, UUID family) {
-		return !jdbc
-				.query("SELECT token_hash FROM used_refresh_token WHERE token_hash=? AND session_id=? AND family_id=?",
-						(rs, n) -> rs.getString(1), hash, sessionId, family)
-				.isEmpty();
-	}
+	@Query(value = """
+			select exists (
+			    select 1 from used_refresh_token
+			    where token_hash = :hash and session_id = :sessionId and family_id = :family
+			)
+			""", nativeQuery = true)
+	boolean wasConsumed(String hash, long sessionId, UUID family);
 
-	public void revoke(long sessionId, UUID family, Instant now) {
-		jdbc.update("UPDATE refresh_token SET revoked_at=?,updated_at=? WHERE id=? AND jti=? AND revoked_at IS NULL",
-				Timestamp.from(now), Timestamp.from(now), sessionId, family);
-	}
-
-	public record Session(
-		long id,
-		String refreshHash,
-		Instant expiresAt
-	) {
-		@Override
-		public String toString() { return "Session[redacted]"; }
-	}
+	@Modifying
+	@Query("""
+			update RefreshToken r set r.revokedAt = :now, r.updatedAt = :now
+			where r.id = :sessionId and r.jti = :family and r.revokedAt is null
+			""")
+	void revoke(long sessionId, UUID family, Instant now);
 }

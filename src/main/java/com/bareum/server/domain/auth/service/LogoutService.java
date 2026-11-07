@@ -39,15 +39,16 @@ public class LogoutService {
 		var claims = verified.get();
 		if (sessions.findMemberForUpdate(claims.memberId()).isEmpty())
 			return;
-		var locked = repository.findForUpdate(claims.memberId(), claims.family());
+		var locked = repository.findByMemberIdAndJti(claims.memberId(), claims.family());
 		if (locked.isEmpty())
 			return;
 		var session = locked.get();
 		String hash = tokens.hash("refresh", refresh);
-		if (!hash.equals(session.refreshHash()) && !repository.wasConsumed(hash, session.id(), claims.family()))
+		if (!hash.equals(session.getRefreshTokenHash())
+				&& !repository.wasConsumed(hash, session.getId(), claims.family()))
 			return;
 		var now = clock.instant();
-		repository.revoke(session.id(), claims.family(), now);
-		sessions.revokeFamily(claims.memberId(), claims.family(), now, session.expiresAt());
+		repository.revoke(session.getId(), claims.family(), now);
+		sessions.revokeFamily(claims.memberId(), claims.family(), now, session.getExpiresAt());
 	}
 }
