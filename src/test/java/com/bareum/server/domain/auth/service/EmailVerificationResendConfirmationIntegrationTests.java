@@ -64,11 +64,11 @@ class EmailVerificationResendConfirmationIntegrationTests {
 	@MockitoBean
 	private EmailVerificationCodeGenerator codes;
 	@MockitoBean
-	private Clock emailVerificationClock;
+	private Clock clock;
 
 	@BeforeEach
 	void setUp() {
-		when(emailVerificationClock.instant()).thenAnswer(invocation -> time.get());
+		when(clock.instant()).thenAnswer(invocation -> time.get());
 		when(codes.generate()).thenReturn("012345", "654321");
 	}
 

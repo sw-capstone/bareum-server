@@ -90,7 +90,7 @@ class EmailSignupServiceIntegrationTests {
 	private MemberTermRepository memberTerms;
 	@MockitoSpyBean
 	private PasswordHashService passwordHashes;
-	@MockitoBean(name = "emailVerificationClock")
+	@MockitoBean
 	private Clock clock;
 	@MockitoBean
 	private EmailVerificationMailSender mail;

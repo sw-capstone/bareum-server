@@ -26,6 +26,7 @@ final class PdfApiFixture implements AutoCloseable {
 	final AtomicInteger calls = new AtomicInteger();
 	final CountDownLatch entered = new CountDownLatch(1);
 	final CountDownLatch release = new CountDownLatch(1);
+	final CountDownLatch headersSent = new CountDownLatch(1);
 	volatile String received;
 	volatile String authorization;
 	volatile String method;
@@ -34,6 +35,8 @@ final class PdfApiFixture implements AutoCloseable {
 	String contentType = "application/json";
 	String retryAfter;
 	boolean hold;
+	boolean holdBody;
+	int bodyPrefixBytes;
 
 	PdfApiFixture() throws IOException {
 		body = success().toString();
@@ -60,7 +63,20 @@ final class PdfApiFixture implements AutoCloseable {
 				}
 				byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
 				exchange.sendResponseHeaders(status, bytes.length);
-				exchange.getResponseBody().write(bytes);
+				if (holdBody) {
+					exchange.getResponseBody().write(bytes, 0, bodyPrefixBytes);
+					exchange.getResponseBody().flush();
+					headersSent.countDown();
+					try {
+						release.await();
+					} catch (InterruptedException exception) {
+						Thread.currentThread().interrupt();
+						return;
+					}
+					exchange.getResponseBody().write(bytes, bodyPrefixBytes, bytes.length - bodyPrefixBytes);
+				} else {
+					exchange.getResponseBody().write(bytes);
+				}
 			}
 		});
 		server.start();

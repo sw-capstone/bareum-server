@@ -75,11 +75,11 @@ class EmailVerificationSendServiceIntegrationTests {
 	@MockitoBean
 	private EmailVerificationMailSender sender;
 	@MockitoBean
-	private Clock emailVerificationClock;
+	private Clock clock;
 
 	@BeforeEach
 	void setUp() {
-		when(emailVerificationClock.instant()).thenAnswer(invocation -> time.get());
+		when(clock.instant()).thenAnswer(invocation -> time.get());
 	}
 
 	@AfterEach

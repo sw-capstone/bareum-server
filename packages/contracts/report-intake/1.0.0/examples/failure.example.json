@@ -1,0 +1,10 @@
+{
+  "type": "about:blank",
+  "title": "Gateway Timeout",
+  "status": 504,
+  "detail": "PDF 파싱 API의 응답 대기시간을 초과했습니다.",
+  "instance": "/api/v1/reports",
+  "code": "REPORT-0031",
+  "reportId": 101,
+  "parseAttemptId": 201
+}

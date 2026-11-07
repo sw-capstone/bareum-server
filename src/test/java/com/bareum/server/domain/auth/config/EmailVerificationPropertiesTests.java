@@ -14,7 +14,7 @@ import com.bareum.server.domain.auth.exception.AuthException;
 
 class EmailVerificationPropertiesTests {
 	private final ApplicationContextRunner context = new ApplicationContextRunner()
-			.withUserConfiguration(EmailVerificationTimeConfig.class);
+			.withUserConfiguration(EmailVerificationConfig.class);
 
 	@Test
 	void envV2NamesBindTemporaryPeriodsAndLimitsForBothPurposes() {

@@ -2,7 +2,6 @@ package com.bareum.server.domain.auth.service;
 
 import java.time.Clock;
 
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
@@ -25,7 +24,7 @@ public class LoginAttemptLimiter {
 		LoginAttemptRepository repository,
 		LoginProperties properties,
 		LoginTokenGenerator tokens,
-		@Qualifier("loginClock") Clock clock,
+		Clock clock,
 		PlatformTransactionManager manager
 	) {
 		this.repository = repository;

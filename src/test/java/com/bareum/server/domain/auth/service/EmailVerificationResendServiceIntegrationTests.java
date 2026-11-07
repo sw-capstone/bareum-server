@@ -86,7 +86,7 @@ class EmailVerificationResendServiceIntegrationTests {
 	@MockitoBean
 	private EmailVerificationCodeGenerator generator;
 
-	@MockitoBean(name = "emailVerificationClock")
+	@MockitoBean
 	private Clock clock;
 
 	@BeforeEach

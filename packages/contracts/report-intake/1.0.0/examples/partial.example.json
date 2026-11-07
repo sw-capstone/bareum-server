@@ -1,0 +1,19 @@
+{
+  "reportId": 101,
+  "contentId": 301,
+  "parseAttemptId": 201,
+  "parseStatus": "SUCCEEDED",
+  "extractionQuality": "PARTIAL",
+  "warnings": [
+    {
+      "stage": "extraction",
+      "code": "table_detection_failed",
+      "target": {
+        "type": "page",
+        "page": 2
+      },
+      "message": "2페이지의 표 구조를 추출하지 못했습니다."
+    }
+  ],
+  "sourceExpiresAt": "2026-12-04T03:00:00Z"
+}

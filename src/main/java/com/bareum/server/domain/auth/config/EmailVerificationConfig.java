@@ -1,20 +1,12 @@
 package com.bareum.server.domain.auth.config;
 
-import java.time.Clock;
-
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
-import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-@Configuration
+/** 이메일 인증과 발송 대기열의 설정값을 등록한다. */
+@Configuration(proxyBeanMethods = false)
 @EnableConfigurationProperties({
 	EmailVerificationProperties.class, EmailOutboxProperties.class
 })
-@org.springframework.scheduling.annotation.EnableScheduling
-public class EmailVerificationTimeConfig {
-
-	@Bean
-	public Clock emailVerificationClock() {
-		return Clock.systemUTC();
-	}
+public class EmailVerificationConfig {
 }

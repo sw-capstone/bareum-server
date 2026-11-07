@@ -26,7 +26,7 @@ public class EmailVerificationConfirmService {
 	private final EmailVerificationRepository verificationRepository;
 	private final EmailVerificationCodeHasher codeHasher;
 	private final EmailVerificationTokenGenerator tokenGenerator;
-	private final Clock emailVerificationClock;
+	private final Clock clock;
 
 	@Transactional(noRollbackFor = EmailVerificationCodeMismatchException.class)
 	public EmailVerificationConfirmResponse confirm(EmailVerificationConfirmRequest request) {
@@ -35,7 +35,7 @@ public class EmailVerificationConfirmService {
 		EmailVerification verification = verificationRepository
 				.findFirstByEmailIgnoreCaseAndPurposeOrderByIdDesc(request.email(), request.purpose())
 				.orElseThrow(() -> new AuthException(AuthErrorCode.EMAIL_VERIFICATION_INVALID));
-		Instant now = emailVerificationClock.instant();
+		Instant now = clock.instant();
 
 		if (verification.getConsumedAt() != null || verification.getLastSentAt() == null) {
 			throw new AuthException(AuthErrorCode.EMAIL_VERIFICATION_INVALID);

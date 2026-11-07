@@ -53,7 +53,10 @@
     "packages/contracts/report-content/1.0.0/content.schema.json": "packages/contracts/report-content/1.0.0/examples/pdf.example.json",
     "packages/contracts/pdf-parsing/1.0.0/request.schema.json": "packages/contracts/pdf-parsing/1.0.0/examples/request.example.json",
     "packages/contracts/pdf-parsing/1.0.0/success.schema.json": "packages/contracts/pdf-parsing/1.0.0/examples/success.example.json",
-    "packages/contracts/pdf-parsing/1.0.0/failure.schema.json": "packages/contracts/pdf-parsing/1.0.0/examples/failure.example.json"
+    "packages/contracts/pdf-parsing/1.0.0/failure.schema.json": "packages/contracts/pdf-parsing/1.0.0/examples/failure.example.json",
+    "packages/contracts/report-intake/1.0.0/success.schema.json": "packages/contracts/report-intake/1.0.0/examples/success.example.json",
+    "packages/contracts/report-intake/1.0.0/failure.schema.json": "packages/contracts/report-intake/1.0.0/examples/failure.example.json",
+    "packages/contracts/report-intake/1.0.0/source-deletion.schema.json": "packages/contracts/report-intake/1.0.0/examples/source-deletion.example.json"
   },
   "autofix": {"enabled": false, "semantic_changes": false}
 }
