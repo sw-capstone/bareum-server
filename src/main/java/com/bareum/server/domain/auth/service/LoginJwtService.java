@@ -61,6 +61,15 @@ public class LoginJwtService {
 	}
 
 	public Optional<VerifiedToken> verify(String value, String purpose) {
+		return verify(value, purpose, false);
+	}
+
+	// Expired refresh tokens may identify the session to end; they cannot authenticate or renew.
+	Optional<VerifiedToken> verifyForLogout(String value) {
+		return verify(value, "refresh", true);
+	}
+
+	private Optional<VerifiedToken> verify(String value, String purpose, boolean allowExpired) {
 		if (value == null || value.length() > 8192
 				|| !value.matches("[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+"))
 			return Optional.empty();
@@ -78,7 +87,7 @@ public class LoginJwtService {
 					|| !purpose.equals(claims.getStringClaim("token_use"))
 					|| claims.getIssueTime() == null || claims.getIssueTime().toInstant().isAfter(now)
 					|| claims.getExpirationTime() == null
-					|| !claims.getExpirationTime().toInstant().isAfter(now)
+					|| (!allowExpired && !claims.getExpirationTime().toInstant().isAfter(now))
 					|| !claims.getExpirationTime().after(claims.getIssueTime())
 					|| (claims.getNotBeforeTime() != null && claims.getNotBeforeTime().toInstant().isAfter(now)))
 				return Optional.empty();

@@ -82,4 +82,43 @@ class LoginJwtServiceTests {
 			assertTrue(service.verify(signed.serialize(), "access").isEmpty());
 		}
 	}
+
+	@Test
+	void expiredRefreshIsAcceptedOnlyForLogout() {
+		String refresh = service.issue("refresh", 7, family, NOW, NOW.plusSeconds(60));
+		String access = service.issue("access", 7, family, NOW, NOW.plusSeconds(60));
+		var afterExpiry = new LoginJwtService(new LoginJwtProperties(KEY),
+				Clock.fixed(NOW.plusSeconds(60), ZoneOffset.UTC));
+		assertTrue(afterExpiry.verify(refresh, "refresh").isEmpty());
+		assertTrue(afterExpiry.verify(access, "access").isEmpty());
+		assertEquals(family, afterExpiry.verifyForLogout(refresh).orElseThrow().family());
+		assertTrue(afterExpiry.verifyForLogout(access).isEmpty());
+	}
+
+	@Test
+	void logoutStillChecksSignaturePurposeAndRequiredClaims() throws Exception {
+		var original = SignedJWT.parse(service.issue("refresh", 7, family, NOW, NOW.plusSeconds(900)))
+				.getJWTClaimsSet();
+		for (var invalid : new JWTClaimsSet[] {
+			new JWTClaimsSet.Builder(original).issuer("other").build(),
+			new JWTClaimsSet.Builder(original).audience("other").build(),
+			new JWTClaimsSet.Builder(original).claim("token_use", "access").build(),
+			new JWTClaimsSet.Builder(original).issueTime(Date.from(NOW.plusSeconds(1))).build(),
+			new JWTClaimsSet.Builder(original).notBeforeTime(Date.from(NOW.plusSeconds(1))).build(),
+			new JWTClaimsSet.Builder(original).expirationTime(Date.from(NOW)).build(),
+			new JWTClaimsSet.Builder(original).claim("family", "invalid").build(),
+			new JWTClaimsSet.Builder(original).subject("0").build()}) {
+			var signed = new SignedJWT(new JWSHeader.Builder(JWSAlgorithm.HS256)
+					.type(JOSEObjectType.JWT)
+					.build(), invalid);
+			signed.sign(new MACSigner(Base64.getDecoder().decode(KEY)));
+			assertTrue(service.verifyForLogout(signed.serialize()).isEmpty());
+		}
+		byte[] foreignKey = new byte[32];
+		foreignKey[0] = 1;
+		var foreign = new LoginJwtService(new LoginJwtProperties(Base64.getEncoder().encodeToString(foreignKey)),
+				Clock.fixed(NOW, ZoneOffset.UTC));
+		assertTrue(service.verifyForLogout(foreign.issue("refresh", 7, family, NOW, NOW.plusSeconds(900))).isEmpty());
+	}
+
 }
