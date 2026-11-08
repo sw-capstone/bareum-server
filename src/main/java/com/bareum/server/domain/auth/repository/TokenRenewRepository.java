@@ -2,11 +2,11 @@ package com.bareum.server.domain.auth.repository;
 
 import java.sql.Timestamp;
 import java.time.Instant;
-import java.util.Optional;
-import java.util.UUID;
 
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
+
+import com.bareum.server.domain.auth.repository.LoginSessionRepository.Session;
 
 import lombok.RequiredArgsConstructor;
 
@@ -14,14 +14,6 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class TokenRenewRepository {
 	private final JdbcTemplate jdbc;
-
-	public Optional<Session> findForUpdate(long memberId) {
-		return jdbc.query(
-				"SELECT id,jti,refresh_token_hash,expires_at,revoked_at FROM refresh_token WHERE member_id=? FOR UPDATE",
-				(rs, n) -> new Session(rs.getLong(1), rs.getObject(2, UUID.class), rs.getString(3),
-						rs.getTimestamp(4).toInstant(), rs.getTimestamp(5) != null),
-				memberId).stream().findFirst();
-	}
 
 	public boolean wasConsumed(String hash, Session session, Instant now) {
 		return !jdbc.query(
@@ -33,11 +25,6 @@ public class TokenRenewRepository {
 		return !jdbc
 				.query("SELECT token_hash FROM used_refresh_token WHERE token_hash=?", (rs, n) -> rs.getString(1), hash)
 				.isEmpty();
-	}
-
-	public void revoke(Session session, Instant now) {
-		jdbc.update("UPDATE refresh_token SET revoked_at=?,updated_at=? WHERE id=? AND revoked_at IS NULL",
-				Timestamp.from(now), Timestamp.from(now), session.id());
 	}
 
 	public void rotate(Session session, String oldHash, String nextHash, Instant now) {
@@ -69,14 +56,4 @@ public class TokenRenewRepository {
 				Timestamp.from(now.minusSeconds(86400)));
 	}
 
-	public record Session(
-		long id,
-		UUID family,
-		String refreshHash,
-		Instant expiresAt,
-		boolean revoked
-	) {
-		@Override
-		public String toString() { return "Session[redacted]"; }
-	}
 }

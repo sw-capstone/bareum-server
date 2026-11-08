@@ -9,7 +9,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
 import com.bareum.server.domain.auth.config.LoginJwtProperties;
@@ -31,7 +30,7 @@ public class LoginJwtService {
 	private final LoginJwtProperties properties;
 	private final Clock clock;
 
-	public LoginJwtService(LoginJwtProperties properties, @Qualifier("loginClock") Clock clock) {
+	public LoginJwtService(LoginJwtProperties properties, Clock clock) {
 		this.properties = properties;
 		this.clock = clock;
 	}

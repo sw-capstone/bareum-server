@@ -1,7 +1,9 @@
 package com.bareum.server.domain.report.parsing;
 
-/** PDF 파싱 요청을 보내고 결과를 받는 기능의 공통 인터페이스. */
+import java.time.Duration;
+
+/** 접수의 남은 처리 기한 안에서 PDF 파싱 요청을 보내고 결과를 받는다. */
 public interface PdfParser {
 
-	PdfParseResponse parse(PdfParseRequest request);
+	PdfParseResponse parse(PdfParseRequest request, Duration remaining);
 }

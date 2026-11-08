@@ -3,7 +3,6 @@ package com.bareum.server.domain.auth.service;
 import java.time.Clock;
 import java.time.Instant;
 
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,7 +33,7 @@ public class TokenRenewService {
 		LoginJwtService jwt,
 		LoginProperties login,
 		TokenRenewProperties policy,
-		@Qualifier("loginClock") Clock clock
+		Clock clock
 	) {
 		this.sessions = sessions;
 		this.repository = repository;
@@ -49,7 +48,7 @@ public class TokenRenewService {
 	public LoginSessionService.IssuedLogin renew(String refresh) {
 		var verified = jwt.verify(refresh, "refresh").orElseThrow(this::invalid);
 		var member = sessions.findMemberForUpdate(verified.memberId()).orElseThrow(this::invalid);
-		var session = repository.findForUpdate(verified.memberId()).orElseThrow(this::invalid);
+		var session = sessions.findRefreshForUpdate(verified.memberId()).orElseThrow(this::invalid);
 		if (!verified.family().equals(session.family()))
 			throw invalid();
 		Instant now = clock.instant();
@@ -58,7 +57,7 @@ public class TokenRenewService {
 		String hash = tokens.hash("refresh", refresh);
 		if (!hash.equals(session.refreshHash())) {
 			if (repository.wasConsumed(hash, session, now)) {
-				repository.revoke(session, now);
+				sessions.revokeRefresh(session, now);
 				sessions.revokeFamily(verified.memberId(), session.family(), now, session.expiresAt());
 				throw new RefreshTokenReplayException();
 			}

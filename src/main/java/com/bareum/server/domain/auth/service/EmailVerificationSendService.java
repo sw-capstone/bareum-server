@@ -32,7 +32,7 @@ public class EmailVerificationSendService {
 	private final EmailOutboxCipher cipher;
 	private final EmailOutboxProperties outboxProperties;
 	private final EmailVerificationMailSender mailSender;
-	private final Clock emailVerificationClock;
+	private final Clock clock;
 
 	@Transactional(isolation = Isolation.READ_COMMITTED)
 	public EmailVerificationDeliveryResponse send(EmailVerificationRequest request) {
@@ -41,7 +41,7 @@ public class EmailVerificationSendService {
 		mailSender.requireConfigured();
 		requestLock.lockForEmail(request.email());
 		String recipient = accountValidator.resolveRecipient(request.email(), request.purpose());
-		Instant now = emailVerificationClock.instant();
+		Instant now = clock.instant();
 		limitChecker.checkCanSend(recipient, request.purpose(), now);
 		outbox.checkCanQueue(recipient, now, properties);
 		int previousAttemptCount = verificationRepository

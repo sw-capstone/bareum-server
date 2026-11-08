@@ -5,6 +5,7 @@ import org.springframework.http.HttpStatus;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 
+/** 공통 요청 처리 오류의 HTTP 상태와 공개 오류 코드를 정의한다. */
 @Getter
 @RequiredArgsConstructor
 public enum CommonErrorCode implements BaseErrorCode {
@@ -15,7 +16,8 @@ public enum CommonErrorCode implements BaseErrorCode {
 	MISSING_REQUEST_PARAMETER(HttpStatus.BAD_REQUEST, "COMMON-0004", "필수 요청 값이 누락되었습니다."),
 	INVALID_PARAMETER_TYPE(HttpStatus.BAD_REQUEST, "COMMON-0005", "요청 값의 형식이 올바르지 않습니다."),
 	METHOD_NOT_ALLOWED(HttpStatus.METHOD_NOT_ALLOWED, "COMMON-0006", "지원하지 않는 HTTP 메서드입니다."),
-	UNSUPPORTED_MEDIA_TYPE(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "COMMON-0007", "지원하지 않는 요청 데이터 형식입니다.");
+	UNSUPPORTED_MEDIA_TYPE(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "COMMON-0007", "지원하지 않는 요청 데이터 형식입니다."),
+	REQUEST_TOO_LARGE(HttpStatus.CONTENT_TOO_LARGE, "COMMON-0008", "업로드 요청의 허용 용량을 초과했습니다.");
 
 	private final HttpStatus httpStatus;
 	private final String code;

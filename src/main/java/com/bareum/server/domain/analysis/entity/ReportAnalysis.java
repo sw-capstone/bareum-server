@@ -27,6 +27,7 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+/** 고정된 보고서 본문을 기준으로 분석 요청과 처리 상태를 저장한다. */
 @Entity
 @Table(name = "report_analysis")
 @Getter
@@ -73,6 +74,7 @@ public class ReportAnalysis extends BaseTimeEntity {
 	private ReportAnalysis(ReportContent content, UUID requestKey, String rulesetVersion, String promptVersion) {
 		Objects.requireNonNull(content, "content");
 		Objects.requireNonNull(requestKey, "requestKey");
+		content.getReport().requireActiveIntake();
 		if (content.getStatus() != ContentStatus.FROZEN) {
 			throw new AnalysisException(AnalysisErrorCode.INPUT_NOT_FROZEN);
 		}

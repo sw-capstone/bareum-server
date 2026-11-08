@@ -8,6 +8,9 @@ import java.net.http.HttpResponse;
 import java.net.http.HttpTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import com.bareum.server.domain.report.exception.ReportErrorCode;
 import com.bareum.server.domain.report.exception.ReportException;
@@ -32,26 +35,34 @@ public final class HttpPdfParser implements PdfParser {
 			.disable(MapperFeature.ALLOW_COERCION_OF_SCALARS)
 			.build();
 
-	@Override
 	public PdfParseResponse parse(PdfParseRequest request) {
-		// TODO(#53): 접수 서비스에서 호출하고 동시 호출 제한과 새 시도 생성, 상태 저장을 연결한다.
+		return parse(request, timeout);
+	}
+
+	/** 설정된 대기시간과 접수의 남은 기한 중 짧은 시간 안에서 AI를 호출하고 응답 계약을 검증한다. */
+	@Override
+	public PdfParseResponse parse(PdfParseRequest request, Duration remaining) {
+		// 새 시도를 통한 재시도는 접수 서비스에서 제어한다.
 		// 자동 재전송은 하지 않는다. 호출 시간 초과만으로 원격 파싱 종료를 단정할 수 없다.
 		if (client.followRedirects() != HttpClient.Redirect.NEVER) {
 			throw new IllegalArgumentException("PDF 파싱 클라이언트는 리다이렉트를 허용하지 않습니다.");
 		}
+		if (remaining.isZero() || remaining.isNegative()) {
+			throw new ReportException(ReportErrorCode.INTAKE_PROCESSING_TIMEOUT);
+		}
+		Duration budget = remaining.compareTo(timeout) < 0 ? remaining : timeout;
 		// 현재 PDF 파싱 호출은 HTTP/1.1을 유지한다.
 		// 통신 병목이 확인되면 AI 서버와 프록시 설정을 함께 맞춰 HTTP/2 전환을 검토한다.
 		HttpRequest httpRequest = HttpRequest.newBuilder(endpoint)
 				.version(HttpClient.Version.HTTP_1_1)
-				.timeout(timeout)
+				.timeout(budget)
 				.header("Authorization", "Bearer " + token)
 				.header("Content-Type", "application/json")
 				.header("Accept", "application/json")
 				.POST(HttpRequest.BodyPublishers.ofString(mapper.writeValueAsString(request), StandardCharsets.UTF_8))
 				.build();
 		try {
-			HttpResponse<String> response = client.send(httpRequest,
-					HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+			HttpResponse<String> response = receive(httpRequest, budget);
 			String contentType = response.headers().firstValue("Content-Type").orElse("");
 			if (!contentType.split(";", 2)[0].strip().equalsIgnoreCase("application/json")) {
 				throw new ReportException(ReportErrorCode.INVALID_PARSE_RESPONSE_FORMAT);
@@ -70,6 +81,37 @@ public final class HttpPdfParser implements PdfParser {
 		} catch (JacksonException exception) {
 			// 응답이나 다운로드 URL이 예외 원문을 통해 로그에 노출되지 않도록 한다.
 			throw new ReportException(ReportErrorCode.INVALID_PARSE_RESPONSE_FORMAT);
+		}
+	}
+
+	/** 본문 수신 완료까지 하나의 기한으로 기다리고 시간 초과나 인터럽트 시 원래 HTTP 요청을 취소한다. */
+	private HttpResponse<String> receive(HttpRequest request, Duration budget)
+			throws IOException, InterruptedException {
+		long started = System.nanoTime();
+		var pending = client.sendAsync(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+		try {
+			long remainingNanos = budget.toNanos() - (System.nanoTime() - started);
+			if (remainingNanos <= 0) {
+				throw new TimeoutException();
+			}
+			return pending.get(remainingNanos, TimeUnit.NANOSECONDS);
+		} catch (TimeoutException exception) {
+			pending.cancel(true);
+			throw new HttpTimeoutException("PDF parsing response deadline exceeded");
+		} catch (InterruptedException exception) {
+			pending.cancel(true);
+			throw exception;
+		} catch (ExecutionException exception) {
+			if (exception.getCause() instanceof IOException failure) {
+				throw failure;
+			}
+			if (exception.getCause() instanceof RuntimeException failure) {
+				throw failure;
+			}
+			if (exception.getCause() instanceof Error failure) {
+				throw failure;
+			}
+			throw new IOException("PDF parsing exchange failed");
 		}
 	}
 

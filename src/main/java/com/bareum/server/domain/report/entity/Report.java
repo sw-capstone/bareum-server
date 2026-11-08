@@ -1,7 +1,6 @@
 package com.bareum.server.domain.report.entity;
 
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.util.Objects;
 
 import com.bareum.server.domain.member.entity.Member;
@@ -10,6 +9,8 @@ import com.bareum.server.domain.report.enums.InputMethod;
 import com.bareum.server.domain.report.enums.ReportType;
 import com.bareum.server.domain.report.exception.ReportErrorCode;
 import com.bareum.server.domain.report.exception.ReportException;
+import com.bareum.server.domain.report.intake.ReportIntakePolicy;
+import com.bareum.server.domain.report.source.UploadedReportFile;
 import com.bareum.server.global.entity.BaseTimeEntity;
 
 import jakarta.persistence.Column;
@@ -28,6 +29,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+/** 보고서의 소유자, 문서 유형과 원본 파일의 보관 상태를 저장한다. */
 @Entity
 @Table(name = "report")
 @Getter
@@ -61,6 +63,12 @@ public class Report extends BaseTimeEntity {
 	@Column(name = "source_object_key", nullable = true, columnDefinition = "text")
 	private String sourceObjectKey;
 
+	@Column(name = "source_sha256", length = 64)
+	private String sourceSha256;
+
+	@Column(name = "source_version_id", columnDefinition = "text")
+	private String sourceVersionId;
+
 	@Column(name = "original_filename", nullable = true, length = 255)
 	private String originalFilename;
 
@@ -72,6 +80,12 @@ public class Report extends BaseTimeEntity {
 
 	@Column(name = "source_deleted_at")
 	private Instant sourceDeletedAt;
+
+	@Column(name = "intake_cancelled_at")
+	private Instant intakeCancelledAt;
+
+	@Column(name = "source_cleanup_after")
+	private Instant sourceCleanupAfter;
 
 	@Builder(access = AccessLevel.PRIVATE)
 	private Report(
@@ -102,28 +116,23 @@ public class Report extends BaseTimeEntity {
 	public static Report createFromFile(
 		Member member,
 		ReportType reportType,
-		FileFormat fileFormat,
-		String sourceObjectKey,
-		String originalFilename,
-		long fileSizeBytes,
-		Instant uploadedAt
+		UploadedReportFile source
 	) {
-		if (fileFormat == null || sourceObjectKey == null || sourceObjectKey.isBlank()
-				|| originalFilename == null
-				|| originalFilename.isBlank() || fileSizeBytes <= 0 || uploadedAt == null) {
-			throw new ReportException(ReportErrorCode.FILE_METADATA_REQUIRED);
-		}
-		return Report.builder()
+		Objects.requireNonNull(source, "source");
+		Report report = Report.builder()
 				.member(member)
 				.reportType(reportType)
-				.title(originalFilename)
-				.fileFormat(fileFormat)
+				.title(source.originalFilename())
+				.fileFormat(source.format())
 				.inputMethod(InputMethod.FILE)
-				.sourceObjectKey(sourceObjectKey)
-				.originalFilename(originalFilename)
-				.fileSizeBytes(fileSizeBytes)
-				.sourceExpiresAt(uploadedAt.plus(30, ChronoUnit.DAYS))
+				.sourceObjectKey(source.objectKey())
+				.originalFilename(source.originalFilename())
+				.fileSizeBytes(source.sizeBytes())
+				.sourceExpiresAt(source.uploadedAt().plus(ReportIntakePolicy.SOURCE_RETENTION))
 				.build();
+		report.sourceSha256 = source.sha256();
+		report.sourceVersionId = source.versionId();
+		return report;
 	}
 
 	public static Report createFromText(Member member, ReportType reportType, String title) {
@@ -142,5 +151,46 @@ public class Report extends BaseTimeEntity {
 		if (sourceDeletedAt == null) {
 			sourceDeletedAt = deletedAt;
 		}
+	}
+
+	public void cancelIntake(Instant cancelledAt) {
+		if (inputMethod != InputMethod.FILE || cancelledAt == null) {
+			throw new ReportException(ReportErrorCode.INVALID_SOURCE_DELETION);
+		}
+		if (intakeCancelledAt == null) {
+			intakeCancelledAt = cancelledAt;
+			scheduleSourceCleanup(cancelledAt);
+		}
+	}
+
+	public void scheduleSourceCleanup(Instant cleanupAfter) {
+		if (inputMethod != InputMethod.FILE || cleanupAfter == null) {
+			throw new ReportException(ReportErrorCode.INVALID_SOURCE_DELETION);
+		}
+		if (sourceDeletedAt == null && (sourceCleanupAfter == null || cleanupAfter.isAfter(sourceCleanupAfter))) {
+			sourceCleanupAfter = cleanupAfter;
+		}
+	}
+
+	public void requireActiveIntake() {
+		if (intakeCancelledAt != null) {
+			throw new ReportException(ReportErrorCode.INTAKE_CANCELLED);
+		}
+	}
+
+	/** 접수가 취소됐거나 원본이 삭제 또는 정리 대상으로 확정됐다면 새 파싱을 막는다. */
+	public void requireSourceAvailable() {
+		requireActiveIntake();
+		if (inputMethod == InputMethod.FILE && (sourceDeletedAt != null || sourceCleanupAfter != null)) {
+			throw new ReportException(ReportErrorCode.INVALID_SOURCE_DELETION);
+		}
+	}
+
+	/** 정리할 원본의 누락된 버전을 기록하고 이미 기록한 버전과의 충돌을 검사한다. */
+	public void recoverSourceVersion(String versionId) {
+		if (versionId == null || sourceVersionId != null && !sourceVersionId.equals(versionId)) {
+			throw new ReportException(ReportErrorCode.INVALID_SOURCE_DELETION);
+		}
+		sourceVersionId = versionId;
 	}
 }

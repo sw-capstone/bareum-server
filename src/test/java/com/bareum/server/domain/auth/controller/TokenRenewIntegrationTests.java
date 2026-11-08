@@ -82,7 +82,7 @@ class TokenRenewIntegrationTests {
 	@Autowired
 	private JsonMapper mapper;
 
-	@MockitoBean(name = "loginClock")
+	@MockitoBean(name = "clock")
 	private Clock clock;
 
 	private Member member;

@@ -60,7 +60,7 @@ class LogoutIntegrationTests {
 	private JdbcTemplate jdbc;
 	@Autowired
 	private JsonMapper mapper;
-	@MockitoBean(name = "loginClock")
+	@MockitoBean
 	private Clock clock;
 	private Member member;
 
@@ -387,6 +387,19 @@ class LogoutIntegrationTests {
 		var renewed = call("/api/v1/auth/token/renew", issued.refreshToken(), protection);
 		assertEquals(200, renewed.statusCode());
 		success(logout(issued.refreshToken(), protection));
+		assertTrue(sessions.authenticate(json(renewed).path("accessToken").asString()).isEmpty());
+		problem(call("/api/v1/auth/token/renew", refresh(renewed), protection), 401, "AUTH-0021");
+	}
+
+	@Test
+	void consumedCookieCanLogoutAtSessionExpiryWithoutRevivingTokens() throws Exception {
+		var issued = issue();
+		var protection = csrf();
+		var renewed = call("/api/v1/auth/token/renew", issued.refreshToken(), protection);
+		assertEquals(200, renewed.statusCode());
+		when(clock.instant()).thenReturn(issued.sessionExpiresAt());
+		success(logout(issued.refreshToken(), protection));
+		assertEquals(issued.sessionExpiresAt(), revoked(member).toInstant());
 		assertTrue(sessions.authenticate(json(renewed).path("accessToken").asString()).isEmpty());
 		problem(call("/api/v1/auth/token/renew", refresh(renewed), protection), 401, "AUTH-0021");
 	}

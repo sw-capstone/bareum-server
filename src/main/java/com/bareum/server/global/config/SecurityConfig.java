@@ -1,6 +1,5 @@
 package com.bareum.server.global.config;
 
-import java.time.Clock;
 import java.util.List;
 
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -22,24 +21,19 @@ import com.bareum.server.global.security.handler.CustomAccessDeniedHandler;
 import com.bareum.server.global.security.handler.CustomAuthenticationEntryPoint;
 import com.bareum.server.global.security.handler.SecurityProblemWriter;
 
+/** API 인증과 접근 권한, CORS와 CSRF 정책을 설정한다. */
 @Configuration
 @EnableConfigurationProperties({
 	LoginProperties.class, com.bareum.server.domain.auth.config.LoginJwtProperties.class,
 	com.bareum.server.domain.auth.config.TokenRenewProperties.class
 })
-@org.springframework.scheduling.annotation.EnableScheduling
 public class SecurityConfig {
-	@Bean
-	public Clock loginClock() {
-		return Clock.systemUTC();
-	}
-
 	@Bean
 	public UrlBasedCorsConfigurationSource corsConfigurationSource(LoginProperties properties) {
 		var cors = new CorsConfiguration();
 		cors.setAllowedOrigins(properties.allowedOrigins());
 		cors.setAllowedMethods(List.of("GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"));
-		cors.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-CSRF-TOKEN"));
+		cors.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-CSRF-TOKEN", "Idempotency-Key"));
 		cors.setExposedHeaders(List.of("Location"));
 		cors.setAllowCredentials(true);
 		cors.setMaxAge(600L);
@@ -80,6 +74,8 @@ public class SecurityConfig {
 								.csrfTokenRequestHandler(
 										new com.bareum.server.global.security.HeaderOnlyCsrfTokenRequestHandler())
 								.ignoringRequestMatchers(
+										"/api/v1/reports",
+										"/api/v1/reports/*/source",
 										"/api/v1/auth/login/email",
 										"/api/v1/auth/signup",
 										"/api/v1/auth/email-verification",

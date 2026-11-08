@@ -4,9 +4,6 @@ import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
 
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
-
 import com.bareum.server.domain.member.entity.Member;
 import com.bareum.server.global.entity.BaseTimeEntity;
 
@@ -46,10 +43,6 @@ public class RefreshToken extends BaseTimeEntity {
 
 	@Column(name = "revoked_at")
 	private Instant revokedAt;
-
-	@JdbcTypeCode(SqlTypes.CHAR)
-	@Column(name = "refresh_token_hash", length = 64, insertable = false, updatable = false)
-	private String refreshTokenHash;
 
 	private RefreshToken(Member member, UUID jti, Instant expiresAt) {
 		Objects.requireNonNull(member, "member");

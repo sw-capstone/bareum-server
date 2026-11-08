@@ -33,7 +33,7 @@ public class EmailVerificationResendService {
 	private final EmailOutboxCipher cipher;
 	private final EmailOutboxProperties outboxProperties;
 	private final EmailVerificationMailSender mailSender;
-	private final Clock emailVerificationClock;
+	private final Clock clock;
 
 	@Transactional
 	public EmailVerificationDeliveryResponse resend(EmailVerificationRequest request) {
@@ -58,7 +58,7 @@ public class EmailVerificationResendService {
 		}
 		String recipient =
 				accountValidator.resolveRecipient(verification.getEmail(), request.purpose());
-		Instant now = emailVerificationClock.instant();
+		Instant now = clock.instant();
 		limitChecker.checkCanSend(recipient, request.purpose(), now);
 		// Reservations include in-flight jobs across initial send and resend; no live job is
 		// replaced.

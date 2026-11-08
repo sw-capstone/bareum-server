@@ -1,6 +1,11 @@
 spring:
   application:
     name: bareum-server
+  servlet:
+    multipart:
+      max-file-size: 20000000B
+      max-request-size: 21000000B
+      file-size-threshold: 0B
   mail:
     properties:
       "[mail.smtp.connectiontimeout]": ${SMTP_CONNECTION_TIMEOUT_MS:5000}
@@ -68,5 +73,24 @@ auth:
       enabled: ${EMAIL_VERIFICATION_OUTBOX_ENABLED:true}
 
 report:
+  intake:
+    jobs:
+      enabled: ${REPORT_INTAKE_JOBS_ENABLED:true}
+    recovery-interval-ms: ${REPORT_INTAKE_RECOVERY_INTERVAL_MS:300000}
+    source-cleanup-interval-ms: ${REPORT_INTAKE_SOURCE_CLEANUP_INTERVAL_MS:600000}
+    retention-interval-ms: ${REPORT_INTAKE_RETENTION_INTERVAL_MS:3600000}
+    maintenance-batch-size: ${REPORT_INTAKE_MAINTENANCE_BATCH_SIZE:100}
+    retention-batch-size: ${REPORT_INTAKE_RETENTION_BATCH_SIZE:1000}
+    max-concurrent-requests: ${REPORT_INTAKE_MAX_CONCURRENT_REQUESTS:1}
+  upload:
+    bucket: ${REPORT_SOURCE_BUCKET:}
+    region: ${REPORT_SOURCE_REGION:ap-northeast-2}
+    key-prefix: ${REPORT_SOURCE_KEY_PREFIX:reports/}
+    parser-endpoint: ${REPORT_PDF_PARSER_ENDPOINT:}
+    parser-token: ${BAREUM_AI_INTERNAL_API_TOKEN:}
+    signed-url-seconds: ${REPORT_SOURCE_SIGNED_URL_SECONDS:600}
+    parser-timeout-seconds: ${REPORT_PDF_PARSER_TIMEOUT_SECONDS:310}
+    remote-execution-timeout-seconds: ${REPORT_PDF_REMOTE_EXECUTION_TIMEOUT_SECONDS:300}
+    storage-timeout-seconds: ${REPORT_SOURCE_TIMEOUT_SECONDS:30}
   segmentation:
     model-path: ${KIWI_MODEL_PATH:build/kiwi/models/cong/base}
