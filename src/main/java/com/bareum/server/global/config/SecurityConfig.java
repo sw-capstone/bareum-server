@@ -101,6 +101,7 @@ public class SecurityConfig {
 								.requestMatchers(
 										HttpMethod.POST,
 										"/api/v1/auth/token/renew",
+										"/api/v1/auth/logout",
 										"/api/v1/auth/login/email",
 										"/api/v1/auth/signup",
 										"/api/v1/auth/email-verification",

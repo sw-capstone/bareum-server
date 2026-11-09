@@ -10,6 +10,7 @@ import org.springframework.beans.ConversionNotSupportedException;
 import org.springframework.beans.TypeMismatchException;
 import org.springframework.context.MessageSourceResolvable;
 import org.springframework.core.MethodParameter;
+import org.springframework.dao.DataAccessException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
@@ -17,6 +18,7 @@ import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.http.converter.HttpMessageNotWritableException;
+import org.springframework.transaction.TransactionException;
 import org.springframework.util.StringUtils;
 import org.springframework.validation.FieldError;
 import org.springframework.validation.ObjectError;
@@ -35,8 +37,11 @@ import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.multipart.MultipartException;
+import org.springframework.web.servlet.HandlerMapping;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
+import com.bareum.server.domain.auth.exception.AuthErrorCode;
+import com.bareum.server.domain.auth.exception.AuthException;
 import com.bareum.server.global.exception.BusinessException;
 import com.bareum.server.global.exception.code.BaseErrorCode;
 import com.bareum.server.global.exception.code.CommonErrorCode;
@@ -237,6 +242,23 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 		WebRequest request
 	) {
 		return createInternalServerErrorResponse(exception, headers, status, request);
+	}
+
+	/**
+	 * 갱신과 로그아웃에서 발생한 저장소 장애만 인증 서비스 오류로 변환한다.
+	 */
+	@ExceptionHandler({
+		DataAccessException.class, TransactionException.class
+	})
+	public ResponseEntity<ProblemDetail> handlePersistenceException(
+		RuntimeException exception,
+		HttpServletRequest request
+	) {
+		var pattern = request.getAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE);
+		if ("/api/v1/auth/token/renew".equals(pattern) || "/api/v1/auth/logout".equals(pattern)) {
+			return handleBusinessException(new AuthException(AuthErrorCode.LOGIN_SERVICE_UNAVAILABLE), request);
+		}
+		return handleUnexpectedException(exception, request);
 	}
 
 	/**

@@ -62,4 +62,37 @@ public class LoginSessionRepository {
 	public void deleteExpiredRevocations(Instant now) {
 		sessions.deleteExpired(now);
 	}
+
+	public Optional<Session> findRefreshForUpdate(long memberId) {
+		return jdbc.query(
+				"SELECT id,jti,refresh_token_hash,expires_at,revoked_at FROM refresh_token WHERE member_id=? FOR UPDATE",
+				(rs, n) -> new Session(rs.getLong("id"), rs.getObject("jti", UUID.class),
+						rs.getString("refresh_token_hash"),
+						rs.getTimestamp("expires_at").toInstant(), rs.getTimestamp("revoked_at") != null),
+				memberId).stream().findFirst();
+	}
+
+	public void revokeRefresh(Session session, Instant now) {
+		jdbc.update("UPDATE refresh_token SET revoked_at=?,updated_at=? WHERE id=? AND jti=? AND revoked_at IS NULL",
+				Timestamp.from(now), Timestamp.from(now), session.id(), session.family());
+	}
+
+	/** 로그아웃은 만료된 세션도 종료하므로 소비 이력의 만료 시각을 제한하지 않는다. */
+	public boolean wasConsumed(String hash, Session session) {
+		return Boolean.TRUE.equals(jdbc.queryForObject("""
+				select exists (select 1 from used_refresh_token
+				where token_hash=? and session_id=? and family_id=?)
+				""", Boolean.class, hash, session.id(), session.family()));
+	}
+
+	public record Session(
+		long id,
+		UUID family,
+		String refreshHash,
+		Instant expiresAt,
+		boolean revoked
+	) {
+		@Override
+		public String toString() { return "Session[redacted]"; }
+	}
 }

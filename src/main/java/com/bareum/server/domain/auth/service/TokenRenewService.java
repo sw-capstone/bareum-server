@@ -48,7 +48,7 @@ public class TokenRenewService {
 	public LoginSessionService.IssuedLogin renew(String refresh) {
 		var verified = jwt.verify(refresh, "refresh").orElseThrow(this::invalid);
 		var member = sessions.findMemberForUpdate(verified.memberId()).orElseThrow(this::invalid);
-		var session = repository.findForUpdate(verified.memberId()).orElseThrow(this::invalid);
+		var session = sessions.findRefreshForUpdate(verified.memberId()).orElseThrow(this::invalid);
 		if (!verified.family().equals(session.family()))
 			throw invalid();
 		Instant now = clock.instant();
@@ -57,7 +57,7 @@ public class TokenRenewService {
 		String hash = tokens.hash("refresh", refresh);
 		if (!hash.equals(session.refreshHash())) {
 			if (repository.wasConsumed(hash, session, now)) {
-				repository.revoke(session, now);
+				sessions.revokeRefresh(session, now);
 				sessions.revokeFamily(verified.memberId(), session.family(), now, session.expiresAt());
 				throw new RefreshTokenReplayException();
 			}
