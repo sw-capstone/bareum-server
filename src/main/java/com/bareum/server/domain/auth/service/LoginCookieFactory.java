@@ -55,6 +55,8 @@ public class LoginCookieFactory {
 				.toString();
 	}
 
+	public long remainingUntil(Instant expiry) { return remaining(clock.instant(), expiry); }
+
 	private long remaining(Instant now, Instant expiry) {
 		Duration duration = Duration.between(now, expiry);
 		return duration.isPositive() ? duration.getSeconds() + (duration.getNano() > 0 ? 1 : 0) : 0;

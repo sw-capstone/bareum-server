@@ -49,6 +49,9 @@ scalar:
   layout: classic
 
 auth:
+  google:
+    client-ids: ${GOOGLE_CLIENT_IDS:}
+    signup-ttl-seconds: ${GOOGLE_SIGNUP_TTL_SECONDS:600}
   login-jwt:
     signing-key: ${LOGIN_JWT_SIGNING_KEY:}
   login:

@@ -15,13 +15,16 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.bareum.server.domain.auth.dto.request.EmailLoginRequest;
+import com.bareum.server.domain.auth.dto.request.GoogleLoginRequest;
 import com.bareum.server.domain.auth.dto.response.CsrfTokenResponse;
 import com.bareum.server.domain.auth.dto.response.CurrentUserResponse;
 import com.bareum.server.domain.auth.dto.response.EmailLoginResponse;
+import com.bareum.server.domain.auth.dto.response.GoogleLoginResponse;
 import com.bareum.server.domain.auth.exception.AuthErrorCode;
 import com.bareum.server.domain.auth.exception.AuthException;
 import com.bareum.server.domain.auth.service.CurrentUserService;
 import com.bareum.server.domain.auth.service.EmailLoginService;
+import com.bareum.server.domain.auth.service.GoogleLoginService;
 import com.bareum.server.domain.auth.service.LoginCookieFactory;
 import com.bareum.server.domain.auth.service.LogoutService;
 import com.bareum.server.domain.auth.service.TokenRenewService;
@@ -41,6 +44,7 @@ public class AuthController implements AuthControllerDocs {
 	private final LoginCookieFactory cookies;
 	private final TokenRenewService renewals;
 	private final LogoutService logoutService;
+	private final GoogleLoginService googleLoginService;
 
 	@PostMapping(value = "/login/email", consumes = "application/json")
 	public ResponseEntity<EmailLoginResponse> login(@Valid @RequestBody EmailLoginRequest request) {
@@ -99,5 +103,16 @@ public class AuthController implements AuthControllerDocs {
 				.filter(cookie -> LoginCookieFactory.REFRESH_COOKIE.equals(cookie.getName()))
 				.map(Cookie::getValue)
 				.toList();
+	}
+
+	@PostMapping(value = "/login/google", consumes = "application/json")
+	public ResponseEntity<GoogleLoginResponse> googleLogin(@Valid @RequestBody GoogleLoginRequest request) {
+		var result = googleLoginService.login(request.idToken());
+		var response = ResponseEntity.ok().cacheControl(CacheControl.noStore()).header("Pragma", "no-cache");
+		if (result.login() != null)
+			return response.header(HttpHeaders.SET_COOKIE, cookies.refreshCookie(result.login()))
+					.body(GoogleLoginResponse.login(cookies.response(result.login())));
+		return response.body(
+				GoogleLoginResponse.signup(result.signupToken(), cookies.remainingUntil(result.signupExpiresAt())));
 	}
 }
