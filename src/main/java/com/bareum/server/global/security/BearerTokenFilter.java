@@ -31,7 +31,7 @@ public class BearerTokenFilter extends OncePerRequestFilter {
 	protected boolean shouldNotFilter(HttpServletRequest request) {
 		String path = request.getServletPath();
 		return path.equals("/api/v1/auth/token/renew") || path.equals("/api/v1/auth/csrf")
-				|| path.equals("/api/v1/auth/logout");
+				|| path.equals("/api/v1/auth/logout") || path.equals("/api/v1/auth/login/google");
 	}
 
 	@Override

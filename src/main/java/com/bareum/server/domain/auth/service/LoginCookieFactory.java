@@ -1,14 +1,12 @@
 package com.bareum.server.domain.auth.service;
 
 import java.time.Clock;
-import java.time.Duration;
-import java.time.Instant;
 
 import org.springframework.http.ResponseCookie;
 import org.springframework.stereotype.Component;
 
 import com.bareum.server.domain.auth.config.LoginProperties;
-import com.bareum.server.domain.auth.dto.response.EmailLoginResponse;
+import com.bareum.server.domain.auth.support.TokenExpiry;
 
 @Component
 public class LoginCookieFactory {
@@ -21,21 +19,13 @@ public class LoginCookieFactory {
 		this.clock = clock;
 	}
 
-	public EmailLoginResponse response(LoginSessionService.IssuedLogin issued) {
-		Instant now = clock.instant();
-		return EmailLoginResponse.of(
-				issued.accessToken(),
-				remaining(now, issued.accessExpiresAt()),
-				remaining(now, issued.sessionExpiresAt()));
-	}
-
 	public String refreshCookie(LoginSessionService.IssuedLogin issued) {
 		return ResponseCookie.from(REFRESH_COOKIE, issued.refreshToken())
 				.httpOnly(true)
 				.secure(properties.cookieSecure())
 				.sameSite(properties.cookieSameSite())
 				.path("/api/v1/auth")
-				.maxAge(remaining(clock.instant(), issued.sessionExpiresAt()))
+				.maxAge(TokenExpiry.remainingSeconds(clock.instant(), issued.sessionExpiresAt()))
 				.build()
 				.toString();
 	}
@@ -53,10 +43,5 @@ public class LoginCookieFactory {
 				.maxAge(0)
 				.build()
 				.toString();
-	}
-
-	private long remaining(Instant now, Instant expiry) {
-		Duration duration = Duration.between(now, expiry);
-		return duration.isPositive() ? duration.getSeconds() + (duration.getNano() > 0 ? 1 : 0) : 0;
 	}
 }

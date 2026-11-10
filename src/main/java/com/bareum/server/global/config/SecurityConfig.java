@@ -14,6 +14,7 @@ import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import com.bareum.server.domain.auth.config.GoogleLoginProperties;
 import com.bareum.server.domain.auth.config.LoginProperties;
 import com.bareum.server.domain.auth.service.LoginSessionService;
 import com.bareum.server.global.security.BearerTokenFilter;
@@ -25,7 +26,7 @@ import com.bareum.server.global.security.handler.SecurityProblemWriter;
 @Configuration
 @EnableConfigurationProperties({
 	LoginProperties.class, com.bareum.server.domain.auth.config.LoginJwtProperties.class,
-	com.bareum.server.domain.auth.config.TokenRenewProperties.class
+	com.bareum.server.domain.auth.config.TokenRenewProperties.class, GoogleLoginProperties.class
 })
 public class SecurityConfig {
 	@Bean
@@ -91,7 +92,8 @@ public class SecurityConfig {
 															true, 0, "Bearer ", 0, 7)
 													&& !path.equals(
 															"/api/v1/auth/token/renew")
-													&& !path.equals("/api/v1/auth/logout");
+													&& !path.equals("/api/v1/auth/logout")
+													&& !path.equals("/api/v1/auth/login/google");
 										}))
 				.exceptionHandling(
 						c -> c.authenticationEntryPoint(entry).accessDeniedHandler(denied))
@@ -102,6 +104,7 @@ public class SecurityConfig {
 										HttpMethod.POST,
 										"/api/v1/auth/token/renew",
 										"/api/v1/auth/logout",
+										"/api/v1/auth/login/google",
 										"/api/v1/auth/login/email",
 										"/api/v1/auth/signup",
 										"/api/v1/auth/email-verification",

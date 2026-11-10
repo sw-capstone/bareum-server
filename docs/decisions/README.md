@@ -14,3 +14,5 @@
 - [로그인 토큰 갱신 구현 및 협의 사항](token-renew-draft.md): AUTH-009 갱신·CSRF·재사용 차단과 적용 조건.
 
 - [로그아웃 적용 기준](logout-draft.md): AUTH-003 종료·쿠키·동시성 구현안과 적용 조건.
+
+- [Google 로그인 적용 기준](google-login-draft.md): AUTH-004 인증·가입 증명·배포 준비와 검토 조건.

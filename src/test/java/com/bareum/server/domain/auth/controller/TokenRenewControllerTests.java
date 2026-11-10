@@ -31,7 +31,8 @@ class TokenRenewControllerTests {
 		var controller =
 				new AuthController(mock(EmailLoginService.class),
 						mock(CurrentUserService.class),
-						new LoginCookieFactory(properties, Clock.systemUTC()), service, mock(LogoutService.class));
+						new LoginCookieFactory(properties, Clock.systemUTC()), service, mock(LogoutService.class),
+						mock(com.bareum.server.domain.auth.service.GoogleLoginService.class), Clock.systemUTC());
 		var mvc = MockMvcBuilders.standaloneSetup(controller)
 				.setControllerAdvice(new GlobalExceptionHandler())
 				.build();
