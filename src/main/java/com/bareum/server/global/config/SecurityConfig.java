@@ -93,7 +93,8 @@ public class SecurityConfig {
 													&& !path.equals(
 															"/api/v1/auth/token/renew")
 													&& !path.equals("/api/v1/auth/logout")
-													&& !path.equals("/api/v1/auth/login/google");
+													&& !path.equals("/api/v1/auth/login/google")
+													&& !path.equals("/api/v1/auth/signup/google");
 										}))
 				.exceptionHandling(
 						c -> c.authenticationEntryPoint(entry).accessDeniedHandler(denied))
@@ -105,6 +106,7 @@ public class SecurityConfig {
 										"/api/v1/auth/token/renew",
 										"/api/v1/auth/logout",
 										"/api/v1/auth/login/google",
+										"/api/v1/auth/signup/google",
 										"/api/v1/auth/login/email",
 										"/api/v1/auth/signup",
 										"/api/v1/auth/email-verification",
