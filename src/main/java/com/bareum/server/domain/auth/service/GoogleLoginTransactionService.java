@@ -18,7 +18,10 @@ import com.bareum.server.domain.member.enums.SignupMethod;
 import com.bareum.server.domain.member.repository.MemberAuthRepository;
 import com.bareum.server.domain.member.repository.MemberRepository;
 
+import lombok.RequiredArgsConstructor;
+
 @Service
+@RequiredArgsConstructor
 public class GoogleLoginTransactionService {
 	private final GoogleIdentityRepository repository;
 	private final LoginSessionService sessions;
@@ -27,30 +30,7 @@ public class GoogleLoginTransactionService {
 	private final MemberRepository members;
 	private final MemberAuthRepository auths;
 	private final GoogleLoginProperties policy;
-	private final EmailVerificationRequestLock emailLock;
 	private final Clock clock;
-
-	public GoogleLoginTransactionService(
-		GoogleIdentityRepository repository,
-		LoginSessionService sessions,
-		LoginTokenGenerator tokens,
-		GoogleLoginProperties policy,
-		EmailVerificationRequestLock emailLock,
-		Clock clock,
-		GoogleSignupTokenGenerator signupTokens,
-		MemberRepository members,
-		MemberAuthRepository auths
-	) {
-		this.repository = repository;
-		this.sessions = sessions;
-		this.tokens = tokens;
-		this.policy = policy;
-		this.emailLock = emailLock;
-		this.clock = clock;
-		this.signupTokens = signupTokens;
-		this.members = members;
-		this.auths = auths;
-	}
 
 	@Transactional
 	public Result resolve(GoogleIdentity identity) {
@@ -58,16 +38,15 @@ public class GoogleLoginTransactionService {
 		var linked = auths.findMemberId(OAuthProvider.GOOGLE, identity.subject());
 		if (linked.isPresent()) {
 			long memberId = linked.get();
-			var member = members.findByIdForUpdate(memberId)
+			members.findByIdForUpdate(memberId)
 					.filter(m -> m.getStatus() == MemberStatus.ACTIVE && m.getWithdrawnAt() == null
 							&& m.getSignupMethod() == SignupMethod.GOOGLE)
 					.orElseThrow(() -> new AuthException(AuthErrorCode.LOGIN_ACCOUNT_RESTRICTED));
-			var auth = auths.findForUpdate(member.getId(), OAuthProvider.GOOGLE, identity.subject());
-			if (auth.isEmpty() || auth.get().getUnlinkedAt() != null)
+			if (!auths.existsByMember_IdAndProviderAndProviderUserIdAndUnlinkedAtIsNull(
+					memberId, OAuthProvider.GOOGLE, identity.subject()))
 				throw new AuthException(AuthErrorCode.LOGIN_ACCOUNT_RESTRICTED);
 			return new Result(sessions.issueForLockedMember(memberId), null, null);
 		}
-		emailLock.lockForEmail(identity.email());
 		var existing = members.findByEmailIgnoreCase(identity.email());
 		if (existing.isPresent()) {
 			if (existing.get().getSignupMethod() == SignupMethod.LOCAL)

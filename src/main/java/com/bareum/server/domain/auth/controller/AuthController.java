@@ -1,5 +1,6 @@
 package com.bareum.server.domain.auth.controller;
 
+import java.time.Clock;
 import java.util.Arrays;
 import java.util.List;
 
@@ -45,6 +46,7 @@ public class AuthController implements AuthControllerDocs {
 	private final TokenRenewService renewals;
 	private final LogoutService logoutService;
 	private final GoogleLoginService googleLoginService;
+	private final Clock clock;
 
 	@PostMapping(value = "/login/email", consumes = "application/json")
 	public ResponseEntity<EmailLoginResponse> login(@Valid @RequestBody EmailLoginRequest request) {
@@ -54,7 +56,7 @@ public class AuthController implements AuthControllerDocs {
 				.cacheControl(CacheControl.noStore())
 				.header("Pragma", "no-cache")
 				.header(HttpHeaders.SET_COOKIE, cookies.refreshCookie(issued))
-				.body(cookies.response(issued));
+				.body(EmailLoginResponse.from(issued, clock.instant()));
 	}
 
 	@GetMapping("/me")
@@ -73,7 +75,7 @@ public class AuthController implements AuthControllerDocs {
 				.cacheControl(CacheControl.noStore())
 				.header("Pragma", "no-cache")
 				.header(HttpHeaders.SET_COOKIE, cookies.refreshCookie(issued))
-				.body(cookies.response(issued));
+				.body(EmailLoginResponse.from(issued, clock.instant()));
 	}
 
 	@GetMapping("/csrf")
@@ -108,11 +110,12 @@ public class AuthController implements AuthControllerDocs {
 	@PostMapping(value = "/login/google", consumes = "application/json")
 	public ResponseEntity<GoogleLoginResponse> googleLogin(@Valid @RequestBody GoogleLoginRequest request) {
 		var result = googleLoginService.login(request.idToken());
+		var now = clock.instant();
 		var response = ResponseEntity.ok().cacheControl(CacheControl.noStore()).header("Pragma", "no-cache");
 		if (result.login() != null)
 			return response.header(HttpHeaders.SET_COOKIE, cookies.refreshCookie(result.login()))
-					.body(GoogleLoginResponse.login(cookies.response(result.login())));
+					.body(GoogleLoginResponse.login(result.login(), now));
 		return response.body(
-				GoogleLoginResponse.signup(result.signupToken(), cookies.remainingUntil(result.signupExpiresAt())));
+				GoogleLoginResponse.signup(result.signupToken(), result.signupExpiresAt(), now));
 	}
 }

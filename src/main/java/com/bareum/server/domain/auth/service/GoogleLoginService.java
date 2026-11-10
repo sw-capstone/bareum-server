@@ -7,7 +7,9 @@ import org.springframework.transaction.TransactionException;
 import com.bareum.server.domain.auth.exception.AuthErrorCode;
 import com.bareum.server.domain.auth.exception.AuthException;
 
-@lombok.RequiredArgsConstructor
+import lombok.RequiredArgsConstructor;
+
+@RequiredArgsConstructor
 @Service
 public class GoogleLoginService {
 	private final GoogleIdTokenVerifier verifier;

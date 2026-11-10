@@ -4,17 +4,13 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.Set;
 
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.security.oauth2.core.OAuth2Error;
 import org.springframework.security.oauth2.core.OAuth2TokenValidatorResult;
-import org.springframework.security.oauth2.jose.jws.SignatureAlgorithm;
 import org.springframework.security.oauth2.jwt.BadJwtException;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtException;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.stereotype.Component;
-import org.springframework.web.client.RestTemplate;
 
 import com.bareum.server.domain.auth.config.GoogleLoginProperties;
 import com.bareum.server.domain.auth.exception.AuthErrorCode;
@@ -23,20 +19,13 @@ import com.bareum.server.domain.auth.exception.AuthException;
 @Component
 public class GoogleIdTokenVerifier {
 
-	private static final String GOOGLE_JWKS = "https://www.googleapis.com/oauth2/v3/certs";
 	private static final OAuth2Error INVALID_CLAIMS =
 			new OAuth2Error("invalid_token", "Invalid Google ID token claims", null);
 	private final GoogleLoginProperties properties;
 	private final NimbusJwtDecoder decoder;
 	private final Clock clock;
 
-	@Autowired
-	public GoogleIdTokenVerifier(GoogleLoginProperties properties, Clock clock) {
-		this(properties, googleDecoder(), clock);
-	}
-
-	// 검증 키의 출처는 서버가 고정하며 토큰 헤더의 jku·jwk는 사용하지 않습니다.
-	GoogleIdTokenVerifier(GoogleLoginProperties properties, NimbusJwtDecoder decoder, Clock clock) {
+	public GoogleIdTokenVerifier(GoogleLoginProperties properties, NimbusJwtDecoder decoder, Clock clock) {
 		this.properties = properties;
 		this.decoder = decoder;
 		this.clock = clock;
@@ -50,16 +39,6 @@ public class GoogleIdTokenVerifier {
 						return OAuth2TokenValidatorResult.failure(INVALID_CLAIMS);
 					}
 				});
-	}
-
-	private static NimbusJwtDecoder googleDecoder() {
-		var requests = new SimpleClientHttpRequestFactory();
-		requests.setConnectTimeout(3000);
-		requests.setReadTimeout(3000);
-		return NimbusJwtDecoder.withJwkSetUri(GOOGLE_JWKS)
-				.jwsAlgorithm(SignatureAlgorithm.RS256)
-				.restOperations(new RestTemplate(requests))
-				.build();
 	}
 
 	public GoogleIdentity verify(String idToken) {

@@ -81,7 +81,8 @@ class GoogleLoginServiceTests {
 		var identity = new GoogleIdentity("sensitive-sub", "member@gmail.com", "회원", null);
 		var result = new GoogleLoginTransactionService.Result(null, token, Instant.now());
 		var response =
-				com.bareum.server.domain.auth.dto.response.GoogleLoginResponse.signup(token, 600);
+				com.bareum.server.domain.auth.dto.response.GoogleLoginResponse.signup(token,
+						Instant.EPOCH.plusSeconds(600), Instant.EPOCH);
 		assertFalse(identity.toString().contains("member@gmail.com"));
 		assertFalse(result.toString().contains(token));
 		assertFalse(response.toString().contains(token));
