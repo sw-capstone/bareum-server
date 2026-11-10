@@ -27,7 +27,7 @@
     "/reports": {
       "post": {
         "operationId": "uploadReport",
-        "summary": "PDF 보고서 동기 접수",
+        "summary": "보고서 파일 동기 접수",
         "description": "원본 S3 저장, 파싱, 공통 본문과 파싱 이력 저장이 끝난 뒤 응답한다. PARTIAL도 성공이며 경고를 반환한다. 분석은 별도 요청한다. Spring 인스턴스별 신규 접수 동시 처리 수를 제한한다. 제한 초과 시 S3 저장과 접수 기록 생성 없이 503을 반환하며 같은 멱등 키로 나중에 다시 접수할 수 있다. 완료된 멱등 결과 재사용은 처리 자리를 점유하지 않는다.",
         "parameters": [
           {
@@ -56,9 +56,11 @@
                   "file": {
                     "type": "string",
                     "format": "binary",
-                    "description": "비어 있지 않은 PDF 원본 1개. 중복 파일 파트는 허용하지 않는다.",
+                    "description": "비어 있지 않은 PDF, DOCX, HWPX 원본 중 1개. 모든 파일은 20MB 이내이며 60쪽 제한은 PDF에만 적용한다. 중복 파일 파트는 허용하지 않는다.",
                     "x-max-size-bytes": 20000000,
-                    "x-max-page-count": 60
+                    "x-max-page-count": 60,
+                    "x-max-page-count-applies-to": ["PDF"],
+                    "x-supported-file-formats": ["PDF", "DOCX", "HWPX"]
                   },
                   "reportType": {
                     "type": "string",
@@ -134,7 +136,7 @@
             }
           },
           "422": {
-            "description": "60페이지 초과, 손상, 암호화 또는 추출 가능한 본문 없음",
+            "description": "PDF 60쪽 초과, 손상, 암호화 또는 추출 가능한 본문 없음",
             "content": {
               "application/problem+json": {
                 "schema": {

@@ -32,7 +32,7 @@ public class ReportUploadConfig {
 	@Bean
 	@Lazy
 	public S3Client reportS3Client(ReportUploadProperties properties) {
-		properties.requireConfigured();
+		properties.requireStorageConfigured();
 		return S3Client.builder()
 				.region(Region.of(properties.region()))
 				.httpClientBuilder(UrlConnectionHttpClient.builder()

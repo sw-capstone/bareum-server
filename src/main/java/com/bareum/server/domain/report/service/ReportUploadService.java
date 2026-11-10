@@ -10,15 +10,16 @@ import org.springframework.web.multipart.MultipartFile;
 
 import com.bareum.server.domain.report.body.pdf.PdfBodyConverter;
 import com.bareum.server.domain.report.config.ReportUploadProperties;
+import com.bareum.server.domain.report.enums.FileFormat;
 import com.bareum.server.domain.report.enums.PdfParseErrorCode;
 import com.bareum.server.domain.report.enums.ReportType;
 import com.bareum.server.domain.report.exception.ReportErrorCode;
 import com.bareum.server.domain.report.exception.ReportException;
-import com.bareum.server.domain.report.intake.PdfUploadValidator;
-import com.bareum.server.domain.report.intake.PreparedPdf;
+import com.bareum.server.domain.report.intake.PreparedReportFile;
 import com.bareum.server.domain.report.intake.ReportIntakeLimiter;
 import com.bareum.server.domain.report.intake.ReportIntakePolicy;
 import com.bareum.server.domain.report.intake.ReportIntakeResult;
+import com.bareum.server.domain.report.intake.ReportUploadValidator;
 import com.bareum.server.domain.report.parsing.PdfParseResponse;
 import com.bareum.server.domain.report.service.command.ReportIntakeCommandService;
 import com.bareum.server.domain.report.service.query.ReportIntakeQueryService;
@@ -32,9 +33,10 @@ import lombok.extern.slf4j.Slf4j;
 @Service
 @RequiredArgsConstructor
 public class ReportUploadService {
-	private final PdfUploadValidator validator;
+	private final ReportUploadValidator validator;
 	private final ReportSourceStore sources;
 	private final ReportParsingService parsing;
+	private final OfficeReportParsingService officeParsing;
 	private final PdfBodyConverter converter;
 	private final ReportIntakeQueryService queries;
 	private final ReportIntakeCommandService commands;
@@ -43,8 +45,8 @@ public class ReportUploadService {
 
 	@Transactional(propagation = Propagation.NOT_SUPPORTED)
 	public ReportIntakeResult upload(long memberId, UUID key, ReportType type, MultipartFile file) {
-		var pdf = validator.prepare(file);
-		var fingerprint = validator.fingerprint(type, pdf);
+		var prepared = validator.prepare(file);
+		var fingerprint = validator.fingerprint(type, prepared);
 		var replay = queries.findReplay(memberId, key, fingerprint);
 		if (replay.isPresent()) {
 			return replay.get();
@@ -55,24 +57,32 @@ public class ReportUploadService {
 					.orElseThrow(() -> new ReportException(ReportErrorCode.PDF_CAPACITY_EXCEEDED));
 		}
 		try {
-			return accept(memberId, key, type, pdf, fingerprint);
+			return accept(memberId, key, type, prepared, fingerprint);
 		} finally {
 			limiter.release();
 		}
 	}
 
 	/** 확보한 처리 자리 안에서 접수를 선점하고 원본 저장부터 파싱 및 결과 저장까지 수행한다. */
-	private ReportIntakeResult accept(long memberId, UUID key, ReportType type, PreparedPdf pdf, String fingerprint) {
+	private ReportIntakeResult
+			accept(long memberId, UUID key, ReportType type, PreparedReportFile prepared, String fingerprint) {
 		var reservation =
-				commands.reserve(memberId, key, fingerprint, sources.newObjectKey(memberId));
+				commands.reserve(memberId, key, fingerprint, sources.newObjectKey(memberId, prepared.format()));
 		if (reservation.replay() != null) {
 			return reservation.replay();
 		}
 		try {
-			properties.requireConfigured();
-			var source = sources.upload(reservation.objectKey(), pdf);
+			if (prepared.format() == FileFormat.PDF) {
+				properties.requireConfigured();
+			}
+			var source = sources.upload(reservation.objectKey(), prepared);
 			commands.recordSource(reservation.requestId(), source);
 			var work = commands.startParsing(reservation.requestId(), type, source);
+			if (prepared.format() != FileFormat.PDF) {
+				commands.requireParsingActive(work);
+				var office = officeParsing.parse(prepared, work.deadline());
+				return commands.complete(work, office.body(), office.quality());
+			}
 			var parsed = parsing.parse(work, source);
 			var response = parsed.response();
 			if (response instanceof PdfParseResponse.Failed failed) {

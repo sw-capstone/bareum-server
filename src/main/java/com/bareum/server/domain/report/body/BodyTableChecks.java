@@ -3,6 +3,7 @@ package com.bareum.server.domain.report.body;
 import static com.bareum.server.domain.report.body.ReportBody.*;
 
 import java.util.ArrayList;
+import java.util.BitSet;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -43,6 +44,8 @@ final class BodyTableChecks {
 				|| !Set.of("complete", "partial", "unresolved").contains(table.structureStatus())) {
 			throw new ReportException(ReportErrorCode.INVALID_CONTENT);
 		}
+		long gridArea = (long)table.rowCount() * table.columnCount();
+		BitSet occupied = gridArea <= 100_000 ? new BitSet((int)gridArea) : null;
 		List<Region> regions = new ArrayList<>();
 		Set<UUID> cellIds = new HashSet<>();
 		long area = 0;
@@ -53,14 +56,14 @@ final class BodyTableChecks {
 				throw new ReportException(ReportErrorCode.INVALID_CONTENT);
 			}
 			Region region = new Region(cell.row(), cell.column(), cell.rowspan(), cell.colspan());
-			add(region, regions, table);
+			add(region, regions, table, occupied);
 			area += (long)cell.rowspan() * cell.colspan();
 			cellIds.add(cell.id());
 			previousRow = cell.row();
 			previousColumn = cell.column();
 		}
 		for (Slot slot : table.unresolvedSlots()) {
-			add(new Region(slot.row(), slot.column(), 1, 1), regions, table);
+			add(new Region(slot.row(), slot.column(), 1, 1), regions, table, occupied);
 			area++;
 		}
 		if (area != (long)table.rowCount() * table.columnCount()
@@ -81,12 +84,26 @@ final class BodyTableChecks {
 		}
 	}
 
-	private static void add(Region region, List<Region> regions, TableBlock table) {
+	private static void add(Region region, List<Region> regions, TableBlock table, BitSet occupied) {
 		if (region.row < 0 || region.column < 0 || region.rowspan <= 0 || region.colspan <= 0
-				|| region.bottom() > table.rowCount() || region.right() > table.columnCount()
-				|| regions.stream().anyMatch(region::overlaps)) {
+				|| region.bottom() > table.rowCount() || region.right() > table.columnCount()) {
 			throw new ReportException(ReportErrorCode.INVALID_CONTENT);
 		}
-		regions.add(region);
+		if (occupied == null) {
+			if (regions.stream().anyMatch(region::overlaps)) {
+				throw new ReportException(ReportErrorCode.INVALID_CONTENT);
+			}
+			regions.add(region);
+			return;
+		}
+		for (int row = region.row(); row < region.bottom(); row++) {
+			int start = row * table.columnCount() + region.column();
+			int end = start + region.colspan();
+			int next = occupied.nextSetBit(start);
+			if (next >= 0 && next < end) {
+				throw new ReportException(ReportErrorCode.INVALID_CONTENT);
+			}
+			occupied.set(start, end);
+		}
 	}
 }

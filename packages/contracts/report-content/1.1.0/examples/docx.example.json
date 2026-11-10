@@ -1,0 +1,46 @@
+{
+  "schemaVersion": "1.1.0",
+  "offsetUnit": "UNICODE_CODE_POINT",
+  "sourceFormat": "DOCX",
+  "pages": [],
+  "blocks": [
+    {
+      "id": "10000000-0000-4000-8000-000000000031",
+      "kind": "para",
+      "parentId": null,
+      "sectionId": null,
+      "text": "가😀나",
+      "sourceText": "가😀나",
+      "units": [
+        {
+          "id": "10000000-0000-4000-8000-000000000032",
+          "start": 0,
+          "end": 3,
+          "text": "가😀나"
+        }
+      ],
+      "sourceRefs": [
+        {
+          "parserBlockId": "word/document.xml#/0/0",
+          "officeLocation": {
+            "part": "word/document.xml",
+            "path": "/0/0",
+            "start": 0,
+            "end": 3
+          }
+        }
+      ]
+    }
+  ],
+  "sections": [],
+  "warnings": [
+    {
+      "stage": "composition",
+      "code": "LINE_COUNT_UNAVAILABLE",
+      "target": {
+        "type": "document"
+      },
+      "message": "렌더링 줄 수를 확인할 수 없습니다."
+    }
+  ]
+}

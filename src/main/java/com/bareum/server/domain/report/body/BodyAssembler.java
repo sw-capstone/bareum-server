@@ -95,7 +95,8 @@ public final class BodyAssembler {
 						resolve(mapped, section.key()), resolve(mapped, section.headingKey()),
 						resolve(mapped, section.parentKey())))
 				.toList();
-		ReportBody body = new ReportBody("1.0.0", "UNICODE_CODE_POINT", input.sourceFormat(),
+		ReportBody body = new ReportBody(input.sourceFormat().isOffice() ? "1.1.0" : "1.0.0", "UNICODE_CODE_POINT",
+				input.sourceFormat(),
 				input.pages(), blocks, sections, warnings);
 		return ValidatedReportBody.from(body);
 	}

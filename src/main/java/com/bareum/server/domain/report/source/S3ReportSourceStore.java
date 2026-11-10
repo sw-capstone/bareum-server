@@ -16,7 +16,7 @@ import com.bareum.server.domain.report.config.ReportUploadProperties;
 import com.bareum.server.domain.report.enums.FileFormat;
 import com.bareum.server.domain.report.exception.ReportErrorCode;
 import com.bareum.server.domain.report.exception.ReportException;
-import com.bareum.server.domain.report.intake.PreparedPdf;
+import com.bareum.server.domain.report.intake.PreparedReportFile;
 
 import lombok.RequiredArgsConstructor;
 import software.amazon.awssdk.core.exception.SdkException;
@@ -37,26 +37,26 @@ public final class S3ReportSourceStore implements ReportSourceStore {
 	private final Clock clock;
 
 	@Override
-	public String newObjectKey(long memberId) {
-		return properties.keyPrefix() + memberId + "/" + UUID.randomUUID() + ".pdf";
+	public String newObjectKey(long memberId, FileFormat format) {
+		return properties.keyPrefix() + memberId + "/" + UUID.randomUUID() + "." + format.extension();
 	}
 
 	@Override
-	public UploadedReportFile upload(String objectKey, PreparedPdf pdf) {
-		properties.requireConfigured();
+	public UploadedReportFile upload(String objectKey, PreparedReportFile file) {
+		properties.requireStorageConfigured();
 		PutObjectRequest request = PutObjectRequest.builder()
 				.bucket(properties.bucket())
 				.key(objectKey)
-				.contentType("application/pdf")
-				.contentLength(pdf.sizeBytes())
-				.checksumSHA256(Base64.getEncoder().encodeToString(HexFormat.of().parseHex(pdf.sha256())))
-				.metadata(Map.of("sha256", pdf.sha256(), "size-bytes", Long.toString(pdf.sizeBytes()),
+				.contentType(file.format().contentType())
+				.contentLength(file.sizeBytes())
+				.checksumSHA256(Base64.getEncoder().encodeToString(HexFormat.of().parseHex(file.sha256())))
+				.metadata(Map.of("sha256", file.sha256(), "size-bytes", Long.toString(file.sizeBytes()),
 						"filename-base64",
-						Base64.getEncoder().encodeToString(pdf.filename().getBytes(StandardCharsets.UTF_8))))
+						Base64.getEncoder().encodeToString(file.filename().getBytes(StandardCharsets.UTF_8))))
 				.build();
-		try (var input = pdf.openStream()) {
-			var result = clients.get().putObject(request, RequestBody.fromInputStream(input, pdf.sizeBytes()));
-			return new UploadedReportFile(FileFormat.PDF, objectKey, pdf.filename(), pdf.sizeBytes(), pdf.sha256(),
+		try (var input = file.openStream()) {
+			var result = clients.get().putObject(request, RequestBody.fromInputStream(input, file.sizeBytes()));
+			return new UploadedReportFile(file.format(), objectKey, file.filename(), file.sizeBytes(), file.sha256(),
 					result.versionId(), clock.instant());
 		} catch (SdkException | IOException exception) {
 			throw new ReportException(ReportErrorCode.SOURCE_STORAGE_FAILED);
@@ -82,7 +82,7 @@ public final class S3ReportSourceStore implements ReportSourceStore {
 	/** S3 목록의 모든 페이지에서 객체 키가 정확히 일치하는 원본 버전과 삭제 마커를 찾는다. */
 	@Override
 	public List<String> findVersions(String objectKey) {
-		properties.requireConfigured();
+		properties.requireStorageConfigured();
 		requireOwnedKey(objectKey);
 		var versions = new TreeSet<String>();
 		try {
@@ -109,7 +109,7 @@ public final class S3ReportSourceStore implements ReportSourceStore {
 	/** 지정한 S3 버전을 실제로 삭제하며 이미 없는 버전만 성공으로 처리하고 다른 오류는 보존한다. */
 	@Override
 	public void delete(String objectKey, String versionId) {
-		properties.requireConfigured();
+		properties.requireStorageConfigured();
 		requireOwnedKey(objectKey);
 		if (versionId == null || versionId.isBlank()) {
 			throw new ReportException(ReportErrorCode.INVALID_SOURCE_DELETION);

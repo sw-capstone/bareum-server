@@ -144,7 +144,21 @@ public record ReportBody(
 		@JsonProperty(required = true) String parserBlockId,
 		Integer parserRow,
 		Integer parserColumn,
-		PdfLocation location
+		PdfLocation location,
+		OfficeLocation officeLocation
+	) {
+		public SourceRef(String parserBlockId, Integer parserRow, Integer parserColumn, PdfLocation location) {
+			this(parserBlockId, parserRow, parserColumn, location, null);
+		}
+	}
+
+	/** Unicode 코드 포인트 기준의 반열린 구간. 표의 구조 참조에는 문자 범위가 없다. */
+	@JsonInclude(JsonInclude.Include.NON_NULL)
+	public record OfficeLocation(
+		@JsonProperty(required = true) String part,
+		@JsonProperty(required = true) String path,
+		Integer start,
+		Integer end
 	) {
 	}
 

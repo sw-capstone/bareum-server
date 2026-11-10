@@ -23,7 +23,7 @@ public class ReportUploadWebConfig implements WebMvcConfigurer {
 		registry.addInterceptor(new UploadPartsInterceptor()).addPathPatterns("/api/v1/reports");
 	}
 
-	/** 접수 요청에 PDF 파일 파트 하나와 문서 유형만 포함되었는지 확인한다. */
+	/** 접수 요청에 파일 파트 하나와 문서 유형만 포함되었는지 확인한다. */
 	static class UploadPartsInterceptor implements HandlerInterceptor {
 		@Override
 		public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {

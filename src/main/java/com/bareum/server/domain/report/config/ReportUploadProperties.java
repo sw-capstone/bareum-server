@@ -23,14 +23,9 @@ public record ReportUploadProperties(
 	@DefaultValue("300") int remoteExecutionTimeoutSeconds
 ) {
 	public void requireConfigured() {
-		// AI와 같은 virtual-hosted HTTPS 주소를 사용하므로 점이 있는 버킷명은 받지 않는다.
-		if (bucket == null || !bucket.matches("[a-z0-9][a-z0-9-]{1,61}[a-z0-9]")
-				|| region == null || !region.matches("[a-z]{2}(-[a-z]+)+-[0-9]+")
-				|| keyPrefix == null || !keyPrefix.matches("[A-Za-z0-9_-]+(/[A-Za-z0-9_-]+)*/")
-				|| parserToken == null || parserToken.isBlank()
+		requireStorageConfigured();
+		if (parserToken == null || parserToken.isBlank()
 				|| parserToken.chars().anyMatch(c -> Character.isISOControl(c) || Character.isWhitespace(c))
-				|| parserTimeoutSeconds < 1 || parserTimeoutSeconds > 320
-				|| storageTimeoutSeconds < 1 || storageTimeoutSeconds > 30 || remoteExecutionTimeoutSeconds < 1
 				|| signedUrlSeconds < parserTimeoutSeconds + 30 || signedUrlSeconds > 3600) {
 			throw new ReportException(ReportErrorCode.UPLOAD_NOT_CONFIGURED);
 		}
@@ -42,6 +37,16 @@ public record ReportUploadProperties(
 				throw new IllegalArgumentException();
 			}
 		} catch (IllegalArgumentException | NullPointerException exception) {
+			throw new ReportException(ReportErrorCode.UPLOAD_NOT_CONFIGURED);
+		}
+	}
+
+	public void requireStorageConfigured() {
+		if (bucket == null || !bucket.matches("[a-z0-9][a-z0-9-]{1,61}[a-z0-9]")
+				|| region == null || !region.matches("[a-z]{2}(-[a-z]+)+-[0-9]+")
+				|| keyPrefix == null || !keyPrefix.matches("[A-Za-z0-9_-]+(/[A-Za-z0-9_-]+)*/")
+				|| parserTimeoutSeconds < 1 || parserTimeoutSeconds > 320
+				|| storageTimeoutSeconds < 1 || storageTimeoutSeconds > 30 || remoteExecutionTimeoutSeconds < 1) {
 			throw new ReportException(ReportErrorCode.UPLOAD_NOT_CONFIGURED);
 		}
 	}

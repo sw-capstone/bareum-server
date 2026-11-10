@@ -21,11 +21,13 @@ public final class BodyValidator {
 	// 본문 전체 검사
 	public void validate(ReportBody body) {
 		// TODO: 검증 실패 위치를 추적할 수 있도록 내부 로그에 위치 정보를 연결한다.
-		if (body == null || !"1.0.0".equals(body.schemaVersion())
+		if (body == null || !("1.0.0".equals(body.schemaVersion()) || "1.1.0".equals(body.schemaVersion()))
 				|| !"UNICODE_CODE_POINT".equals(body.offsetUnit()) || body.sourceFormat() == null) {
 			throw new ReportException(ReportErrorCode.INVALID_CONTENT);
 		}
-		if (body.sourceFormat() == SourceFormat.TEXT ? !body.pages().isEmpty() : body.pages().isEmpty()) {
+		boolean office = body.sourceFormat().isOffice();
+		if ((office && !"1.1.0".equals(body.schemaVersion()))
+				|| (body.sourceFormat() == SourceFormat.PDF ? body.pages().isEmpty() : !body.pages().isEmpty())) {
 			throw new ReportException(ReportErrorCode.INVALID_CONTENT);
 		}
 		Map<Integer, Page> pages = new HashMap<>();
@@ -52,14 +54,14 @@ public final class BodyValidator {
 				registry.reference(block.sectionId(), BodyTargetType.SECTION);
 			}
 			parents.put(block.id(), block.parentId());
-			sources(block.sourceRefs(), pages, false);
+			sources(block.sourceRefs(), pages, false, office);
 			// 표라면 추가 검사
 			switch (block) {
 				case TextBlock text -> {}
 				case TableBlock table -> {
 					BodyTableChecks.validate(table);
 					for (Cell cell : table.cells()) {
-						sources(cell.sourceRefs(), pages, true);
+						sources(cell.sourceRefs(), pages, true, office);
 					}
 					for (UnitNoteRef note : table.unitNoteRefs()) {
 						BodyTargetType type = ownerType(note.type());
@@ -134,13 +136,26 @@ public final class BodyValidator {
 	}
 
 	// 원본 춡처와 PDF 좌표 검사
-	private static void sources(List<SourceRef> refs, Map<Integer, Page> pages, boolean cell) {
+	private static void sources(List<SourceRef> refs, Map<Integer, Page> pages, boolean cell, boolean office) {
+		if (office && refs.isEmpty()) {
+			throw new ReportException(ReportErrorCode.INVALID_CONTENT);
+		}
 		for (SourceRef ref : refs) {
 			if (!present(ref.parserBlockId()) || (ref.parserRow() == null) != (ref.parserColumn() == null)
 					|| (cell && ref.parserRow() == null)) {
 				throw new ReportException(ReportErrorCode.INVALID_CONTENT);
 			}
 			if (ref.parserRow() != null && (ref.parserRow() < 0 || ref.parserColumn() < 0)) {
+				throw new ReportException(ReportErrorCode.INVALID_CONTENT);
+			}
+			OfficeLocation officeLocation = ref.officeLocation();
+			if (office != (officeLocation != null) || (office && ref.location() != null)) {
+				throw new ReportException(ReportErrorCode.INVALID_CONTENT);
+			}
+			if (officeLocation != null && (!present(officeLocation.part()) || !present(officeLocation.path())
+					|| (officeLocation.start() == null) != (officeLocation.end() == null)
+					|| (officeLocation.start() != null
+							&& (officeLocation.start() < 0 || officeLocation.end() < officeLocation.start())))) {
 				throw new ReportException(ReportErrorCode.INVALID_CONTENT);
 			}
 			PdfLocation location = ref.location();

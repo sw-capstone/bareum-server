@@ -11,9 +11,12 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
@@ -39,6 +42,7 @@ import com.bareum.server.domain.auth.service.EmailLoginCredentialService.Validat
 import com.bareum.server.domain.auth.service.LoginSessionService;
 import com.bareum.server.domain.member.entity.Member;
 import com.bareum.server.domain.member.repository.MemberRepository;
+import com.bareum.server.domain.report.body.BodyJson;
 import com.bareum.server.domain.report.enums.FileFormat;
 import com.bareum.server.domain.report.enums.PdfParseErrorCode;
 import com.bareum.server.domain.report.enums.ReportType;
@@ -94,12 +98,13 @@ class ReportUploadIntegrationTests {
 		member = members.saveAndFlush(
 				Member.createLocal("upload-" + UUID.randomUUID() + "@example.invalid", "tester", "test-hash"));
 		token = sessions.issue(new ValidatedMember(member.getId(), member.getPasswordHash())).accessToken();
-		when(sources.newObjectKey(anyLong()))
-				.thenAnswer(i -> "reports/" + i.getArgument(0) + "/" + UUID.randomUUID() + ".pdf");
+		when(sources.newObjectKey(anyLong(), any()))
+				.thenAnswer(i -> "reports/" + i.getArgument(0) + "/" + UUID.randomUUID() + "."
+						+ ((FileFormat)i.getArgument(1)).extension());
 		when(sources.upload(anyString(), any())).thenAnswer(i -> {
 			assertFalse(TransactionSynchronizationManager.isActualTransactionActive());
-			PreparedPdf pdf = i.getArgument(1);
-			return new UploadedReportFile(FileFormat.PDF, i.getArgument(0), pdf.filename(), pdf.sizeBytes(),
+			PreparedReportFile pdf = i.getArgument(1);
+			return new UploadedReportFile(pdf.format(), i.getArgument(0), pdf.filename(), pdf.sizeBytes(),
 					pdf.sha256(), "version-fixture", Instant.now());
 		});
 		when(sources.presign(any())).thenAnswer(i -> {
@@ -291,7 +296,7 @@ class ReportUploadIntegrationTests {
 		assertEquals(0,
 				jdbc.queryForObject("SELECT count(*) FROM report WHERE member_id=?", Integer.class, member.getId()));
 		doAnswer(i -> {
-			PreparedPdf pdf = i.getArgument(1);
+			PreparedReportFile pdf = i.getArgument(1);
 			return new UploadedReportFile(FileFormat.PDF, i.getArgument(0), pdf.filename(), pdf.sizeBytes(),
 					pdf.sha256(), "version-fixture", Instant.now());
 		}).when(sources).upload(anyString(), any());
@@ -456,6 +461,117 @@ class ReportUploadIntegrationTests {
 		assertEquals(201, next.statusCode(), next.body());
 	}
 
+	@Test
+	void docxStoresOfficeBodyWithCodePointOffsetsAndReplaysWithoutAiCall() throws Exception {
+		var file = officeArchive(Map.of(
+				"[Content_Types].xml",
+				"""
+						<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+						  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+						</Types>
+						""",
+				"word/document.xml", """
+						<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+						  <w:body><w:p><w:r><w:t>가😀나</w:t></w:r></w:p></w:body>
+						</w:document>
+						"""));
+		var key = UUID.randomUUID();
+		var response = upload(key, "RESULT", "report.docx", file, 1, token);
+		assertEquals(201, response.statusCode(), response.body());
+		assertEquals("COMPLETE", json(response).path("extractionQuality").asString());
+		assertEquals("DOCX", jdbc.queryForObject("SELECT file_format FROM report WHERE id=?", String.class,
+				json(response).path("reportId").asLong()));
+		var stored = storedBody(response);
+		var block = stored.path("blocks").get(0);
+		assertEquals("1.1.0", stored.path("schemaVersion").asString());
+		assertEquals("para", block.path("kind").asString());
+		assertEquals("가😀나", block.path("text").asString());
+		assertFalse(block.has("lineCount"));
+		assertEquals(3, block.path("sourceRefs").get(0).path("officeLocation").path("end").asInt());
+		assertEquals(json(response), json(upload(key, "RESULT", "report.docx", file, 1, token)));
+		assertEquals(0, API.calls.get());
+		verify(sources, never()).presign(any());
+		verify(sources, times(1)).upload(anyString(), any());
+	}
+
+	@Test
+	void hwpxRetainsUnitNoteAndMergedCellAndMarksOmittedFootnotePartial() throws Exception {
+		var file = officeArchive(Map.of(
+				"Contents/content.hpf", """
+						<opf:package xmlns:opf="http://www.idpf.org/2007/opf/">
+						  <opf:manifest><opf:item id="s0" href="Contents/section0.xml"/></opf:manifest>
+						  <opf:spine><opf:itemref idref="s0"/></opf:spine>
+						</opf:package>
+						""",
+				"Contents/section0.xml",
+				"""
+						<hs:sec xmlns:hs="http://www.hancom.co.kr/hwpml/2011/section" xmlns:hp="http://www.hancom.co.kr/hwpml/2011/paragraph">
+						  <hp:p><hp:run>
+						    <hp:tbl rowCnt="1" colCnt="2">
+						      <hp:caption side="TOP"><hp:subList>
+						        <hp:p><hp:run><hp:t>사업 실적 표</hp:t></hp:run></hp:p>
+						        <hp:p><hp:run><hp:t>(단위: 건)</hp:t></hp:run></hp:p>
+						      </hp:subList></hp:caption>
+						      <hp:tr><hp:tc>
+						      <hp:subList><hp:p><hp:run><hp:t>2,294</hp:t></hp:run></hp:p></hp:subList>
+						      <hp:cellAddr rowAddr="0" colAddr="0"/>
+						      <hp:cellSpan rowSpan="1" colSpan="2"/>
+						    </hp:tc></hp:tr></hp:tbl>
+						    <hp:footNote><hp:subList><hp:p><hp:run><hp:t>각주</hp:t></hp:run></hp:p></hp:subList></hp:footNote>
+						  </hp:run></hp:p>
+						</hs:sec>
+						"""));
+		var response = upload(UUID.randomUUID(), "RESULT", "report.hwpx", file, 1, token);
+		assertEquals(201, response.statusCode(), response.body());
+		assertEquals("PARTIAL", json(response).path("extractionQuality").asString());
+		assertTrue(json(response).path("warnings").toString().contains("OFFICE_TEXT_OMITTED"));
+		var stored = storedBody(response);
+		assertEquals("HWPX", stored.path("sourceFormat").asString());
+		var blocks = stored.path("blocks");
+		assertEquals("사업 실적 표", blocks.get(0).path("text").asString());
+		var table = blocks.get(2);
+		assertEquals(blocks.get(1).path("id"), table.path("unitNoteRefs").get(0).path("id"));
+		var cell = table.path("cells").get(0);
+		assertEquals("2,294", cell.path("text").asString());
+		assertEquals(2, cell.path("colspan").asInt());
+		assertEquals(0, cell.path("sourceRefs").get(0).path("parserRow").asInt(-1));
+		assertEquals(0, cell.path("sourceRefs").get(0).path("parserColumn").asInt(-1));
+		assertEquals(0, API.calls.get());
+	}
+
+	@Test
+	void unreadableOfficeUploadRecordsFailureAndSchedulesCleanup() throws Exception {
+		var file = officeArchive(Map.of("unrelated.xml", "<unrelated/>"));
+		var response = upload(UUID.randomUUID(), "PLAN", "broken.docx", file, 1, token);
+		assertEquals(422, response.statusCode(), response.body());
+		assertEquals("REPORT-0058", json(response).path("code").asString());
+		assertEquals("FAILED", jdbc.queryForObject(
+				"SELECT process_status FROM report_parse_attempt WHERE id=?", String.class,
+				json(response).path("parseAttemptId").asLong()));
+		assertNotNull(jdbc.queryForObject("SELECT source_cleanup_after FROM report WHERE id=?",
+				java.sql.Timestamp.class, json(response).path("reportId").asLong()));
+		assertEquals(0, API.calls.get());
+	}
+
+	private JsonNode storedBody(HttpResponse<String> response) {
+		String body = jdbc.queryForObject("SELECT content::text FROM report_content WHERE id=?", String.class,
+				json(response).path("contentId").asLong());
+		var codec = new BodyJson();
+		return codec.tree(codec.read(body));
+	}
+
+	private static byte[] officeArchive(Map<String, String> parts) throws Exception {
+		var bytes = new ByteArrayOutputStream();
+		try (var zip = new ZipOutputStream(bytes)) {
+			for (var part : parts.entrySet()) {
+				zip.putNextEntry(new ZipEntry(part.getKey()));
+				zip.write(part.getValue().getBytes(StandardCharsets.UTF_8));
+				zip.closeEntry();
+			}
+		}
+		return bytes.toByteArray();
+	}
+
 	private HttpResponse<String> upload(UUID key, String type, String filename, byte[] bytes, int files, String access)
 			throws Exception {
 		String boundary = "bareum-test-boundary";
@@ -465,7 +581,8 @@ class ReportUploadIntegrationTests {
 						.getBytes(StandardCharsets.UTF_8));
 		for (int i = 0; i < files; i++) {
 			body.writeBytes(("--" + boundary + "\r\nContent-Disposition: form-data; name=\"file\"; filename=\""
-					+ filename + "\"\r\nContent-Type: application/pdf\r\n\r\n").getBytes(StandardCharsets.UTF_8));
+					+ filename + "\"\r\nContent-Type: " + uploadMime(filename) + "\r\n\r\n")
+					.getBytes(StandardCharsets.UTF_8));
 			body.writeBytes(bytes);
 			body.writeBytes("\r\n".getBytes(StandardCharsets.US_ASCII));
 		}
@@ -478,6 +595,16 @@ class ReportUploadIntegrationTests {
 		if (access != null)
 			request.header("Authorization", "Bearer " + access);
 		return send(request);
+	}
+
+	private static String uploadMime(String filename) {
+		if (filename.endsWith(".docx")) {
+			return FileFormat.DOCX.contentType();
+		}
+		if (filename.endsWith(".hwpx")) {
+			return FileFormat.HWPX.contentType();
+		}
+		return FileFormat.PDF.contentType();
 	}
 
 	private HttpResponse<String> send(HttpRequest.Builder request) throws Exception {

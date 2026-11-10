@@ -20,8 +20,8 @@ import com.bareum.server.domain.report.exception.ReportErrorCode;
 import com.bareum.server.domain.report.exception.ReportException;
 
 /** PDF 업로드의 파일 제한, 파일명 정리와 요청 지문 계산을 검증한다. */
-class PdfUploadValidatorTests {
-	private final PdfUploadValidator validator = new PdfUploadValidator();
+class ReportUploadValidatorTests {
+	private final ReportUploadValidator validator = new ReportUploadValidator();
 	private final byte[] bytes = "%PDF-1.7\nfixture".getBytes(StandardCharsets.US_ASCII);
 
 	@Test

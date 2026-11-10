@@ -5,20 +5,22 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.text.Normalizer;
+import java.util.Arrays;
 import java.util.HexFormat;
 import java.util.Locale;
 
 import org.springframework.stereotype.Component;
 import org.springframework.web.multipart.MultipartFile;
 
+import com.bareum.server.domain.report.enums.FileFormat;
 import com.bareum.server.domain.report.enums.ReportType;
 import com.bareum.server.domain.report.exception.ReportErrorCode;
 import com.bareum.server.domain.report.exception.ReportException;
 
-/** PDF 파일의 크기와 형식을 검증하고 원본 해시와 요청 지문을 계산한다. */
+/** 보고서 파일의 크기와 형식을 검증하고 원본 해시와 요청 지문을 계산한다. */
 @Component
-public class PdfUploadValidator {
-	public PreparedPdf prepare(MultipartFile file) {
+public class ReportUploadValidator {
+	public PreparedReportFile prepare(MultipartFile file) {
 		if (file == null || file.isEmpty()) {
 			throw new ReportException(ReportErrorCode.FILE_METADATA_REQUIRED);
 		}
@@ -26,11 +28,15 @@ public class PdfUploadValidator {
 			throw new ReportException(ReportErrorCode.FILE_TOO_LARGE);
 		}
 		String filename = normalizeFilename(file.getOriginalFilename());
+		FileFormat format = Arrays.stream(FileFormat.values())
+				.filter(value -> filename.toLowerCase(Locale.ROOT).endsWith("." + value.extension()))
+				.findFirst()
+				.orElseThrow(() -> new ReportException(ReportErrorCode.UNSUPPORTED_FILE_TYPE));
 		String contentType = file.getContentType();
-		if (!filename.toLowerCase(Locale.ROOT).endsWith(".pdf")
-				|| (contentType != null && !contentType.isBlank()
-						&& !contentType.equalsIgnoreCase("application/pdf")
-						&& !contentType.equalsIgnoreCase("application/octet-stream"))) {
+		if (contentType != null && !contentType.isBlank()
+				&& !format.contentType().equalsIgnoreCase(contentType)
+				&& !"application/octet-stream".equalsIgnoreCase(contentType)
+				&& !(format == FileFormat.HWPX && "application/zip".equalsIgnoreCase(contentType))) {
 			throw new ReportException(ReportErrorCode.UNSUPPORTED_FILE_TYPE);
 		}
 		byte[] bytes;
@@ -45,13 +51,16 @@ public class PdfUploadValidator {
 		if (bytes.length != file.getSize()) {
 			throw new ReportException(ReportErrorCode.FILE_METADATA_REQUIRED);
 		}
-		if (bytes.length < 5 || !new String(bytes, 0, 5, StandardCharsets.US_ASCII).equals("%PDF-")) {
+		boolean signatureMatches = format == FileFormat.PDF
+				? bytes.length >= 5 && "%PDF-".equals(new String(bytes, 0, 5, StandardCharsets.US_ASCII))
+				: bytes.length >= 4 && bytes[0] == 'P' && bytes[1] == 'K' && bytes[2] == 3 && bytes[3] == 4;
+		if (!signatureMatches) {
 			throw new ReportException(ReportErrorCode.UNSUPPORTED_FILE_TYPE);
 		}
-		return new PreparedPdf(bytes, filename, digest(bytes));
+		return new PreparedReportFile(bytes, filename, digest(bytes), format);
 	}
 
-	public String fingerprint(ReportType type, PreparedPdf pdf) {
+	public String fingerprint(ReportType type, PreparedReportFile pdf) {
 		String input = type.name() + "\0" + pdf.filename() + "\0" + pdf.sizeBytes() + "\0" + pdf.sha256();
 		return digest(input.getBytes(StandardCharsets.UTF_8));
 	}

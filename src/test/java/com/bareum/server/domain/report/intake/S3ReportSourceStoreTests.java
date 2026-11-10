@@ -15,6 +15,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockMultipartFile;
 
 import com.bareum.server.domain.report.config.ReportUploadProperties;
+import com.bareum.server.domain.report.enums.FileFormat;
 import com.bareum.server.domain.report.exception.ReportErrorCode;
 import com.bareum.server.domain.report.exception.ReportException;
 import com.bareum.server.domain.report.source.S3ReportSourceStore;
@@ -33,7 +34,8 @@ class S3ReportSourceStoreTests {
 	@Test
 	void uploadsExactBytesAndMetadataThenPresignsTheRecordedObjectVersion() throws Exception {
 		byte[] bytes = "%PDF-1.7\nwire-fixture".getBytes(StandardCharsets.US_ASCII);
-		var pdf = new PdfUploadValidator().prepare(new MockMultipartFile("file", "보고서.pdf", "application/pdf", bytes));
+		var pdf =
+				new ReportUploadValidator().prepare(new MockMultipartFile("file", "보고서.pdf", "application/pdf", bytes));
 		var received = new java.util.concurrent.atomic.AtomicReference<byte[]>();
 		var checksum = new java.util.concurrent.atomic.AtomicReference<String>();
 		var filename = new java.util.concurrent.atomic.AtomicReference<String>();
@@ -65,8 +67,8 @@ class S3ReportSourceStoreTests {
 				var presigner =
 						S3Presigner.builder().region(Region.AP_NORTHEAST_2).credentialsProvider(credentials).build()) {
 			var store = new S3ReportSourceStore(() -> client, () -> presigner, properties(), Clock.systemUTC());
-			String key = store.newObjectKey(42);
-			assertNotEquals(key, store.newObjectKey(42));
+			String key = store.newObjectKey(42, FileFormat.PDF);
+			assertNotEquals(key, store.newObjectKey(42, FileFormat.PDF));
 			assertTrue(key.startsWith("reports/42/"));
 			var uploaded = store.upload(key, pdf);
 			assertEquals("/fixture-bucket/" + key, path.get());
@@ -111,7 +113,7 @@ class S3ReportSourceStoreTests {
 						.retryStrategy(StandardRetryStrategy.builder().maxAttempts(1).build()))
 				.build()) {
 			var store = new S3ReportSourceStore(() -> client, () -> null, properties(), Clock.systemUTC());
-			var pdf = new PdfUploadValidator().prepare(new MockMultipartFile("file", "report.pdf", "application/pdf",
+			var pdf = new ReportUploadValidator().prepare(new MockMultipartFile("file", "report.pdf", "application/pdf",
 					"%PDF-1.7".getBytes(StandardCharsets.US_ASCII)));
 			var failure = assertThrows(ReportException.class, () -> store.upload("reports/source.pdf", pdf));
 			assertEquals(ReportErrorCode.SOURCE_STORAGE_FAILED, failure.getBaseErrorCode());

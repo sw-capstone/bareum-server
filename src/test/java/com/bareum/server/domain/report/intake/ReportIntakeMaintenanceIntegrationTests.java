@@ -86,11 +86,11 @@ class ReportIntakeMaintenanceIntegrationTests {
 		when(clock.getZone()).thenReturn(ZoneOffset.UTC);
 		member = members.saveAndFlush(
 				Member.createLocal("maintenance-" + UUID.randomUUID() + "@example.invalid", "tester", "hash"));
-		when(sources.newObjectKey(anyLong()))
+		when(sources.newObjectKey(anyLong(), any()))
 				.thenAnswer(i -> "reports/" + i.getArgument(0) + "/" + UUID.randomUUID() + ".pdf");
 		when(sources.upload(anyString(), any())).thenAnswer(i -> {
 			assertFalse(TransactionSynchronizationManager.isActualTransactionActive());
-			PreparedPdf pdf = i.getArgument(1);
+			PreparedReportFile pdf = i.getArgument(1);
 			return new UploadedReportFile(FileFormat.PDF, i.getArgument(0), pdf.filename(), pdf.sizeBytes(),
 					pdf.sha256(), "version-1", now.get());
 		});

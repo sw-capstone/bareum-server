@@ -74,7 +74,7 @@ public enum ReportErrorCode implements BaseErrorCode {
 	INVALID_INTAKE_STATE(HttpStatus.CONFLICT, "REPORT-0040", "현재 접수 상태에서는 처리할 수 없습니다."),
 	INVALID_INTAKE_RESULT(HttpStatus.INTERNAL_SERVER_ERROR, "REPORT-0041", "접수 결과 기록이 올바르지 않습니다."),
 	INTAKE_REPORT_MISMATCH(HttpStatus.INTERNAL_SERVER_ERROR, "REPORT-0042", "접수 기록과 보고서의 원본 또는 소유자가 일치하지 않습니다."),
-	UNSUPPORTED_FILE_TYPE(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "REPORT-0043", "PDF 파일만 접수할 수 있습니다."),
+	UNSUPPORTED_FILE_TYPE(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "REPORT-0043", "PDF, DOCX, HWPX 파일을 접수할 수 있습니다."),
 	INVALID_FILE_COUNT(HttpStatus.BAD_REQUEST, "REPORT-0044", "file 필드로 PDF 파일 1개를 보내주세요."),
 	FILE_READ_FAILED(HttpStatus.BAD_REQUEST, "REPORT-0045", "업로드한 파일을 읽을 수 없습니다."),
 	SOURCE_STORAGE_FAILED(HttpStatus.BAD_GATEWAY, "REPORT-0046", "원본 파일 저장소와 통신할 수 없습니다."),
@@ -82,13 +82,14 @@ public enum ReportErrorCode implements BaseErrorCode {
 	PAGE_LIMIT_EXCEEDED(HttpStatus.UNPROCESSABLE_CONTENT, "REPORT-0048", "PDF는 최대 60페이지까지 접수할 수 있습니다."),
 	PDF_ENCRYPTED(HttpStatus.UNPROCESSABLE_CONTENT, "REPORT-0049", "암호화된 PDF는 접수할 수 없습니다."),
 	PDF_CORRUPTED(HttpStatus.UNPROCESSABLE_CONTENT, "REPORT-0050", "PDF 파일이 손상되었습니다."),
-	NO_EXTRACTABLE_TEXT(HttpStatus.UNPROCESSABLE_CONTENT, "REPORT-0051", "PDF에서 추출할 수 있는 본문이 없습니다."),
+	NO_EXTRACTABLE_TEXT(HttpStatus.UNPROCESSABLE_CONTENT, "REPORT-0051", "파일에서 추출할 수 있는 본문이 없습니다."),
 	PDF_PARSER_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "REPORT-0052", "PDF 파싱 중 오류가 발생했습니다."),
-	PDF_CAPACITY_EXCEEDED(HttpStatus.SERVICE_UNAVAILABLE, "REPORT-0053", "현재 PDF 처리 용량이 부족합니다."),
+	PDF_CAPACITY_EXCEEDED(HttpStatus.SERVICE_UNAVAILABLE, "REPORT-0053", "현재 보고서 접수 처리 용량이 부족합니다."),
 	PDF_PARSER_UNAVAILABLE(HttpStatus.BAD_GATEWAY, "REPORT-0054", "PDF 파싱 서버가 요청을 처리할 수 없습니다."),
 	INTAKE_PERSISTENCE_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "REPORT-0055", "접수 결과를 저장할 수 없습니다."),
 	PDF_SOURCE_UNAVAILABLE(HttpStatus.BAD_GATEWAY, "REPORT-0056", "PDF 파싱 서버가 원본을 가져올 수 없습니다."),
-	INTAKE_PROCESSING_TIMEOUT(HttpStatus.GATEWAY_TIMEOUT, "REPORT-0057", "보고서 접수 처리 기한을 초과했습니다.");
+	INTAKE_PROCESSING_TIMEOUT(HttpStatus.GATEWAY_TIMEOUT, "REPORT-0057", "보고서 접수 처리 기한을 초과했습니다."),
+	OFFICE_DOCUMENT_UNREADABLE(HttpStatus.UNPROCESSABLE_CONTENT, "REPORT-0058", "DOCX 또는 HWPX 문서를 읽을 수 없습니다.");
 
 	private final HttpStatus httpStatus;
 	private final String code;
