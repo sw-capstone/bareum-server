@@ -49,7 +49,7 @@ public class LoginSessionService {
 		return issueForLockedMember(validated.memberId());
 	}
 
-	// 호출자는 같은 트랜잭션에서 회원 상태·인증 수단을 확인하고 회원 행을 잠가야 합니다.
+	// 호출자는 같은 트랜잭션에서 기존 회원 행을 잠그고 상태·인증 수단을 확인하거나 신규 회원 행을 삽입해야 합니다.
 	IssuedLogin issueForLockedMember(long memberId) {
 		Instant now = clock.instant().truncatedTo(java.time.temporal.ChronoUnit.SECONDS);
 		Instant accessExpiry = now.plusSeconds(properties.accessTtlSeconds());
