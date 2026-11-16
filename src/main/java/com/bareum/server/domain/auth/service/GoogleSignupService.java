@@ -30,9 +30,9 @@ public class GoogleSignupService {
 						throw new AuthException(AuthErrorCode.INVALID_GOOGLE_SIGNUP_PROOF);
 				}
 			}
-			throw new AuthException(AuthErrorCode.GOOGLE_SIGNUP_UNAVAILABLE);
+			throw new AuthException(AuthErrorCode.GOOGLE_SIGNUP_UNAVAILABLE, failure);
 		} catch (DataAccessException | TransactionException failure) {
-			throw new AuthException(AuthErrorCode.GOOGLE_SIGNUP_UNAVAILABLE);
+			throw new AuthException(AuthErrorCode.GOOGLE_SIGNUP_UNAVAILABLE, failure);
 		}
 	}
 }

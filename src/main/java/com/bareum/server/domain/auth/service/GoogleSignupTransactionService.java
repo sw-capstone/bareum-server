@@ -68,13 +68,8 @@ public class GoogleSignupTransactionService {
 		memberTerms.saveAllAndFlush(
 				consents.stream()
 						.map(
-								consent -> MemberTerm.create(
-										member,
-										consent.term(),
-										consent.agreed() ? completedAt : null,
-										null,
-										consent.agreed(),
-										completedAt))
+								consent -> MemberTerm.createSignupConsent(
+										member, consent.term(), consent.agreed(), completedAt))
 						.toList());
 		if (!identities.consumeProof(hash, clock.instant()))
 			throw invalid();

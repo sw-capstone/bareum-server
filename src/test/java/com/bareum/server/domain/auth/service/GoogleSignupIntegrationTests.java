@@ -12,6 +12,7 @@ import java.util.concurrent.*;
 
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -20,6 +21,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.*;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionSystemException;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import com.bareum.server.domain.auth.dto.request.*;
@@ -860,17 +862,25 @@ class GoogleSignupIntegrationTests {
 	}
 
 	@ParameterizedTest
-	@ValueSource(
-		strings = {
-			"{}",
-			"broken-json",
-			"{\"signupToken\":null,\"agreements\":{}}",
-			"{\"signupToken\":\"gs_short\",\"agreements\":{}}"
-		})
+	@ValueSource(strings = {"{}", "broken-json"})
 	void invalidJsonAndMissingFieldsAre400WithoutEcho(String body) throws Exception {
 		var response = post(body);
 		assertEquals(400, response.statusCode());
 		assertFalse(response.body().contains(proof));
+		unchanged();
+	}
+
+	@ParameterizedTest
+	@NullSource
+	@ValueSource(strings = "gs_short")
+	void invalidTokenWithValidAgreementsHasTokenValidationDetail(String token) throws Exception {
+		var response = post(mapper.writeValueAsString(new GoogleSignupRequest(token, agreements)));
+		assertEquals(400, response.statusCode());
+		var problem = json(response);
+		assertEquals("COMMON-0002", problem.path("code").asString());
+		var errors = problem.path("errors");
+		assertEquals(1, errors.size());
+		assertEquals("signupToken", errors.path(0).path("field").asString());
 		unchanged();
 	}
 
@@ -898,11 +908,18 @@ class GoogleSignupIntegrationTests {
 		unchanged();
 	}
 
-	@Test
-	void storageFailureResponseDoesNotExposeSqlProfileOrProof() throws Exception {
-		doThrow(new DataIntegrityViolationException("secret SQL fixture"))
+	@ParameterizedTest
+	@ValueSource(booleans = {false, true})
+	void storageFailurePreservesCauseWithoutExposingItInResponse(boolean transactionFailure) throws Exception {
+		var cause = transactionFailure
+				? new TransactionSystemException("secret SQL fixture")
+				: new DataIntegrityViolationException("secret SQL fixture");
+		doThrow(cause)
 				.when(auths)
 				.saveAndFlush(any());
+		var error = assertThrows(AuthException.class, () -> service.signup(input()));
+		assertSame(AuthErrorCode.GOOGLE_SIGNUP_UNAVAILABLE, error.getBaseErrorCode());
+		assertSame(cause, error.getCause());
 		var response = post(body());
 		assertEquals(503, response.statusCode());
 		assertEquals("AUTH-0030", json(response).path("code").asString());

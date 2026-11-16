@@ -8,4 +8,8 @@ public class AuthException extends BusinessException {
 	public AuthException(AuthErrorCode errorCode) {
 		super(Domain.AUTH, errorCode);
 	}
+
+	public AuthException(AuthErrorCode errorCode, Throwable cause) {
+		super(Domain.AUTH, errorCode, cause);
+	}
 }
