@@ -81,8 +81,7 @@ public class EmailSignupService {
 		}
 		List<MemberTerm> consents = new ArrayList<>();
 		for (ValidatedConsent consent : terms) {
-			consents.add(MemberTerm.create(member, consent.term(),
-					consent.agreed() ? completedAt : null, null, consent.agreed(), completedAt));
+			consents.add(MemberTerm.createSignupConsent(member, consent.term(), consent.agreed(), completedAt));
 		}
 		memberTermRepository.saveAllAndFlush(consents);
 		verificationRepository.flush();

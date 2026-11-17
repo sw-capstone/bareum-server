@@ -31,7 +31,8 @@ class LogoutControllerTests {
 		var controller = new AuthController(mock(EmailLoginService.class),
 				mock(CurrentUserService.class),
 				new LoginCookieFactory(properties, Clock.systemUTC()), mock(TokenRenewService.class), service,
-				mock(com.bareum.server.domain.auth.service.GoogleLoginService.class), Clock.systemUTC());
+				mock(com.bareum.server.domain.auth.service.GoogleLoginService.class), mock(GoogleSignupService.class),
+				Clock.systemUTC());
 		var mvc = MockMvcBuilders.standaloneSetup(controller)
 				.setControllerAdvice(new GlobalExceptionHandler())
 				.build();
@@ -54,7 +55,8 @@ class LogoutControllerTests {
 		var controller = new AuthController(mock(EmailLoginService.class),
 				mock(CurrentUserService.class),
 				new LoginCookieFactory(properties, Clock.systemUTC()), mock(TokenRenewService.class), service,
-				mock(com.bareum.server.domain.auth.service.GoogleLoginService.class), Clock.systemUTC());
+				mock(com.bareum.server.domain.auth.service.GoogleLoginService.class), mock(GoogleSignupService.class),
+				Clock.systemUTC());
 		var request = new MockHttpServletRequest();
 		request.setCookies(new Cookie("bareum_refresh", "one"), new Cookie("bareum_refresh", "two"));
 		assertEquals("AUTH-0021", assertThrows(AuthException.class,

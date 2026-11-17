@@ -6,6 +6,7 @@ import java.util.List;
 
 import org.springframework.http.CacheControl;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.web.csrf.CsrfToken;
@@ -17,6 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.bareum.server.domain.auth.dto.request.EmailLoginRequest;
 import com.bareum.server.domain.auth.dto.request.GoogleLoginRequest;
+import com.bareum.server.domain.auth.dto.request.GoogleSignupRequest;
 import com.bareum.server.domain.auth.dto.response.CsrfTokenResponse;
 import com.bareum.server.domain.auth.dto.response.CurrentUserResponse;
 import com.bareum.server.domain.auth.dto.response.EmailLoginResponse;
@@ -26,6 +28,7 @@ import com.bareum.server.domain.auth.exception.AuthException;
 import com.bareum.server.domain.auth.service.CurrentUserService;
 import com.bareum.server.domain.auth.service.EmailLoginService;
 import com.bareum.server.domain.auth.service.GoogleLoginService;
+import com.bareum.server.domain.auth.service.GoogleSignupService;
 import com.bareum.server.domain.auth.service.LoginCookieFactory;
 import com.bareum.server.domain.auth.service.LogoutService;
 import com.bareum.server.domain.auth.service.TokenRenewService;
@@ -46,6 +49,7 @@ public class AuthController implements AuthControllerDocs {
 	private final TokenRenewService renewals;
 	private final LogoutService logoutService;
 	private final GoogleLoginService googleLoginService;
+	private final GoogleSignupService googleSignupService;
 	private final Clock clock;
 
 	@PostMapping(value = "/login/email", consumes = "application/json")
@@ -117,5 +121,15 @@ public class AuthController implements AuthControllerDocs {
 					.body(GoogleLoginResponse.login(result.login(), now));
 		return response.body(
 				GoogleLoginResponse.signup(result.signupToken(), result.signupExpiresAt(), now));
+	}
+
+	@PostMapping(value = "/signup/google", consumes = "application/json")
+	public ResponseEntity<EmailLoginResponse> googleSignup(@Valid @RequestBody GoogleSignupRequest request) {
+		var issued = googleSignupService.signup(request);
+		return ResponseEntity.status(HttpStatus.CREATED)
+				.cacheControl(CacheControl.noStore())
+				.header("Pragma", "no-cache")
+				.header(HttpHeaders.SET_COOKIE, cookies.refreshCookie(issued))
+				.body(EmailLoginResponse.from(issued, clock.instant()));
 	}
 }

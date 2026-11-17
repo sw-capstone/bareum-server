@@ -16,3 +16,5 @@
 - [로그아웃 적용 기준](logout-draft.md): AUTH-003 종료·쿠키·동시성 구현안과 적용 조건.
 
 - [Google 로그인 적용 기준](google-login-draft.md): AUTH-004 인증·가입 증명·배포 준비와 검토 조건.
+
+- [Google 가입 완료 적용 기준](google-signup-draft.md): AUTH-011 증명 소비·약관·세션 발급과 동시성 검증.

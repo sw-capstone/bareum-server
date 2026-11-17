@@ -18,7 +18,6 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
-import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
@@ -53,7 +52,6 @@ public class MemberTerm extends BaseTimeEntity {
 	@Column(name = "responded_at", nullable = false)
 	private Instant respondedAt;
 
-	@Builder(access = AccessLevel.PRIVATE)
 	private MemberTerm(
 		Member member,
 		Term term,
@@ -79,21 +77,12 @@ public class MemberTerm extends BaseTimeEntity {
 		this.respondedAt = respondedAt;
 	}
 
-	public static MemberTerm create(
+	public static MemberTerm createSignupConsent(
 		Member member,
 		Term term,
-		Instant agreedAt,
-		Instant withdrawnAt,
-		boolean isAgreed,
+		boolean agreed,
 		Instant respondedAt
 	) {
-		return MemberTerm.builder()
-				.member(member)
-				.term(term)
-				.agreedAt(agreedAt)
-				.withdrawnAt(withdrawnAt)
-				.isAgreed(isAgreed)
-				.respondedAt(respondedAt)
-				.build();
+		return new MemberTerm(member, term, agreed ? respondedAt : null, null, agreed, respondedAt);
 	}
 }

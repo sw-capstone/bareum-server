@@ -342,6 +342,9 @@ class GoogleLoginHttpTests {
 		}
 
 		@Bean
+		GoogleSignupService googleSignupService() { return mock(GoogleSignupService.class); }
+
+		@Bean
 		LoginSessionService loginSessionService() {
 			return mock(LoginSessionService.class);
 		}
