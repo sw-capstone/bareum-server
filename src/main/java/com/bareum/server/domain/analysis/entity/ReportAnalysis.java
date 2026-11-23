@@ -118,7 +118,7 @@ public class ReportAnalysis extends BaseTimeEntity {
 		}
 	}
 
-	void succeedAfterReportSaved(Instant finishedAt) {
+	void finishReportGenerationSucceeded(Instant finishedAt) {
 		requireScoreForReportGeneration();
 		validateFinishTime(finishedAt);
 		this.finishedAt = finishedAt;

@@ -117,11 +117,12 @@ public class ReportAnalysisStep extends BaseTimeEntity {
 		this.startedAt = startedAt;
 	}
 
-	/** 결과 리포트를 저장한 트랜잭션에서 호출해 단계와 전체 상태를 함께 완료한다. */
-	public void completeReportGeneration(int expectedRetryCount, Instant finishedAt) {
+	/** 생성된 결과 리포트를 단계와 전체 분석 상태를 갱신하는 트랜잭션에서 함께 저장한다. */
+	public AnalysisResultReport completeReportGeneration(int expectedRetryCount, String summary, Instant finishedAt) {
 		requireReportGenerationAttempt(expectedRetryCount, finishedAt);
-		reportAnalysis.succeedAfterReportSaved(finishedAt);
+		reportAnalysis.finishReportGenerationSucceeded(finishedAt);
 		markFinished(AnalysisStepStatus.SUCCEEDED, finishedAt);
+		return AnalysisResultReport.create(reportAnalysis, summary, finishedAt);
 	}
 
 	public void failReportGeneration(

@@ -30,11 +30,6 @@ public enum ReportErrorCode implements BaseErrorCode {
 	INVALID_PARSE_RESULT(HttpStatus.INTERNAL_SERVER_ERROR, "REPORT-0008", "파싱 결과 데이터가 올바르지 않습니다."),
 	INVALID_PARSE_TIME(HttpStatus.INTERNAL_SERVER_ERROR, "REPORT-0010", "파싱 처리 시각이 올바르지 않습니다."),
 
-	// 결과 리포트 생성과 상태 관리
-	RESULT_CONTENT_NOT_FROZEN(HttpStatus.CONFLICT, "REPORT-0012", "결과 리포트는 고정된 본문으로 생성해야 합니다."),
-	INVALID_RESULT_STATE(HttpStatus.CONFLICT, "REPORT-0013", "현재 결과 리포트 상태에서는 처리할 수 없습니다."),
-	INVALID_RESULT(HttpStatus.INTERNAL_SERVER_ERROR, "REPORT-0014", "결과 리포트의 점수 또는 처리 시각이 올바르지 않습니다."),
-
 	// PDF 파싱 API 통신
 	PDF_PARSE_REQUEST_TIMEOUT(HttpStatus.GATEWAY_TIMEOUT, "REPORT-0031", "PDF 파싱 API의 응답 대기시간을 초과했습니다."),
 	PDF_PARSE_REQUEST_INTERRUPTED(HttpStatus.INTERNAL_SERVER_ERROR, "REPORT-0032", "PDF 파싱 API 호출 대기가 중단되었습니다."),

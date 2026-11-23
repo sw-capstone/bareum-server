@@ -73,10 +73,13 @@ class EntityInvariantTests {
 		assertNull(analysis.getFinishedAt());
 
 		generation.start(STARTED_AT.plusSeconds(2));
-		generation.completeReportGeneration(0, STARTED_AT.plusSeconds(3));
+		var resultReport = generation.completeReportGeneration(0, "분석 요약", STARTED_AT.plusSeconds(3));
 		assertEquals(AnalysisStatus.SUCCEEDED, analysis.getStatus());
 		assertEquals(AnalysisStepStatus.SUCCEEDED, generation.getStatus());
 		assertEquals(generation.getFinishedAt(), analysis.getFinishedAt());
+		assertSame(analysis, resultReport.getReportAnalysis());
+		assertEquals("분석 요약", resultReport.getSummary());
+		assertEquals(analysis.getFinishedAt(), resultReport.getGeneratedAt());
 	}
 
 	@Test
@@ -97,12 +100,14 @@ class EntityInvariantTests {
 						.getBaseErrorCode());
 		assertEquals(AnalysisErrorCode.STALE_REPORT_GENERATION_ATTEMPT,
 				assertThrows(AnalysisException.class,
-						() -> generation.completeReportGeneration(0, STARTED_AT.plusSeconds(3))).getBaseErrorCode());
+						() -> generation.completeReportGeneration(0, "이전 결과", STARTED_AT.plusSeconds(3)))
+						.getBaseErrorCode());
 		assertEquals(AnalysisStatus.PROCESSING, analysis.getStatus());
 
-		generation.completeReportGeneration(1, STARTED_AT.plusSeconds(4));
+		var resultReport = generation.completeReportGeneration(1, "재시도 결과", STARTED_AT.plusSeconds(4));
 		assertEquals(AnalysisStatus.SUCCEEDED, analysis.getStatus());
 		assertEquals(AnalysisStepStatus.SUCCEEDED, generation.getStatus());
+		assertEquals("재시도 결과", resultReport.getSummary());
 		assertEquals(BigDecimal.TEN, analysis.getTotalScore());
 	}
 
@@ -135,7 +140,8 @@ class EntityInvariantTests {
 		analysis.cancel(STARTED_AT.plusSeconds(2));
 		assertEquals(AnalysisErrorCode.ANALYSIS_NOT_PROCESSING,
 				assertThrows(AnalysisException.class,
-						() -> generation.completeReportGeneration(0, STARTED_AT.plusSeconds(3))).getBaseErrorCode());
+						() -> generation.completeReportGeneration(0, "취소된 결과", STARTED_AT.plusSeconds(3)))
+						.getBaseErrorCode());
 		assertEquals(AnalysisStatus.CANCELLED, analysis.getStatus());
 		assertNull(analysis.getTotalScore());
 	}
