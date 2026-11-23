@@ -72,7 +72,8 @@ public class ReportUploadService {
 			properties.requireConfigured();
 			var source = sources.upload(reservation.objectKey(), pdf);
 			commands.recordSource(reservation.requestId(), source);
-			var work = commands.startParsing(reservation.requestId(), type, source);
+			commands.attachReport(reservation.requestId(), type, source);
+			var work = commands.startParsing(reservation.requestId());
 			var parsed = parsing.parse(work, source);
 			var response = parsed.response();
 			if (response instanceof PdfParseResponse.Failed failed) {

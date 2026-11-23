@@ -41,8 +41,7 @@ class BodyAssemblerTests {
 				List.of(new SectionInput("s", "h", null)), List.of());
 		ValidatedReportBody validated = assembler.assemble(input);
 		var body = validated.getBody();
-		Report report = Report.createFromText(Member.createLocal("body@example.invalid", "tester", "hash"),
-				ReportType.PLAN, "title");
+		Report report = Report.create(Member.createLocal("body@example.invalid", "tester", "hash"), ReportType.PLAN);
 		assertSame(body, ReportContent.create(report, validated).getContent());
 		var paragraph = (TextBlock)body.blocks().get(1);
 		assertEquals(List.of("교육 완료.", "조사 예정."), paragraph.units().stream().map(Unit::text).toList());

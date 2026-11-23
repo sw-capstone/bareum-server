@@ -7,7 +7,6 @@ import org.hibernate.annotations.ColumnDefault;
 import org.hibernate.annotations.SQLRestriction;
 
 import com.bareum.server.domain.analysis.entity.ReportAnalysis;
-import com.bareum.server.domain.report.enums.ContentStatus;
 import com.bareum.server.domain.report.enums.ResultStatus;
 import com.bareum.server.domain.report.exception.ReportErrorCode;
 import com.bareum.server.domain.report.exception.ReportException;
@@ -66,9 +65,6 @@ public class ReportResult extends BaseTimeEntity {
 	private Instant deletedAt;
 
 	private ReportResult(ReportAnalysis reportAnalysis, ReportContent content) {
-		if (content.getStatus() != ContentStatus.FROZEN) {
-			throw new ReportException(ReportErrorCode.RESULT_CONTENT_NOT_FROZEN);
-		}
 		this.reportAnalysis = reportAnalysis;
 		this.content = content;
 		this.status = ResultStatus.PENDING;

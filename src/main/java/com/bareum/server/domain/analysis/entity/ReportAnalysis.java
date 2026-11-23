@@ -9,7 +9,6 @@ import com.bareum.server.domain.analysis.enums.AnalysisStatus;
 import com.bareum.server.domain.analysis.exception.AnalysisErrorCode;
 import com.bareum.server.domain.analysis.exception.AnalysisException;
 import com.bareum.server.domain.report.entity.ReportContent;
-import com.bareum.server.domain.report.enums.ContentStatus;
 import com.bareum.server.global.entity.BaseTimeEntity;
 
 import jakarta.persistence.Column;
@@ -75,9 +74,6 @@ public class ReportAnalysis extends BaseTimeEntity {
 		Objects.requireNonNull(content, "content");
 		Objects.requireNonNull(requestKey, "requestKey");
 		content.getReport().requireActiveIntake();
-		if (content.getStatus() != ContentStatus.FROZEN) {
-			throw new AnalysisException(AnalysisErrorCode.INPUT_NOT_FROZEN);
-		}
 		this.content = content;
 		this.requestKey = requestKey;
 		this.status = AnalysisStatus.PENDING;

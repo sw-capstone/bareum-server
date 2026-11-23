@@ -264,7 +264,6 @@
   "x-server-policy": {
     "maxFileSizeBytes": 20000000,
     "maxPageCount": 60,
-    "sourceRetentionDays": 30,
     "idempotencyRetentionHoursAfterCompletion": 24,
     "idempotencyCleanupIntervalSeconds": 3600,
     "idempotencyScope": [
@@ -290,7 +289,7 @@
     "automaticRetryForTransportTimeout": false,
     "automaticRetryForParserTimeout": false,
     "retryDeadline": "접수 전체의 남은 시간 한도 안에서만 재시도한다.",
-    "cleanup": "최종 실패 또는 사용자 삭제 원본은 안전한 시점 이후 삭제한다. 실패 시 작업을 유지하고 재시도하며 실제 삭제 완료 후에만 시각을 기록한다. 진행 중이거나 정리할 원본이 남은 멱등 기록은 만료돼도 삭제하지 않는다.",
+    "cleanup": "최종 실패나 접수 취소 시 저장된 파일을 소프트 삭제하고 S3 정리를 예약한다. 실제 S3 삭제가 완료되면 파일별로 완료 시각을 기록한다. 진행 중이거나 정리할 파일이 남은 멱등 기록은 만료돼도 삭제하지 않는다.",
     "sourceVersioning": "버전 관리 버킷은 업로드 응답의 versionId를 저장해 해당 버전을 삭제한다."
   }
 }

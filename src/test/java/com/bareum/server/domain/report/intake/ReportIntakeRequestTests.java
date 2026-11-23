@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import com.bareum.server.domain.report.entity.ReportFile;
 import com.bareum.server.domain.report.entity.ReportIntakeRequest;
 import com.bareum.server.domain.report.entity.ReportParseAttempt;
 import com.bareum.server.domain.report.enums.ExtractionQuality;
@@ -72,7 +73,8 @@ class ReportIntakeRequestTests {
 		var request = IntakeFixtures.request(member);
 		request.assignSourceKey("reports/planned.pdf");
 		var otherReport = IntakeFixtures.report(IntakeFixtures.member());
-		assertThrows(ReportException.class, () -> request.attachAttempt(ReportParseAttempt.request(otherReport)));
+		var otherSource = ReportFile.original(otherReport, IntakeFixtures.source("reports/planned.pdf"));
+		assertThrows(ReportException.class, () -> request.attachReport(otherSource));
 		assertThrows(ReportException.class, () -> request.assignSourceKey("reports/replacement.pdf"));
 		assertNull(request.getReport());
 	}
@@ -81,11 +83,11 @@ class ReportIntakeRequestTests {
 	void successUsesTheExistingAttemptAndCancellationPreventsReplay() throws Exception {
 		var member = IntakeFixtures.member();
 		var source = IntakeFixtures.source("reports/planned.pdf");
-		var report = com.bareum.server.domain.report.entity.Report.createFromFile(member,
-				com.bareum.server.domain.report.enums.ReportType.PLAN, source);
+		var report = IntakeFixtures.report(member);
 		var request = IntakeFixtures.request(member);
 		request.assignSourceKey(source.objectKey());
 		request.recordUploadedSource(source);
+		request.attachReport(ReportFile.original(report, source));
 		var attempt = ReportParseAttempt.request(report);
 		request.attachAttempt(attempt);
 		attempt.start(IntakeFixtures.NOW);
@@ -98,6 +100,24 @@ class ReportIntakeRequestTests {
 		report.cancelIntake(IntakeFixtures.NOW.plusSeconds(3));
 		assertEquals(ReportErrorCode.INTAKE_CANCELLED,
 				assertThrows(ReportException.class, request::requireReplayable).getBaseErrorCode());
+	}
+
+	@Test
+	void failureBeforeParsingCanReplayAfterReportIsSoftDeleted() {
+		var member = IntakeFixtures.member();
+		var request = IntakeFixtures.request(member);
+		var report = IntakeFixtures.report(member);
+		var source = IntakeFixtures.source("reports/source.pdf");
+		request.assignSourceKey(source.objectKey());
+		request.recordUploadedSource(source);
+		request.attachReport(ReportFile.original(report, source));
+		assertSame(report, request.getReport());
+		assertNull(request.getParseAttempt());
+		assertThrows(ReportException.class,
+				() -> request.attachAttempt(ReportParseAttempt.request(IntakeFixtures.report(member))));
+		request.complete(500, mapper.createObjectNode(), IntakeFixtures.NOW.plusSeconds(1));
+		report.softDelete(IntakeFixtures.NOW.plusSeconds(1));
+		assertDoesNotThrow(request::requireReplayable);
 	}
 
 	@Test

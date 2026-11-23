@@ -4,13 +4,9 @@ import java.time.Instant;
 import java.util.Objects;
 
 import com.bareum.server.domain.member.entity.Member;
-import com.bareum.server.domain.report.enums.FileFormat;
-import com.bareum.server.domain.report.enums.InputMethod;
 import com.bareum.server.domain.report.enums.ReportType;
 import com.bareum.server.domain.report.exception.ReportErrorCode;
 import com.bareum.server.domain.report.exception.ReportException;
-import com.bareum.server.domain.report.intake.ReportIntakePolicy;
-import com.bareum.server.domain.report.source.UploadedReportFile;
 import com.bareum.server.global.entity.BaseTimeEntity;
 
 import jakarta.persistence.Column;
@@ -25,11 +21,10 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
-import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-/** 보고서의 소유자, 문서 유형과 원본 파일의 보관 상태를 저장한다. */
+/** 업로드한 보고서의 소유자, 문서 유형과 삭제 상태를 관리한다. */
 @Entity
 @Table(name = "report")
 @Getter
@@ -49,126 +44,32 @@ public class Report extends BaseTimeEntity {
 	@Column(name = "report_type", nullable = false, length = 30)
 	private ReportType reportType;
 
-	@Column(name = "title", nullable = false, length = 255)
-	private String title;
-
-	@Enumerated(EnumType.STRING)
-	@Column(name = "file_format", nullable = true, length = 30)
-	private FileFormat fileFormat;
-
-	@Enumerated(EnumType.STRING)
-	@Column(name = "input_method", nullable = false, length = 30)
-	private InputMethod inputMethod;
-
-	@Column(name = "source_object_key", nullable = true, columnDefinition = "text")
-	private String sourceObjectKey;
-
-	@Column(name = "source_sha256", length = 64)
-	private String sourceSha256;
-
-	@Column(name = "source_version_id", columnDefinition = "text")
-	private String sourceVersionId;
-
-	@Column(name = "original_filename", nullable = true, length = 255)
-	private String originalFilename;
-
-	@Column(name = "file_size_bytes", nullable = true)
-	private Long fileSizeBytes;
-
-	@Column(name = "source_expires_at")
-	private Instant sourceExpiresAt;
-
-	@Column(name = "source_deleted_at")
-	private Instant sourceDeletedAt;
-
 	@Column(name = "intake_cancelled_at")
 	private Instant intakeCancelledAt;
 
-	@Column(name = "source_cleanup_after")
-	private Instant sourceCleanupAfter;
+	@Column(name = "deleted_at")
+	private Instant deletedAt;
 
-	@Builder(access = AccessLevel.PRIVATE)
-	private Report(
-		Member member,
-		ReportType reportType,
-		String title,
-		FileFormat fileFormat,
-		InputMethod inputMethod,
-		String sourceObjectKey,
-		String originalFilename,
-		Long fileSizeBytes,
-		Instant sourceExpiresAt
-	) {
-		Objects.requireNonNull(member, "member");
-		Objects.requireNonNull(reportType, "reportType");
-		Objects.requireNonNull(inputMethod, "inputMethod");
-		this.member = member;
-		this.reportType = reportType;
-		this.title = title;
-		this.fileFormat = fileFormat;
-		this.inputMethod = inputMethod;
-		this.sourceObjectKey = sourceObjectKey;
-		this.originalFilename = originalFilename;
-		this.fileSizeBytes = fileSizeBytes;
-		this.sourceExpiresAt = sourceExpiresAt;
+	private Report(Member member, ReportType reportType) {
+		this.member = Objects.requireNonNull(member, "member");
+		this.reportType = Objects.requireNonNull(reportType, "reportType");
 	}
 
-	public static Report createFromFile(
-		Member member,
-		ReportType reportType,
-		UploadedReportFile source
-	) {
-		Objects.requireNonNull(source, "source");
-		Report report = Report.builder()
-				.member(member)
-				.reportType(reportType)
-				.title(source.originalFilename())
-				.fileFormat(source.format())
-				.inputMethod(InputMethod.FILE)
-				.sourceObjectKey(source.objectKey())
-				.originalFilename(source.originalFilename())
-				.fileSizeBytes(source.sizeBytes())
-				.sourceExpiresAt(source.uploadedAt().plus(ReportIntakePolicy.SOURCE_RETENTION))
-				.build();
-		report.sourceSha256 = source.sha256();
-		report.sourceVersionId = source.versionId();
-		return report;
-	}
-
-	public static Report createFromText(Member member, ReportType reportType, String title) {
-		return Report.builder()
-				.member(member)
-				.reportType(reportType)
-				.title(title)
-				.inputMethod(InputMethod.TEXT)
-				.build();
-	}
-
-	public void markSourceDeleted(Instant deletedAt) {
-		if (inputMethod != InputMethod.FILE || deletedAt == null) {
-			throw new ReportException(ReportErrorCode.INVALID_SOURCE_DELETION);
-		}
-		if (sourceDeletedAt == null) {
-			sourceDeletedAt = deletedAt;
-		}
+	public static Report create(Member member, ReportType reportType) {
+		return new Report(member, reportType);
 	}
 
 	public void cancelIntake(Instant cancelledAt) {
-		if (inputMethod != InputMethod.FILE || cancelledAt == null) {
-			throw new ReportException(ReportErrorCode.INVALID_SOURCE_DELETION);
-		}
 		if (intakeCancelledAt == null) {
+			softDelete(cancelledAt);
 			intakeCancelledAt = cancelledAt;
-			scheduleSourceCleanup(cancelledAt);
 		}
 	}
 
-	public void scheduleSourceCleanup(Instant cleanupAfter) {
-		if (inputMethod != InputMethod.FILE || cleanupAfter == null) {
-			throw new ReportException(ReportErrorCode.INVALID_SOURCE_DELETION);
-		}
-		if (sourceDeletedAt == null && (sourceCleanupAfter == null || cleanupAfter.isAfter(sourceCleanupAfter))) {
-			sourceCleanupAfter = cleanupAfter;
+	public void softDelete(Instant deletedAt) {
+		Objects.requireNonNull(deletedAt, "deletedAt");
+		if (this.deletedAt == null) {
+			this.deletedAt = deletedAt;
 		}
 	}
 
@@ -176,21 +77,8 @@ public class Report extends BaseTimeEntity {
 		if (intakeCancelledAt != null) {
 			throw new ReportException(ReportErrorCode.INTAKE_CANCELLED);
 		}
-	}
-
-	/** 접수가 취소됐거나 원본이 삭제 또는 정리 대상으로 확정됐다면 새 파싱을 막는다. */
-	public void requireSourceAvailable() {
-		requireActiveIntake();
-		if (inputMethod == InputMethod.FILE && (sourceDeletedAt != null || sourceCleanupAfter != null)) {
-			throw new ReportException(ReportErrorCode.INVALID_SOURCE_DELETION);
+		if (deletedAt != null) {
+			throw new ReportException(ReportErrorCode.REPORT_NOT_FOUND);
 		}
-	}
-
-	/** 정리할 원본의 누락된 버전을 기록하고 이미 기록한 버전과의 충돌을 검사한다. */
-	public void recoverSourceVersion(String versionId) {
-		if (versionId == null || sourceVersionId != null && !sourceVersionId.equals(versionId)) {
-			throw new ReportException(ReportErrorCode.INVALID_SOURCE_DELETION);
-		}
-		sourceVersionId = versionId;
 	}
 }

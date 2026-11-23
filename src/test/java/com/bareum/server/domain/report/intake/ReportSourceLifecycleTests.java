@@ -2,7 +2,6 @@ package com.bareum.server.domain.report.intake;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import java.time.Duration;
 import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
@@ -11,24 +10,27 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import com.bareum.server.domain.analysis.entity.ReportAnalysis;
 import com.bareum.server.domain.report.entity.Report;
+import com.bareum.server.domain.report.entity.ReportFile;
 import com.bareum.server.domain.report.entity.ReportParseAttempt;
 import com.bareum.server.domain.report.enums.FileFormat;
+import com.bareum.server.domain.report.enums.ReportFileRole;
 import com.bareum.server.domain.report.enums.ReportType;
 import com.bareum.server.domain.report.exception.ReportErrorCode;
 import com.bareum.server.domain.report.exception.ReportException;
 import com.bareum.server.domain.report.source.UploadedReportFile;
 
-/** 원본 파일의 보관 기한과 접수 취소에 따른 상태 변경을 검증한다. */
+/** 원본과 변환 PDF의 식별 정보와 파일별 삭제 상태를 검증한다. */
 class ReportSourceLifecycleTests {
 	@Test
-	void sourceStoresNormalizedIdentityVersionAndThirtyDayExpiry() {
+	void sourceStoresNormalizedIdentityAndVersion() {
 		var source = new UploadedReportFile(FileFormat.PDF, "reports/source.pdf", "보고서.pdf",
 				20_000_000, "A".repeat(64), "version-1", IntakeFixtures.NOW);
-		Report report = Report.createFromFile(IntakeFixtures.member(), ReportType.RESULT, source);
-		assertEquals(IntakeFixtures.HASH, report.getSourceSha256());
-		assertEquals("version-1", report.getSourceVersionId());
-		assertEquals(IntakeFixtures.NOW.plus(Duration.ofDays(30)), report.getSourceExpiresAt());
-		assertEquals("보고서.pdf", report.getTitle());
+		Report report = Report.create(IntakeFixtures.member(), ReportType.RESULT);
+		var file = ReportFile.original(report, source);
+		assertEquals(IntakeFixtures.HASH, file.getSha256());
+		assertEquals("version-1", file.getVersionId());
+		assertEquals("보고서.pdf", file.getFilename());
+		assertEquals(ReportFileRole.ORIGINAL, file.getRole());
 		assertFalse(source.toString().contains("reports/source.pdf"));
 	}
 
@@ -62,12 +64,10 @@ class ReportSourceLifecycleTests {
 		Report report = IntakeFixtures.report(IntakeFixtures.member());
 		var content = IntakeFixtures.content(report);
 		var body = content.getContent();
-		content.freeze();
 		report.cancelIntake(IntakeFixtures.NOW.plusSeconds(10));
 		report.cancelIntake(IntakeFixtures.NOW.plusSeconds(20));
 		assertEquals(IntakeFixtures.NOW.plusSeconds(10), report.getIntakeCancelledAt());
-		assertEquals(IntakeFixtures.NOW.plusSeconds(10), report.getSourceCleanupAfter());
-		assertNull(report.getSourceDeletedAt());
+		assertEquals(IntakeFixtures.NOW.plusSeconds(10), report.getDeletedAt());
 		assertEquals(body, content.getContent());
 		ReportException error = assertThrows(ReportException.class,
 				() -> ReportAnalysis.request(content, UUID.randomUUID(), "v1", "v1"));
@@ -76,28 +76,41 @@ class ReportSourceLifecycleTests {
 	}
 
 	@Test
-	void sourceExpiryAndConfirmedDeletionAreSeparateFromIntakeCancellation() throws Exception {
-		Report report = IntakeFixtures.report(IntakeFixtures.member());
-		var content = IntakeFixtures.content(report);
-		content.freeze();
-		report.markSourceDeleted(report.getSourceExpiresAt());
-		assertDoesNotThrow(() -> ReportAnalysis.request(content, UUID.randomUUID(), "v1", "v1"));
-		assertNull(report.getIntakeCancelledAt());
+	void convertedPdfBelongsToTheSameReportAndNeedsASeparateObjectKey() {
+		var report = IntakeFixtures.report(IntakeFixtures.member());
+		var original = ReportFile.original(report, new UploadedReportFile(FileFormat.DOCX, "reports/original.docx",
+				"원본.docx", 100, IntakeFixtures.HASH, "original-version", IntakeFixtures.NOW));
+		var converted = ReportFile.convertedPdf(original, IntakeFixtures.source("reports/display.pdf"));
+		assertSame(report, converted.getReport());
+		assertEquals(ReportFileRole.CONVERTED_PDF, converted.getRole());
+		assertEquals(FileFormat.PDF, converted.getFormat());
+		assertThrows(ReportException.class,
+				() -> ReportFile.convertedPdf(original, IntakeFixtures.source(original.getObjectKey())));
+		var originalPdf = IntakeFixtures.original(report);
+		assertThrows(ReportException.class, () -> ReportFile.convertedPdf(originalPdf,
+				IntakeFixtures.source("reports/duplicate.pdf")));
 	}
 
 	@Test
 	void cleanupCanBeDeferredUntilTheRemoteExecutionDeadline() {
-		Report report = IntakeFixtures.report(IntakeFixtures.member());
-		report.scheduleSourceCleanup(IntakeFixtures.NOW.plusSeconds(320));
-		assertEquals(IntakeFixtures.NOW.plusSeconds(320), report.getSourceCleanupAfter());
-		assertNull(report.getSourceDeletedAt());
+		var file = IntakeFixtures.original(IntakeFixtures.report(IntakeFixtures.member()));
+		var after = IntakeFixtures.NOW.plusSeconds(320);
+		file.scheduleDeletion(IntakeFixtures.NOW, after);
+		assertEquals(IntakeFixtures.NOW, file.getDeletedAt());
+		assertEquals(after, file.getCleanupAfter());
+		assertNull(file.getS3DeletedAt());
+		assertThrows(ReportException.class, () -> file.markS3Deleted(IntakeFixtures.NOW));
+		file.markS3Deleted(after);
+		assertEquals(IntakeFixtures.NOW, file.getDeletedAt());
+		assertEquals(after, file.getS3DeletedAt());
 	}
 
 	@Test
 	void cancellationCannotBringForwardADeferredCleanupDeadline() {
-		Report report = IntakeFixtures.report(IntakeFixtures.member());
-		report.scheduleSourceCleanup(IntakeFixtures.NOW.plusSeconds(320));
-		report.cancelIntake(IntakeFixtures.NOW.plusSeconds(10));
-		assertEquals(IntakeFixtures.NOW.plusSeconds(320), report.getSourceCleanupAfter());
+		var file = IntakeFixtures.original(IntakeFixtures.report(IntakeFixtures.member()));
+		var after = IntakeFixtures.NOW.plusSeconds(320);
+		file.scheduleDeletion(IntakeFixtures.NOW, after);
+		file.scheduleDeletion(IntakeFixtures.NOW.plusSeconds(10), IntakeFixtures.NOW.plusSeconds(10));
+		assertEquals(after, file.getCleanupAfter());
 	}
 }

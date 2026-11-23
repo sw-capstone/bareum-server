@@ -10,6 +10,7 @@ import com.bareum.server.domain.report.body.BodyJson;
 import com.bareum.server.domain.report.body.ValidatedReportBody;
 import com.bareum.server.domain.report.entity.Report;
 import com.bareum.server.domain.report.entity.ReportContent;
+import com.bareum.server.domain.report.entity.ReportFile;
 import com.bareum.server.domain.report.entity.ReportIntakeRequest;
 import com.bareum.server.domain.report.enums.FileFormat;
 import com.bareum.server.domain.report.enums.ReportType;
@@ -32,7 +33,11 @@ final class IntakeFixtures {
 	}
 
 	static Report report(Member member) {
-		return Report.createFromFile(member, ReportType.PLAN, source("reports/" + UUID.randomUUID() + ".pdf"));
+		return Report.create(member, ReportType.PLAN);
+	}
+
+	static ReportFile original(Report report) {
+		return ReportFile.original(report, source("reports/" + UUID.randomUUID() + ".pdf"));
 	}
 
 	static ReportIntakeRequest request(Member member) {

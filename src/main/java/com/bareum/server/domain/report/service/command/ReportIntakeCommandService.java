@@ -18,9 +18,11 @@ import com.bareum.server.domain.report.config.ReportUploadProperties;
 import com.bareum.server.domain.report.dto.response.ReportUploadResponse;
 import com.bareum.server.domain.report.entity.Report;
 import com.bareum.server.domain.report.entity.ReportContent;
+import com.bareum.server.domain.report.entity.ReportFile;
 import com.bareum.server.domain.report.entity.ReportIntakeRequest;
 import com.bareum.server.domain.report.entity.ReportParseAttempt;
 import com.bareum.server.domain.report.enums.ExtractionQuality;
+import com.bareum.server.domain.report.enums.FileFormat;
 import com.bareum.server.domain.report.enums.ParseStatus;
 import com.bareum.server.domain.report.enums.ReportIntakeStatus;
 import com.bareum.server.domain.report.enums.ReportType;
@@ -29,6 +31,7 @@ import com.bareum.server.domain.report.exception.ReportException;
 import com.bareum.server.domain.report.intake.ReportIntakePolicy;
 import com.bareum.server.domain.report.intake.ReportIntakeResult;
 import com.bareum.server.domain.report.repository.ReportContentRepository;
+import com.bareum.server.domain.report.repository.ReportFileRepository;
 import com.bareum.server.domain.report.repository.ReportIntakeRequestRepository;
 import com.bareum.server.domain.report.repository.ReportParseAttemptRepository;
 import com.bareum.server.domain.report.repository.ReportRepository;
@@ -45,6 +48,7 @@ public class ReportIntakeCommandService {
 	private final MemberRepository members;
 	private final ReportIntakeRequestRepository requests;
 	private final ReportRepository reports;
+	private final ReportFileRepository files;
 	private final ReportParseAttemptRepository attempts;
 	private final ReportContentRepository contents;
 	private final Clock clock;
@@ -79,12 +83,25 @@ public class ReportIntakeCommandService {
 		request.recordUploadedSource(source);
 	}
 
-	public ParseWork startParsing(long requestId, ReportType type, UploadedReportFile source) {
+	public void attachReport(long requestId, ReportType type, UploadedReportFile source) {
 		var request = locked(requestId);
 		request.requireProcessingAt(clock.instant());
-		var report = reports.save(Report.createFromFile(request.getMember(), type, source));
+		var report = reports.save(Report.create(request.getMember(), type));
+		var original = files.save(ReportFile.original(report, source));
+		request.attachReport(original);
+	}
+
+	public ParseWork startParsing(long requestId) {
+		var request = locked(requestId);
+		var now = clock.instant();
+		request.requireProcessingAt(now);
+		var report = request.getReport();
+		if (report == null || request.getParseAttempt() != null
+				|| !files.existsByReportIdAndFormatAndDeletedAtIsNull(report.getId(), FileFormat.PDF)) {
+			throw new ReportException(ReportErrorCode.INVALID_INTAKE_STATE);
+		}
 		var attempt = attempts.save(ReportParseAttempt.request(report));
-		attempt.start(clock.instant());
+		attempt.start(now);
 		request.attachAttempt(attempt);
 		return new ParseWork(requestId, report.getId(), attempt.getId(), request.getProcessingDeadlineAt());
 	}
@@ -125,7 +142,7 @@ public class ReportIntakeCommandService {
 		requireAttempt(request, work);
 	}
 
-	/** 복구로 종료된 접수와 늦은 응답을 차단하고 유효한 파싱 결과만 현재 본문과 완료 응답으로 저장한다. */
+	/** 복구로 종료된 접수와 늦은 응답을 차단하고 파싱 결과를 확정 본문과 완료 응답으로 저장한다. */
 	public ReportIntakeResult complete(ParseWork work, ValidatedReportBody body, ExtractionQuality quality) {
 		var request = locked(work.requestId());
 		if (request.getStatus() != ReportIntakeStatus.PROCESSING) {
@@ -138,7 +155,6 @@ public class ReportIntakeCommandService {
 		}
 		requireAttempt(request, work);
 		var content = contents.save(ReportContent.create(request.getReport(), body));
-		content.adoptAsCurrent();
 		request.getParseAttempt()
 				.complete(content, quality, mapper.valueToTree(body.getBody().warnings()), clock.instant());
 		request.complete(201, mapper.valueToTree(ReportUploadResponse.from(request.getParseAttempt())),
@@ -167,7 +183,7 @@ public class ReportIntakeCommandService {
 		return true;
 	}
 
-	/** 잠근 접수의 실패 응답과 파싱 오류를 저장하고 원본 소유 기록에 삭제 예정 시각을 남긴다. */
+	/** 최종 실패를 저장하고 보고서에 연결된 파일 또는 고아 원본을 정리 대상으로 표시한다. */
 	private ReportIntakeResult failLocked(
 		ReportIntakeRequest request,
 		ReportErrorCode code,
@@ -181,17 +197,23 @@ public class ReportIntakeCommandService {
 				.put("detail", code.getMessage())
 				.put("instance", "/api/v1/reports")
 				.put("code", code.getCode());
+		var now = clock.instant();
+		var report = request.getReport();
+		if (report != null) {
+			problem.put("reportId", report.getId());
+		}
 		var attempt = request.getParseAttempt();
 		if (attempt != null) {
 			if (attempt.getProcessStatus() == ParseStatus.PROCESSING) {
-				attempt.fail(attemptError, clock.instant());
+				attempt.fail(attemptError, now);
 			}
-			problem.put("reportId", request.getReport().getId()).put("parseAttemptId", attempt.getId());
+			problem.put("parseAttemptId", attempt.getId());
 		}
-		request.complete(code.getHttpStatus().value(), problem, clock.instant());
-		var cleanupAfter = clock.instant().plus(cleanupDelay);
-		if (request.getReport() != null) {
-			request.getReport().scheduleSourceCleanup(cleanupAfter);
+		request.complete(code.getHttpStatus().value(), problem, now);
+		var cleanupAfter = now.plus(cleanupDelay);
+		if (report != null) {
+			report.softDelete(now);
+			files.findByReportIdOrderById(report.getId()).forEach(file -> file.scheduleDeletion(now, cleanupAfter));
 		} else {
 			request.scheduleOrphanCleanup(cleanupAfter);
 		}

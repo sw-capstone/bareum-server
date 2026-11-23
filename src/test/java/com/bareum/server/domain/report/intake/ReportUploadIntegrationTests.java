@@ -120,6 +120,7 @@ class ReportUploadIntegrationTests {
 		jdbc.update("DELETE FROM report_parse_attempt WHERE report_id IN (SELECT id FROM report WHERE member_id = ?)",
 				id);
 		jdbc.update("DELETE FROM report_content WHERE report_id IN (SELECT id FROM report WHERE member_id = ?)", id);
+		jdbc.update("DELETE FROM report_file WHERE report_id IN (SELECT id FROM report WHERE member_id = ?)", id);
 		jdbc.update("DELETE FROM report WHERE member_id = ?", id);
 		jdbc.update("DELETE FROM refresh_token WHERE member_id = ?", id);
 		jdbc.update("DELETE FROM member WHERE id = ?", id);
@@ -132,7 +133,7 @@ class ReportUploadIntegrationTests {
 	}
 
 	@Test
-	void storesSourceCurrentDraftAndHistoryBeforeReplyAndReplaysTheSameIds() throws Exception {
+	void storesSourceParsedBodyAndHistoryBeforeReplyAndReplaysTheSameIds() throws Exception {
 		UUID key = UUID.randomUUID();
 		var first = upload(key, "PLAN", "report.pdf", PDF, 1, token);
 		assertEquals(201, first.statusCode(), first.body());
@@ -145,14 +146,16 @@ class ReportUploadIntegrationTests {
 		assertEquals(attempt, API.received.get("parseAttemptId").asLong());
 		assertEquals("PLAN", jdbc.queryForObject("SELECT report_type FROM report WHERE id=?", String.class, report));
 		assertEquals("version-fixture",
-				jdbc.queryForObject("SELECT source_version_id FROM report WHERE id=?", String.class, report));
+				jdbc.queryForObject("SELECT version_id FROM report_file WHERE report_id=?", String.class, report));
+		assertEquals("report.pdf",
+				jdbc.queryForObject("SELECT filename FROM report_file WHERE report_id=?", String.class, report));
 		assertEquals("SUCCEEDED", jdbc.queryForObject("SELECT process_status FROM report_parse_attempt WHERE id=?",
 				String.class, attempt));
 		assertEquals(content, jdbc.queryForObject("SELECT produced_content_id FROM report_parse_attempt WHERE id=?",
 				Long.class, attempt));
-		assertEquals("DRAFT",
-				jdbc.queryForObject("SELECT status FROM report_content WHERE id=?", String.class, content));
-		assertTrue(jdbc.queryForObject("SELECT is_current FROM report_content WHERE id=?", Boolean.class, content));
+		assertEquals(report,
+				jdbc.queryForObject("SELECT report_id FROM report_content WHERE id=?", Long.class, content));
+		assertFalse(result.has("sourceExpiresAt"));
 		assertEquals(0,
 				jdbc.queryForObject("SELECT count(*) FROM report_analysis WHERE content_id=?", Integer.class, content));
 		var repeated = upload(key, "PLAN", "report.pdf", PDF, 1, token);
@@ -224,7 +227,9 @@ class ReportUploadIntegrationTests {
 		assertFalse(response.body().contains("private-parser-diagnostic"));
 		assertEquals(code.name(), jdbc.queryForObject("SELECT error_code FROM report_parse_attempt WHERE id=?",
 				String.class, json(response).get("parseAttemptId").asLong()));
-		assertNotNull(jdbc.queryForObject("SELECT source_cleanup_after FROM report WHERE id=?",
+		assertNotNull(jdbc.queryForObject("SELECT cleanup_after FROM report_file WHERE report_id=?",
+				java.sql.Timestamp.class, json(response).get("reportId").asLong()));
+		assertNotNull(jdbc.queryForObject("SELECT deleted_at FROM report WHERE id=?",
 				java.sql.Timestamp.class, json(response).get("reportId").asLong()));
 		assertEquals(json(response), json(upload(key, "PLAN", "report.pdf", PDF, 1, token)));
 		assertEquals(1, API.calls.get());
@@ -331,8 +336,9 @@ class ReportUploadIntegrationTests {
 		assertEquals(1, API.calls.get());
 		assertNotNull(jdbc.queryForObject("SELECT intake_cancelled_at FROM report WHERE id=?", java.sql.Timestamp.class,
 				report));
-		assertNull(jdbc.queryForObject("SELECT source_deleted_at FROM report WHERE id=?", java.sql.Timestamp.class,
-				report));
+		assertNull(
+				jdbc.queryForObject("SELECT s3_deleted_at FROM report_file WHERE report_id=?", java.sql.Timestamp.class,
+						report));
 		assertEquals(1,
 				jdbc.queryForObject("SELECT count(*) FROM report_content WHERE report_id=?", Integer.class, report));
 	}
@@ -428,7 +434,7 @@ class ReportUploadIntegrationTests {
 			long report = json(response).get("reportId").asLong();
 			assertEquals("FAILED", jdbc.queryForObject(
 					"SELECT process_status FROM report_parse_attempt WHERE report_id=?", String.class, report));
-			assertNotNull(jdbc.queryForObject("SELECT source_cleanup_after FROM report WHERE id=?",
+			assertNotNull(jdbc.queryForObject("SELECT cleanup_after FROM report_file WHERE report_id=?",
 					java.sql.Timestamp.class, report));
 			assertEquals(1, API.calls.get());
 		} finally {

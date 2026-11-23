@@ -10,6 +10,7 @@ import org.hibernate.type.SqlTypes;
 
 import com.bareum.server.domain.member.entity.Member;
 import com.bareum.server.domain.report.enums.ParseStatus;
+import com.bareum.server.domain.report.enums.ReportFileRole;
 import com.bareum.server.domain.report.enums.ReportIntakeStatus;
 import com.bareum.server.domain.report.exception.ReportErrorCode;
 import com.bareum.server.domain.report.exception.ReportException;
@@ -174,21 +175,29 @@ public class ReportIntakeRequest extends BaseTimeEntity {
 		sourceVersionId = source.versionId();
 	}
 
-	public void attachAttempt(ReportParseAttempt attempt) {
+	public void attachReport(ReportFile source) {
 		requireProcessing();
-		Report owner = Objects.requireNonNull(attempt, "attempt").getReport();
+		Report owner = Objects.requireNonNull(source, "source").getReport();
 		owner.requireActiveIntake();
 		Member ownerMember = owner.getMember();
 		boolean sameMember = member == ownerMember
 				|| (member.getId() != null && member.getId().equals(ownerMember.getId()));
-		boolean sameReport = report == null || report == owner
-				|| (report.getId() != null && report.getId().equals(owner.getId()));
-		if (!sameMember || !sameReport || sourceCleanupAfter != null
-				|| !Objects.equals(sourceObjectKey, owner.getSourceObjectKey())
-				|| !Objects.equals(sourceVersionId, owner.getSourceVersionId())) {
+		if (!sameMember || report != null || source.getRole() != ReportFileRole.ORIGINAL
+				|| source.getDeletedAt() != null || sourceCleanupAfter != null
+				|| !Objects.equals(sourceObjectKey, source.getObjectKey())
+				|| !Objects.equals(sourceVersionId, source.getVersionId())) {
 			throw new ReportException(ReportErrorCode.INTAKE_REPORT_MISMATCH);
 		}
 		report = owner;
+	}
+
+	public void attachAttempt(ReportParseAttempt attempt) {
+		requireProcessing();
+		Report owner = Objects.requireNonNull(attempt, "attempt").getReport();
+		if (report == null || (report != owner && (report.getId() == null || !report.getId().equals(owner.getId())))) {
+			throw new ReportException(ReportErrorCode.INTAKE_REPORT_MISMATCH);
+		}
+		report.requireActiveIntake();
 		parseAttempt = attempt;
 	}
 
@@ -212,7 +221,7 @@ public class ReportIntakeRequest extends BaseTimeEntity {
 	}
 
 	public void requireReplayable() {
-		if (report != null) {
+		if (report != null && (status == ReportIntakeStatus.SUCCEEDED || report.getIntakeCancelledAt() != null)) {
 			report.requireActiveIntake();
 		}
 		if (status == ReportIntakeStatus.PROCESSING) {

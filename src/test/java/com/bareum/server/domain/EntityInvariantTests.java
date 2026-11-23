@@ -30,7 +30,7 @@ import com.bareum.server.domain.report.exception.ReportException;
 class EntityInvariantTests {
 
 	@Test
-	void immutableBodiesProtectFrozenContentAndDrafts() {
+	void parsedBodyAndItsTextUnitsAreImmutable() {
 		List<Block> blocks = new ArrayList<>(body("original").blocks());
 		ReportBody input = new ReportBody("1.0.0", "UNICODE_CODE_POINT", SourceFormat.TEXT,
 				List.of(), blocks, List.of(), List.of());
@@ -38,36 +38,20 @@ class EntityInvariantTests {
 		ReportContent baseline = ReportContent.create(report(), validated);
 		blocks.clear();
 		assertEquals("original", text(baseline));
-		baseline.freeze();
 		assertThrows(UnsupportedOperationException.class, () -> baseline.getContent().blocks().clear());
 		assertThrows(UnsupportedOperationException.class,
 				() -> ((TextBlock)baseline.getContent().blocks().getFirst()).units().clear());
-		ReportContent draft = ReportContent.draftFrom(baseline);
-		assertSame(baseline.getContent(), draft.getContent());
-		draft.replaceContent(ValidatedReportBody.from(body("edited")));
-		assertEquals("original", text(baseline));
-		assertEquals("edited", text(draft));
-		assertEquals(2, draft.getRevision());
-		assertEquals(ReportErrorCode.FROZEN_CONTENT_CANNOT_BE_EDITED,
-				assertThrows(ReportException.class, () -> baseline.replaceContent(validated)).getBaseErrorCode());
 	}
 
 	@Test
-	void creationAndReplacementRejectNullWithoutChangingDraft() {
-		ReportBody valid = body("original");
-		ReportContent draft = ReportContent.create(report(), ValidatedReportBody.from(valid));
+	void creationRejectsMissingParsedBody() {
 		assertEquals(ReportErrorCode.INVALID_CONTENT,
 				assertThrows(ReportException.class, () -> ReportContent.create(report(), null)).getBaseErrorCode());
-		assertEquals(ReportErrorCode.INVALID_CONTENT,
-				assertThrows(ReportException.class, () -> draft.replaceContent(null)).getBaseErrorCode());
-		assertEquals(valid, draft.getContent());
-		assertEquals(1, draft.getRevision());
 	}
 
 	@Test
 	void cancelledAnalysisRejectsLateCompletion() {
 		ReportContent content = ReportContent.create(report(), ValidatedReportBody.from(body("original")));
-		content.freeze();
 		ReportAnalysis analysis = ReportAnalysis.request(content, UUID.randomUUID(), "v1", "v1");
 		Instant now = Instant.now();
 		analysis.start(now);
@@ -80,23 +64,13 @@ class EntityInvariantTests {
 	}
 
 	@Test
-	void analysisRequiresFrozenInput() {
+	void analysisUsesTheFixedParsedBody() {
 		ReportContent content = ReportContent.create(report(), ValidatedReportBody.from(body("original")));
-		assertEquals(AnalysisErrorCode.INPUT_NOT_FROZEN, assertThrows(AnalysisException.class,
-				() -> ReportAnalysis.request(content, UUID.randomUUID(), "v1", "v1")).getBaseErrorCode());
-	}
-
-	@Test
-	void textReportHasNoFileMetadata() {
-		Report report = Report.createFromText(member(), ReportType.PLAN, "title");
-		assertNull(report.getSourceObjectKey());
-		assertNull(report.getFileFormat());
-		assertNull(report.getOriginalFilename());
-		assertNull(report.getFileSizeBytes());
+		assertSame(content, ReportAnalysis.request(content, UUID.randomUUID(), "v1", "v1").getContent());
 	}
 
 	private Report report() {
-		return Report.createFromText(member(), ReportType.PLAN, "title");
+		return Report.create(member(), ReportType.PLAN);
 	}
 
 	private ReportBody body(String text) {

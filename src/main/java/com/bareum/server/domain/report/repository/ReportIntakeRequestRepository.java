@@ -53,8 +53,8 @@ public interface ReportIntakeRequestRepository extends JpaRepository<ReportIntak
 			      AND (r.report_id IS NOT NULL OR r.source_object_key IS NULL OR r.source_deleted_at IS NOT NULL)
 			      AND (r.source_cleanup_after IS NULL OR r.source_deleted_at IS NOT NULL)
 			      AND NOT EXISTS (
-			          SELECT 1 FROM report p WHERE p.id = r.report_id
-			            AND p.source_cleanup_after IS NOT NULL AND p.source_deleted_at IS NULL)
+			          SELECT 1 FROM report_file f WHERE f.report_id = r.report_id
+			            AND f.cleanup_after IS NOT NULL AND f.s3_deleted_at IS NULL)
 			    ORDER BY r.expires_at, r.id LIMIT :batchSize FOR UPDATE OF r SKIP LOCKED
 			)
 			""", nativeQuery = true)

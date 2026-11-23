@@ -19,6 +19,7 @@ import com.bareum.server.domain.member.repository.MemberRepository;
 import com.bareum.server.domain.report.config.ReportIntakeProperties;
 import com.bareum.server.domain.report.config.ReportUploadConfig;
 import com.bareum.server.domain.report.repository.ReportContentRepository;
+import com.bareum.server.domain.report.repository.ReportFileRepository;
 import com.bareum.server.domain.report.repository.ReportIntakeRequestRepository;
 import com.bareum.server.domain.report.repository.ReportParseAttemptRepository;
 import com.bareum.server.domain.report.repository.ReportRepository;
@@ -33,6 +34,7 @@ class ReportIntakeConfigurationTests {
 			.withBean(Clock.class, Clock::systemUTC)
 			.withBean(MemberRepository.class, () -> mock(MemberRepository.class))
 			.withBean(ReportRepository.class, () -> mock(ReportRepository.class))
+			.withBean(ReportFileRepository.class, () -> mock(ReportFileRepository.class))
 			.withBean(ReportIntakeRequestRepository.class, () -> mock(ReportIntakeRequestRepository.class))
 			.withBean(ReportParseAttemptRepository.class, () -> mock(ReportParseAttemptRepository.class))
 			.withBean(ReportContentRepository.class, () -> mock(ReportContentRepository.class))
@@ -75,13 +77,13 @@ class ReportIntakeConfigurationTests {
 					var now = Instant.now();
 					queries.expiredRequests(now, 42);
 					queries.orphanSources(now, 42);
-					queries.reportSources(now, 42);
+					queries.reportFiles(now, 42);
 					ctx.getBean(ReportIntakeCommandService.class).purgeExpiredRequests(now);
 					var requests = ctx.getBean(ReportIntakeRequestRepository.class);
 					verify(requests).findExpiredProcessingIds(now, 42, 7);
 					verify(requests).findOrphanCleanupIds(now, 42, 7);
 					verify(requests).deleteExpiredBatch(now, 13);
-					verify(ctx.getBean(ReportRepository.class)).findSourceCleanupIds(now, 42, 7);
+					verify(ctx.getBean(ReportFileRepository.class)).findCleanupIds(now, 42, 7);
 				});
 	}
 

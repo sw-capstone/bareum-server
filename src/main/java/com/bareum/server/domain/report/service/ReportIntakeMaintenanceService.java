@@ -36,10 +36,10 @@ public class ReportIntakeMaintenanceService {
 		forEachBatch(afterId -> queries.expiredRequests(now, afterId), intakes::recoverExpired);
 	}
 
-	/** 삭제 시각이 지난 보고서 원본과 보고서 생성 전에 남은 원본을 각각 나눠 조회해 정리한다. */
+	/** 삭제 예정 시각이 지난 보고서 파일과 접수 중 남은 고아 원본을 정리한다. */
 	public void deleteSources() {
 		var now = clock.instant();
-		forEachBatch(afterId -> queries.reportSources(now, afterId), id -> delete(sources.prepareReportCleanup(id)));
+		forEachBatch(afterId -> queries.reportFiles(now, afterId), id -> delete(sources.prepareFileCleanup(id)));
 		forEachBatch(afterId -> queries.orphanSources(now, afterId), id -> delete(sources.prepareOrphanCleanup(id)));
 	}
 

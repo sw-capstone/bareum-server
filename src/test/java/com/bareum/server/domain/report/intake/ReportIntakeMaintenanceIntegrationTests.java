@@ -24,6 +24,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -112,6 +113,7 @@ class ReportIntakeMaintenanceIntegrationTests {
 		jdbc.update("DELETE FROM report_parse_attempt WHERE report_id IN (SELECT id FROM report WHERE member_id=?)",
 				id);
 		jdbc.update("DELETE FROM report_content WHERE report_id IN (SELECT id FROM report WHERE member_id=?)", id);
+		jdbc.update("DELETE FROM report_file WHERE report_id IN (SELECT id FROM report WHERE member_id=?)", id);
 		jdbc.update("DELETE FROM report WHERE member_id=?", id);
 		jdbc.update("DELETE FROM member WHERE id=?", id);
 	}
@@ -179,7 +181,7 @@ class ReportIntakeMaintenanceIntegrationTests {
 		verify(parser, times(1)).parse(any(), any());
 		long report = result.body().get("reportId").asLong();
 		assertEquals(now.get().plusSeconds(370).toEpochMilli(), jdbc.queryForObject(
-				"SELECT source_cleanup_after FROM report WHERE id=?", java.sql.Timestamp.class, report)
+				"SELECT cleanup_after FROM report_file WHERE report_id=?", java.sql.Timestamp.class, report)
 				.toInstant()
 				.toEpochMilli());
 		maintenance.deleteSources();
@@ -282,8 +284,9 @@ class ReportIntakeMaintenanceIntegrationTests {
 				.when(sources)
 				.delete(anyString(), anyString());
 		maintenance.deleteSources();
-		assertNull(jdbc.queryForObject("SELECT source_deleted_at FROM report WHERE id=?", java.sql.Timestamp.class,
-				report));
+		assertNull(
+				jdbc.queryForObject("SELECT s3_deleted_at FROM report_file WHERE report_id=?", java.sql.Timestamp.class,
+						report));
 		advance(86_400);
 		assertEquals(0, commands.purgeExpiredRequests(now.get()));
 		maintenance.deleteSources();
@@ -302,25 +305,73 @@ class ReportIntakeMaintenanceIntegrationTests {
 				.when(sourceCommands)
 				.markDeleted(any());
 		maintenance.deleteSources();
-		assertNull(jdbc.queryForObject("SELECT source_deleted_at FROM report WHERE id=?", java.sql.Timestamp.class,
-				report));
+		assertNull(
+				jdbc.queryForObject("SELECT s3_deleted_at FROM report_file WHERE report_id=?", java.sql.Timestamp.class,
+						report));
 		maintenance.deleteSources();
-		assertNotNull(jdbc.queryForObject("SELECT source_deleted_at FROM report WHERE id=?", java.sql.Timestamp.class,
-				report));
+		assertNotNull(
+				jdbc.queryForObject("SELECT s3_deleted_at FROM report_file WHERE report_id=?", java.sql.Timestamp.class,
+						report));
 		verify(sources, times(2)).delete(anyString(), eq("version-1"));
 	}
 
-	/** 보관 만료된 원본만 삭제하고 파싱한 본문과 접수 상태는 보존하는지 검증한다. */
+	/** 접수를 취소하지 않으면 30일 후에도 원본과 본문을 보존하는지 검증한다. */
 	@Test
-	void deletesExpiredOriginalWithoutDeletingTheParsedBody() {
+	void keepsOriginalAndParsedBodyAfterThirtyDays() {
 		long report = upload().body().get("reportId").asLong();
 		advance(30 * 86_400L);
 		maintenance.deleteSources();
-		assertNotNull(jdbc.queryForObject("SELECT source_deleted_at FROM report WHERE id=?", java.sql.Timestamp.class,
-				report));
+		assertNull(
+				jdbc.queryForObject("SELECT s3_deleted_at FROM report_file WHERE report_id=?", java.sql.Timestamp.class,
+						report));
+		verify(sources, never()).delete(anyString(), anyString());
 		assertNull(jdbc.queryForObject("SELECT intake_cancelled_at FROM report WHERE id=?", java.sql.Timestamp.class,
 				report));
 		assertEquals(1, contentCount(report));
+	}
+
+	@ParameterizedTest
+	@ValueSource(booleans = {false, true})
+	void finalFailureDeletesOnlyFilesAlreadyStored(boolean converted) {
+		String originalKey = "reports/original.hwpx";
+		String convertedKey = "reports/converted.pdf";
+		var request = commands.reserve(member.getId(), UUID.randomUUID(), IntakeFixtures.HASH, originalKey);
+		var source = new UploadedReportFile(FileFormat.HWPX, originalKey, "original.hwpx", 100L, IntakeFixtures.HASH,
+				"version-1", now.get());
+		commands.recordSource(request.requestId(), source);
+		commands.attachReport(request.requestId(), ReportType.PLAN, source);
+		long report = requestValue(request.requestId(), "report_id", Long.class);
+		assertEquals(ReportErrorCode.INVALID_INTAKE_STATE,
+				assertThrows(ReportException.class, () -> commands.startParsing(request.requestId()))
+						.getBaseErrorCode());
+		if (converted) {
+			jdbc.update(
+					"""
+							INSERT INTO report_file (report_id, file_role, file_format, filename, size_bytes, object_key, version_id)
+							VALUES (?, 'CONVERTED_PDF', 'PDF', 'preview.pdf', 100, ?, 'version-2')
+							""",
+					report, convertedKey);
+			commands.startParsing(request.requestId());
+		}
+
+		var result =
+				commands.fail(request.requestId(), ReportErrorCode.PDF_PARSER_FAILED, "PARSER_FAILED", Duration.ZERO);
+		assertEquals(report, result.body().get("reportId").asLong());
+		assertEquals(converted, result.body().has("parseAttemptId"));
+		assertNotNull(
+				jdbc.queryForObject("SELECT deleted_at FROM report WHERE id=?", java.sql.Timestamp.class, report));
+		int storedFiles = converted ? 2 : 1;
+		assertEquals(storedFiles, jdbc.queryForObject(
+				"SELECT count(*) FROM report_file WHERE report_id=? AND deleted_at IS NOT NULL AND s3_deleted_at IS NULL",
+				Integer.class, report));
+		assertEquals(0, contentCount(report));
+
+		maintenance.deleteSources();
+		verify(sources).delete(originalKey, "version-1");
+		verify(sources, times(converted ? 1 : 0)).delete(convertedKey, "version-2");
+		assertEquals(storedFiles, jdbc.queryForObject(
+				"SELECT count(*) FROM report_file WHERE report_id=? AND s3_deleted_at IS NOT NULL", Integer.class,
+				report));
 	}
 
 	/** 버전 조회 실패는 미완료로 남기고 다른 원본의 정리는 계속 진행하는지 검증한다. */
@@ -342,18 +393,17 @@ class ReportIntakeMaintenanceIntegrationTests {
 		verify(sources).delete("reports/first.pdf", "null");
 	}
 
-	/** 재시도 대기 중 시도가 실패 상태여도 접수 취소와 원본 삭제를 막는지 검증한다. */
+	/** 재시도 대기 중 시도가 실패 상태여도 접수 취소와 파일 삭제를 막는지 검증한다. */
 	@Test
-	void failedAttemptWaitingForRetryCannotBeCancelledOrCollectedAsAnExpiredSource() {
+	void failedAttemptWaitingForRetryCannotBeCancelledOrCollected() {
 		String key = "reports/retry-wait.pdf";
 		var request = commands.reserve(member.getId(), UUID.randomUUID(), IntakeFixtures.HASH, key);
 		var source = new UploadedReportFile(FileFormat.PDF, key, "report.pdf", 100L, IntakeFixtures.HASH, "version-1",
 				now.get());
 		commands.recordSource(request.requestId(), source);
-		var work = commands.startParsing(request.requestId(), ReportType.PLAN, source);
+		commands.attachReport(request.requestId(), ReportType.PLAN, source);
+		var work = commands.startParsing(request.requestId());
 		commands.recordRetryableFailure(work, PdfParseErrorCode.CAPACITY_EXCEEDED.name());
-		jdbc.update("UPDATE report SET source_expires_at=? WHERE id=?",
-				java.sql.Timestamp.from(now.get().minusSeconds(1)), work.reportId());
 		var error = assertThrows(ReportException.class, () -> sourceCommands.request(member.getId(), work.reportId()));
 		assertEquals(ReportErrorCode.SOURCE_IN_USE, error.getBaseErrorCode());
 		maintenance.deleteSources();

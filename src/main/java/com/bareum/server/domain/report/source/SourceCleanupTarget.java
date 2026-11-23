@@ -1,6 +1,6 @@
 package com.bareum.server.domain.report.source;
 
-/** 트랜잭션 밖에서 삭제할 원본의 소유 기록과 객체 키, 버전 정보를 전달한다. */
+/** 트랜잭션 밖에서 정리할 파일 또는 고아 원본 접수의 ID와 S3 객체 정보를 전달한다. */
 public record SourceCleanupTarget(
 	long id,
 	boolean orphan,

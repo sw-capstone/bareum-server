@@ -6,7 +6,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -112,8 +111,7 @@ class ReportUploadContractTests {
 	}
 
 	private static ReportUploadResponse response(ExtractionQuality quality, List<Warning> warnings) {
-		return new ReportUploadResponse(101L, 301L, 201L, ParseStatus.SUCCEEDED, quality, warnings,
-				Instant.parse("2026-12-04T03:00:00Z"));
+		return new ReportUploadResponse(101L, 301L, 201L, ParseStatus.SUCCEEDED, quality, warnings);
 	}
 
 	/** 요청 바인딩과 응답 계약을 검증할 테스트 컨트롤러다. */
