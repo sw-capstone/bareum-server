@@ -47,6 +47,7 @@ import com.bareum.server.domain.report.exception.ReportException;
 import com.bareum.server.domain.report.repository.ReportContentRepository;
 import com.bareum.server.domain.report.service.ReportUploadService;
 import com.bareum.server.domain.report.source.ReportSourceStore;
+import com.bareum.server.domain.report.source.ReportSourceStore.DownloadSource;
 import com.bareum.server.domain.report.source.UploadedReportFile;
 
 import tools.jackson.databind.JsonNode;
@@ -192,6 +193,88 @@ class ReportUploadIntegrationTests {
 	}
 
 	@Test
+	void returnsFreshPreviewUrlsToTheOwnerBeforeAnalysis() throws Exception {
+		HttpResponse<String> uploaded = upload(UUID.randomUUID(), "PLAN", "report.pdf", PDF, 1, token);
+		assertEquals(201, uploaded.statusCode(), uploaded.body());
+		long reportId = json(uploaded).get("reportId").asLong();
+		String originalKey = jdbc.queryForObject("SELECT object_key FROM report_file WHERE report_id=?",
+				String.class, reportId);
+		Instant expiresAt = Instant.now().plusSeconds(600);
+		URI firstUrl = URI.create("https://files.example.invalid/preview.pdf?signature=first");
+		URI secondUrl = URI.create("https://files.example.invalid/preview.pdf?signature=second");
+		when(sources.presignPreview(originalKey, "version-fixture"))
+				.thenReturn(new DownloadSource(firstUrl, expiresAt),
+						new DownloadSource(secondUrl, expiresAt.plusSeconds(1)));
+
+		HttpResponse<String> first = preview(reportId, token);
+		assertEquals(200, first.statusCode(), first.body());
+		assertEquals("no-store", first.headers().firstValue("Cache-Control").orElseThrow());
+		JsonNode result = json(first);
+		assertEquals(reportId, result.get("reportId").asLong());
+		assertEquals(firstUrl.toString(), result.get("pdfUrl").asString());
+		assertEquals(expiresAt, Instant.parse(result.get("expiresAt").asString()));
+		assertEquals(secondUrl.toString(), json(preview(reportId, token)).get("pdfUrl").asString());
+		assertEquals(1, API.calls.get());
+		verify(sources, times(2)).presignPreview(originalKey, "version-fixture");
+	}
+
+	@Test
+	void blocksUnauthenticatedAndOtherMembersWithoutSigning() throws Exception {
+		Long reportId =
+				jdbc.queryForObject("INSERT INTO report(member_id, report_type) VALUES (?, 'PLAN') RETURNING id",
+						Long.class, member.getId());
+		Member other = members.saveAndFlush(
+				Member.createLocal("preview-" + UUID.randomUUID() + "@example.invalid", "tester", "test-hash"));
+		try {
+			String otherToken =
+					sessions.issue(new ValidatedMember(other.getId(), other.getPasswordHash())).accessToken();
+			assertEquals(401, preview(reportId, null).statusCode());
+			HttpResponse<String> denied = preview(reportId, otherToken);
+			assertEquals(404, denied.statusCode(), denied.body());
+			assertEquals("REPORT-0038", json(denied).get("code").asString());
+			HttpResponse<String> notReady = preview(reportId, token);
+			assertEquals(409, notReady.statusCode(), notReady.body());
+			assertEquals("REPORT-0058", json(notReady).get("code").asString());
+			assertEquals(400, preview(0, token).statusCode());
+			verifyNoInteractions(sources);
+		} finally {
+			jdbc.update("DELETE FROM refresh_token WHERE member_id=?", other.getId());
+			jdbc.update("DELETE FROM member WHERE id=?", other.getId());
+		}
+	}
+
+	@Test
+	void choosesTheLiveConvertedPdfForAnOfficeDocument() throws Exception {
+		HttpResponse<String> uploaded = upload(UUID.randomUUID(), "PLAN", "report.pdf", PDF, 1, token);
+		assertEquals(201, uploaded.statusCode(), uploaded.body());
+		long reportId = json(uploaded).get("reportId").asLong();
+		jdbc.update("UPDATE report_file SET file_format='HWPX', filename='report.hwpx' WHERE report_id=?", reportId);
+		HttpResponse<String> missing = preview(reportId, token);
+		assertEquals(404, missing.statusCode(), missing.body());
+		assertEquals("REPORT-0059", json(missing).get("code").asString());
+		verify(sources, never()).presignPreview(anyString(), any());
+
+		String convertedKey = "reports/" + member.getId() + "/" + UUID.randomUUID() + ".pdf";
+		jdbc.update(
+				"""
+						INSERT INTO report_file(report_id, file_role, file_format, filename, size_bytes, sha256, object_key, version_id)
+						VALUES (?, 'CONVERTED_PDF', 'PDF', 'report.pdf', 100, ?, ?, 'converted-version')
+						""",
+				reportId, "a".repeat(64), convertedKey);
+		URI convertedUrl = URI.create("https://files.example.invalid/converted.pdf?signature=fixture");
+		when(sources.presignPreview(convertedKey, "converted-version"))
+				.thenReturn(new DownloadSource(convertedUrl, Instant.now().plusSeconds(600)));
+		HttpResponse<String> converted = preview(reportId, token);
+		assertEquals(200, converted.statusCode(), converted.body());
+		assertEquals(convertedUrl.toString(), json(converted).get("pdfUrl").asString());
+		jdbc.update("UPDATE report_file SET deleted_at=now(), cleanup_after=now() WHERE object_key=?", convertedKey);
+		HttpResponse<String> removed = preview(reportId, token);
+		assertEquals(404, removed.statusCode(), removed.body());
+		assertEquals("REPORT-0059", json(removed).get("code").asString());
+		verify(sources).presignPreview(convertedKey, "converted-version");
+	}
+
+	@Test
 	void acceptsSixtyPagesAndPartialExtractionWithWarnings() throws Exception {
 		API.pageCount = 60;
 		API.quality = "PARTIAL";
@@ -332,6 +415,7 @@ class ReportUploadIntegrationTests {
 		assertEquals("PENDING", json(deleted).get("sourceDeletionStatus").asString());
 		assertEquals(202, send(HttpRequest.newBuilder(uri(path)).DELETE().header("Authorization", "Bearer " + token))
 				.statusCode());
+		assertEquals(404, preview(report, token).statusCode());
 		assertEquals(409, upload(key, "PLAN", "report.pdf", PDF, 1, token).statusCode());
 		assertEquals(1, API.calls.get());
 		assertNotNull(jdbc.queryForObject("SELECT intake_cancelled_at FROM report WHERE id=?", java.sql.Timestamp.class,
@@ -357,6 +441,9 @@ class ReportUploadIntegrationTests {
 		try {
 			assertTrue(API.entered.await(10, TimeUnit.SECONDS));
 			assertEquals(409, upload(key, "PLAN", "report.pdf", PDF, 1, token).statusCode());
+			HttpResponse<String> notReady = preview(API.received.get("reportId").asLong(), token);
+			assertEquals(409, notReady.statusCode(), notReady.body());
+			assertEquals("REPORT-0058", json(notReady).get("code").asString());
 			var deletion = send(
 					HttpRequest.newBuilder(uri("/api/v1/reports/" + API.received.get("reportId").asLong() + "/source"))
 							.DELETE()
@@ -488,6 +575,14 @@ class ReportUploadIntegrationTests {
 
 	private HttpResponse<String> send(HttpRequest.Builder request) throws Exception {
 		return client.send(request.build(), HttpResponse.BodyHandlers.ofString());
+	}
+
+	private HttpResponse<String> preview(long reportId, String access) throws Exception {
+		HttpRequest.Builder request = HttpRequest.newBuilder(uri("/api/v1/reports/" + reportId + "/preview")).GET();
+		if (access != null) {
+			request.header("Authorization", "Bearer " + access);
+		}
+		return send(request);
 	}
 
 	private URI uri(String path) {

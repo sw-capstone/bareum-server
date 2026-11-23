@@ -14,6 +14,8 @@ public interface ReportSourceStore {
 
 	DownloadSource presign(UploadedReportFile source);
 
+	DownloadSource presignPreview(String objectKey, String versionId);
+
 	List<String> findVersions(String objectKey);
 
 	void delete(String objectKey, String versionId);

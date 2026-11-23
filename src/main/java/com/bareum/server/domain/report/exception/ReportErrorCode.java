@@ -83,7 +83,10 @@ public enum ReportErrorCode implements BaseErrorCode {
 	PDF_PARSER_UNAVAILABLE(HttpStatus.BAD_GATEWAY, "REPORT-0054", "PDF 파싱 서버가 요청을 처리할 수 없습니다."),
 	INTAKE_PERSISTENCE_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "REPORT-0055", "접수 결과를 저장할 수 없습니다."),
 	PDF_SOURCE_UNAVAILABLE(HttpStatus.BAD_GATEWAY, "REPORT-0056", "PDF 파싱 서버가 원본을 가져올 수 없습니다."),
-	INTAKE_PROCESSING_TIMEOUT(HttpStatus.GATEWAY_TIMEOUT, "REPORT-0057", "보고서 접수 처리 기한을 초과했습니다.");
+	INTAKE_PROCESSING_TIMEOUT(HttpStatus.GATEWAY_TIMEOUT, "REPORT-0057", "보고서 접수 처리 기한을 초과했습니다."),
+	PREVIEW_NOT_READY(HttpStatus.CONFLICT, "REPORT-0058", "보고서 PDF가 아직 준비되지 않았습니다."),
+	PREVIEW_PDF_NOT_FOUND(HttpStatus.NOT_FOUND, "REPORT-0059", "보고서 PDF 파일을 찾을 수 없습니다."),
+	PREVIEW_URL_FAILED(HttpStatus.BAD_GATEWAY, "REPORT-0060", "보고서 PDF 접근 URL을 발급할 수 없습니다.");
 
 	private final HttpStatus httpStatus;
 	private final String code;

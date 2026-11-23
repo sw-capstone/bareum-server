@@ -1,9 +1,9 @@
 {
   "openapi": "3.1.1",
   "info": {
-    "title": "보고서 접수 및 원본 삭제 계약",
+    "title": "보고서 접수 및 파일 관리 계약",
     "version": "1.0.0",
-    "description": "#53의 공개 계약. 동기 접수와 삭제 요청 등록을 제공한다. 실제 원본 삭제 작업은 수명 관리 단계에서 연결한다."
+    "description": "보고서 동기 접수, 분석 화면용 PDF 조회와 원본 삭제 요청을 제공한다."
   },
   "servers": [
     {
@@ -181,6 +181,76 @@
                   "$ref": "./failure.schema.json"
                 }
               }
+            }
+          }
+        }
+      }
+    },
+    "/reports/{reportId}/preview": {
+      "get": {
+        "operationId": "getReportPreview",
+        "summary": "분석 화면용 PDF 조회",
+        "description": "REPORT-012. 접수를 완료한 본인 보고서의 PDF 접근 URL과 만료 시각을 반환한다. 원본이 PDF이면 원본을, 그 외에는 준비된 변환 PDF를 사용한다. 만료 시 다시 조회한다. 기본 유효기간은 600초이며 서버 설정으로 변경할 수 있다.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "reportId",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9223372036854775807
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "PDF 접근 URL과 만료 시각",
+            "headers": {
+              "Cache-Control": {
+                "schema": {"type": "string", "const": "no-store"}
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "./preview.schema.json"}
+              }
+            }
+          },
+          "400": {
+            "description": "보고서 식별자 오류",
+            "content": {
+              "application/problem+json": {"schema": {"$ref": "./failure.schema.json"}}
+            }
+          },
+          "401": {
+            "description": "인증 실패",
+            "content": {
+              "application/problem+json": {"schema": {"$ref": "./failure.schema.json"}}
+            }
+          },
+          "404": {
+            "description": "보고서 접근 불가(REPORT-0038) 또는 PDF 없음(REPORT-0059)",
+            "content": {
+              "application/problem+json": {"schema": {"$ref": "./failure.schema.json"}}
+            }
+          },
+          "409": {
+            "description": "PDF 준비 미완료 또는 실패(REPORT-0058)",
+            "content": {
+              "application/problem+json": {"schema": {"$ref": "./failure.schema.json"}}
+            }
+          },
+          "502": {
+            "description": "PDF 저장소 조회 또는 접근 URL 발급 실패(REPORT-0060)",
+            "content": {
+              "application/problem+json": {"schema": {"$ref": "./failure.schema.json"}}
+            }
+          },
+          "503": {
+            "description": "보고서 저장소 설정 미완료(REPORT-0047)",
+            "content": {
+              "application/problem+json": {"schema": {"$ref": "./failure.schema.json"}}
             }
           }
         }

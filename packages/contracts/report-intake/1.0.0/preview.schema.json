@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/sw-capstone/bareum-server/raw/develop/packages/contracts/report-intake/1.0.0/preview.schema.json",
+  "title": "ReportPreviewResponse",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["reportId", "pdfUrl", "expiresAt"],
+  "properties": {
+    "reportId": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9223372036854775807
+    },
+    "pdfUrl": {
+      "type": "string",
+      "format": "uri",
+      "description": "뷰어가 직접 사용하는 임시 PDF 접근 URL"
+    },
+    "expiresAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "URL 만료 시각"
+    }
+  }
+}

@@ -1,6 +1,7 @@
 package com.bareum.server.domain.report.source;
 
 import java.io.IOException;
+import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Duration;
@@ -23,10 +24,13 @@ import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
+import software.amazon.awssdk.services.s3.model.GetObjectRequest;
+import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
 import software.amazon.awssdk.services.s3.model.ListObjectVersionsRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.model.S3Exception;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
+import software.amazon.awssdk.services.s3.presigner.model.PresignedGetObjectRequest;
 
 /** S3에 원본과 메타데이터를 저장하고 해당 버전의 다운로드 URL을 발급한다. */
 @RequiredArgsConstructor
@@ -67,16 +71,46 @@ public final class S3ReportSourceStore implements ReportSourceStore {
 	public DownloadSource presign(UploadedReportFile source) {
 		properties.requireConfigured();
 		try {
-			var signed = presigners.get()
-					.presignGetObject(request -> request
-							.signatureDuration(Duration.ofSeconds(properties.signedUrlSeconds()))
-							.getObjectRequest(get -> get.bucket(properties.bucket())
-									.key(source.objectKey())
-									.versionId(source.versionId())));
-			return new DownloadSource(signed.url().toURI(), signed.expiration());
-		} catch (SdkException | java.net.URISyntaxException exception) {
+			return presignGet(GetObjectRequest.builder()
+					.bucket(properties.bucket())
+					.key(source.objectKey())
+					.versionId(source.versionId())
+					.build());
+		} catch (SdkException | URISyntaxException exception) {
 			throw new ReportException(ReportErrorCode.SOURCE_STORAGE_FAILED);
 		}
+	}
+
+	@Override
+	public DownloadSource presignPreview(String objectKey, String versionId) {
+		properties.requireStorageConfigured();
+		try {
+			clients.get()
+					.headObject(HeadObjectRequest.builder()
+							.bucket(properties.bucket())
+							.key(objectKey)
+							.versionId(versionId)
+							.build());
+			return presignGet(GetObjectRequest.builder()
+					.bucket(properties.bucket())
+					.key(objectKey)
+					.versionId(versionId)
+					.responseCacheControl("private, no-store")
+					.build());
+		} catch (S3Exception exception) {
+			throw new ReportException(exception.statusCode() == 404 ? ReportErrorCode.PREVIEW_PDF_NOT_FOUND
+					: ReportErrorCode.PREVIEW_URL_FAILED);
+		} catch (SdkException | URISyntaxException exception) {
+			throw new ReportException(ReportErrorCode.PREVIEW_URL_FAILED);
+		}
+	}
+
+	private DownloadSource presignGet(GetObjectRequest object) throws URISyntaxException {
+		PresignedGetObjectRequest signed = presigners.get()
+				.presignGetObject(request -> request
+						.signatureDuration(Duration.ofSeconds(properties.signedUrlSeconds()))
+						.getObjectRequest(object));
+		return new DownloadSource(signed.url().toURI(), signed.expiration());
 	}
 
 	/** S3 목록의 모든 페이지에서 객체 키가 정확히 일치하는 원본 버전과 삭제 마커를 찾는다. */

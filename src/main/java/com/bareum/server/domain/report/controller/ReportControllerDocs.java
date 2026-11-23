@@ -6,6 +6,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -13,6 +14,7 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 
 import com.bareum.server.domain.report.dto.request.ReportUploadRequest;
+import com.bareum.server.domain.report.dto.response.ReportPreviewResponse;
 import com.bareum.server.domain.report.dto.response.ReportUploadResponse;
 import com.bareum.server.domain.report.dto.response.SourceDeletionResponse;
 import com.bareum.server.global.security.LoginPrincipal;
@@ -26,9 +28,10 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Positive;
 
-/** 보고서 접수와 원본 삭제 API의 요청 형식과 응답 계약을 정의한다. */
-@Tag(name = "Report", description = "보고서 접수와 원본 관리")
+/** 보고서 접수, PDF 조회와 원본 삭제의 요청과 응답을 정의한다. */
+@Tag(name = "Report", description = "보고서 접수 및 파일 관리")
 @SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/api/v1/reports")
 public interface ReportControllerDocs {
@@ -58,6 +61,26 @@ public interface ReportControllerDocs {
 	ResponseEntity<?> upload(
 		@Valid @ModelAttribute ReportUploadRequest request,
 		@RequestHeader("Idempotency-Key") UUID requestKey,
+		@Parameter(hidden = true) @AuthenticationPrincipal LoginPrincipal principal
+	);
+
+	@Operation(summary = "분석 화면용 PDF 조회",
+		description = "REPORT-012. 접수가 완료된 본인 보고서의 PDF 접근 URL과 만료 시각을 반환합니다. "
+				+ "업로드 원본이 PDF이면 원본을, 그 외에는 준비된 변환 PDF를 사용합니다. 만료 시 다시 조회할 수 있습니다.")
+	@GetMapping(value = "/{reportId}/preview", produces = MediaType.APPLICATION_JSON_VALUE)
+	@ApiResponses({
+		@ApiResponse(responseCode = "200",
+			description = "PDF 접근 URL과 만료 시각",
+			content = @Content(schema = @Schema(implementation = ReportPreviewResponse.class))),
+		@ApiResponse(responseCode = "400", description = "보고서 식별자 오류"),
+		@ApiResponse(responseCode = "401", description = "인증 실패"),
+		@ApiResponse(responseCode = "404", description = "보고서 접근 불가 또는 PDF 없음"),
+		@ApiResponse(responseCode = "409", description = "PDF 준비 미완료 또는 실패"),
+		@ApiResponse(responseCode = "502", description = "PDF 저장소 조회 또는 접근 URL 발급 실패"),
+		@ApiResponse(responseCode = "503", description = "보고서 저장소 설정 미완료")
+	})
+	ResponseEntity<ReportPreviewResponse> preview(
+		@PathVariable @Positive Long reportId,
 		@Parameter(hidden = true) @AuthenticationPrincipal LoginPrincipal principal
 	);
 

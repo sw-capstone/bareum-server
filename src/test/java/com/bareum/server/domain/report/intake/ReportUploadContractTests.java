@@ -4,14 +4,17 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
+import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.annotation.Profile;
+import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.web.method.annotation.AuthenticationPrincipalArgumentResolver;
@@ -23,6 +26,7 @@ import com.bareum.server.domain.report.body.ReportBody.Target;
 import com.bareum.server.domain.report.body.ReportBody.Warning;
 import com.bareum.server.domain.report.controller.ReportControllerDocs;
 import com.bareum.server.domain.report.dto.request.ReportUploadRequest;
+import com.bareum.server.domain.report.dto.response.ReportPreviewResponse;
 import com.bareum.server.domain.report.dto.response.ReportUploadResponse;
 import com.bareum.server.domain.report.dto.response.SourceDeletionResponse;
 import com.bareum.server.domain.report.enums.ExtractionQuality;
@@ -92,13 +96,22 @@ class ReportUploadContractTests {
 	}
 
 	@Test
+	void previewContractReturnsThePublicExampleWithoutCaching() throws Exception {
+		mvc.perform(get("/api/v1/reports/101/preview"))
+				.andExpect(status().isOk())
+				.andExpect(header().string("Cache-Control", "no-store"))
+				.andExpect(content().json(example("preview").toString()));
+	}
+
+	@Test
 	void openApiPublishesTheAgreedLimitsAndNoPublicParsingRetryEndpoint() throws Exception {
 		JsonNode api = mapper.readTree(Files.readString(CONTRACT.resolve("openapi.json")));
-		assertEquals(2, api.get("paths").size());
+		assertEquals(3, api.get("paths").size());
 		assertEquals(20_000_000, api.get("x-server-policy").get("maxFileSizeBytes").asLong());
 		assertEquals(ReportIntakePolicy.MAX_PAGE_COUNT, api.get("x-server-policy").get("maxPageCount").asInt());
 		assertEquals(1, api.get("x-server-policy").get("maxAdditionalParseAttempts").asInt());
 		assertTrue(api.get("paths").get("/reports").get("post").get("responses").has("201"));
+		assertTrue(api.get("paths").get("/reports/{reportId}/preview").get("get").get("responses").has("200"));
 		assertTrue(api.get("paths").get("/reports/{reportId}/source").get("delete").get("responses").has("204"));
 	}
 
@@ -118,6 +131,15 @@ class ReportUploadContractTests {
 	@RestController
 	@Profile("report-intake-contract-fixture")
 	static class ContractController implements ReportControllerDocs {
+		@Override
+		public ResponseEntity<ReportPreviewResponse> preview(Long reportId, LoginPrincipal principal) {
+			return ResponseEntity.ok()
+					.cacheControl(CacheControl.noStore())
+					.body(new ReportPreviewResponse(reportId,
+							URI.create("https://files.example.invalid/reports/7/report.pdf?signature=example"),
+							Instant.parse("2026-11-24T03:10:00Z")));
+		}
+
 		@Override
 		public ResponseEntity<ReportUploadResponse> upload(
 			ReportUploadRequest request,

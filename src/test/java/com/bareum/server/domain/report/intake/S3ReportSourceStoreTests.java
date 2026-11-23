@@ -1,6 +1,7 @@
 package com.bareum.server.domain.report.intake;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
 
 import java.net.InetSocketAddress;
 import java.net.URI;
@@ -12,11 +13,14 @@ import java.util.HexFormat;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.mock.web.MockMultipartFile;
 
 import com.bareum.server.domain.report.config.ReportUploadProperties;
 import com.bareum.server.domain.report.exception.ReportErrorCode;
 import com.bareum.server.domain.report.exception.ReportException;
+import com.bareum.server.domain.report.source.ReportSourceStore.DownloadSource;
 import com.bareum.server.domain.report.source.S3ReportSourceStore;
 import com.sun.net.httpserver.HttpServer;
 
@@ -26,6 +30,8 @@ import software.amazon.awssdk.http.urlconnection.UrlConnectionHttpClient;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.retries.StandardRetryStrategy;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
+import software.amazon.awssdk.services.s3.model.S3Exception;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
 /** S3 SDK의 원본 전송, 메타데이터 저장과 버전별 서명 URL 발급을 검증한다. */
@@ -83,6 +89,54 @@ class S3ReportSourceStoreTests {
 		} finally {
 			server.stop(0);
 		}
+	}
+
+	@Test
+	void previewChecksTheExactObjectVersionAndSignsItWithoutParserConfiguration() {
+		S3Client client = mock(S3Client.class);
+		StaticCredentialsProvider credentials = StaticCredentialsProvider
+				.create(AwsBasicCredentials.create("fixture-access", "fixture-secret"));
+		try (S3Presigner presigner = S3Presigner.builder()
+				.region(Region.AP_NORTHEAST_2)
+				.credentialsProvider(credentials)
+				.build()) {
+			ReportUploadProperties storageProperties = new ReportUploadProperties("fixture-bucket", "ap-northeast-2",
+					"reports/", null, null, 600, 310, 30, 300);
+			S3ReportSourceStore store = new S3ReportSourceStore(() -> client, () -> presigner,
+					storageProperties, Clock.systemUTC());
+			String key = "reports/42/report.pdf";
+			DownloadSource preview = store.presignPreview(key, "preview-version");
+			verify(client).headObject(HeadObjectRequest.builder()
+					.bucket("fixture-bucket")
+					.key(key)
+					.versionId("preview-version")
+					.build());
+			assertEquals("/" + key, preview.url().getPath());
+			assertTrue(preview.url().getQuery().contains("versionId=preview-version"));
+			assertTrue(preview.url().getQuery().contains("X-Amz-Expires=600"));
+			assertTrue(preview.url().getQuery().contains("response-cache-control=private, no-store"));
+		}
+	}
+
+	@ParameterizedTest
+	@CsvSource({"404,PREVIEW_PDF_NOT_FOUND", "403,PREVIEW_URL_FAILED"})
+	void previewDoesNotSignAnUnavailableObject(int status, ReportErrorCode expected) {
+		String key = "reports/42/report.pdf";
+		S3Client client = mock(S3Client.class);
+		S3Presigner presigner = mock(S3Presigner.class);
+		when(client.headObject(HeadObjectRequest.builder()
+				.bucket("fixture-bucket")
+				.key(key)
+				.versionId("preview-version")
+				.build()))
+				.thenThrow(S3Exception.builder().statusCode(status).message("private-diagnostic").build());
+		S3ReportSourceStore store = new S3ReportSourceStore(() -> client, () -> presigner, properties(),
+				Clock.systemUTC());
+		ReportException failure = assertThrows(ReportException.class,
+				() -> store.presignPreview(key, "preview-version"));
+		assertEquals(expected, failure.getBaseErrorCode());
+		assertFalse(failure.getMessage().contains("private-diagnostic"));
+		verifyNoInteractions(presigner);
 	}
 
 	@Test
