@@ -58,6 +58,9 @@ public class ReportAnalysis extends BaseTimeEntity {
 	@Column(name = "finished_at", nullable = true)
 	private Instant finishedAt;
 
+	@Column(name = "deleted_at")
+	private Instant deletedAt;
+
 	@Column(name = "failure_code", nullable = true, length = 30)
 	private String failureCode;
 
@@ -155,6 +158,16 @@ public class ReportAnalysis extends BaseTimeEntity {
 		this.finishedAt = finishedAt;
 		totalScore = null;
 		status = AnalysisStatus.CANCELLED;
+	}
+
+	public void softDelete(Instant deletedAt) {
+		if (status == AnalysisStatus.PENDING || status == AnalysisStatus.PROCESSING) {
+			throw new AnalysisException(AnalysisErrorCode.ANALYSIS_IN_PROGRESS);
+		}
+		Objects.requireNonNull(deletedAt, "deletedAt");
+		if (this.deletedAt == null) {
+			this.deletedAt = deletedAt;
+		}
 	}
 
 	private void requireProcessing() {

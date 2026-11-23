@@ -23,7 +23,9 @@ public enum AnalysisErrorCode implements BaseErrorCode {
 	INVALID_RESULT_DETAIL(HttpStatus.INTERNAL_SERVER_ERROR, "ANALYSIS-0010", "분석 상세 결과가 올바르지 않습니다."),
 	SCORE_NOT_RECORDED(HttpStatus.CONFLICT, "ANALYSIS-0011", "점수 산정이 완료된 분석만 결과 리포트를 생성할 수 있습니다."),
 	INVALID_REPORT_GENERATION_TRANSITION(HttpStatus.CONFLICT, "ANALYSIS-0012", "결과 리포트 생성 단계의 상태 전이가 올바르지 않습니다."),
-	STALE_REPORT_GENERATION_ATTEMPT(HttpStatus.CONFLICT, "ANALYSIS-0013", "현재 결과 리포트 생성 시도만 처리할 수 있습니다.");
+	STALE_REPORT_GENERATION_ATTEMPT(HttpStatus.CONFLICT, "ANALYSIS-0013", "현재 결과 리포트 생성 시도만 처리할 수 있습니다."),
+	ANALYSIS_NOT_FOUND(HttpStatus.NOT_FOUND, "ANALYSIS-0014", "분석 기록을 찾을 수 없습니다."),
+	ANALYSIS_IN_PROGRESS(HttpStatus.CONFLICT, "ANALYSIS-0015", "진행 중인 분석 기록은 삭제할 수 없습니다.");
 
 	private final HttpStatus httpStatus;
 	private final String code;

@@ -2,8 +2,6 @@ package com.bareum.server.domain.analysis.entity;
 
 import java.time.Instant;
 
-import org.hibernate.annotations.SQLRestriction;
-
 import com.bareum.server.global.entity.BaseTimeEntity;
 
 import jakarta.persistence.Column;
@@ -23,7 +21,6 @@ import lombok.NoArgsConstructor;
 @Table(name = "analysis_result_report")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-@SQLRestriction("deleted_at IS NULL")
 public class AnalysisResultReport extends BaseTimeEntity {
 
 	@Id
@@ -40,9 +37,6 @@ public class AnalysisResultReport extends BaseTimeEntity {
 
 	@Column(name = "generated_at", nullable = false)
 	private Instant generatedAt;
-
-	@Column(name = "deleted_at")
-	private Instant deletedAt;
 
 	private AnalysisResultReport(ReportAnalysis reportAnalysis, String summary, Instant generatedAt) {
 		this.reportAnalysis = reportAnalysis;
