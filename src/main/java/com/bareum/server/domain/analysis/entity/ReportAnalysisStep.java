@@ -3,6 +3,8 @@ package com.bareum.server.domain.analysis.entity;
 import java.time.Instant;
 import java.util.Objects;
 
+import org.hibernate.annotations.ColumnDefault;
+
 import com.bareum.server.domain.analysis.enums.AnalysisStepCode;
 import com.bareum.server.domain.analysis.enums.AnalysisStepStatus;
 import com.bareum.server.domain.analysis.exception.AnalysisErrorCode;
@@ -59,6 +61,10 @@ public class ReportAnalysisStep extends BaseTimeEntity {
 	@Column(name = "failure_reason", nullable = true, columnDefinition = "text")
 	private String failureReason;
 
+	@Column(name = "retry_count", nullable = false)
+	@ColumnDefault("0")
+	private int retryCount;
+
 	@ManyToOne(fetch = FetchType.LAZY, optional = false)
 	@JoinColumn(name = "report_analysis_id", nullable = false)
 	private ReportAnalysis reportAnalysis;
@@ -79,11 +85,15 @@ public class ReportAnalysisStep extends BaseTimeEntity {
 		if (status != AnalysisStepStatus.PENDING) {
 			throw new AnalysisException(AnalysisErrorCode.STEP_NOT_PENDING);
 		}
+		if (stepCode == AnalysisStepCode.REPORT_GENERATION) {
+			reportAnalysis.requireScoreForReportGeneration();
+		}
 		this.startedAt = Objects.requireNonNull(startedAt, "startedAt");
 		status = AnalysisStepStatus.PROCESSING;
 	}
 
 	public void succeed(Instant finishedAt) {
+		requireNonReportGenerationStep();
 		if (status != AnalysisStepStatus.PROCESSING) {
 			throw new AnalysisException(AnalysisErrorCode.STEP_NOT_PROCESSING);
 		}
@@ -91,10 +101,38 @@ public class ReportAnalysisStep extends BaseTimeEntity {
 	}
 
 	public void fail(String failureCode, String failureReason, Instant finishedAt) {
+		requireNonReportGenerationStep();
 		if (status != AnalysisStepStatus.PROCESSING) {
 			throw new AnalysisException(AnalysisErrorCode.STEP_NOT_PROCESSING);
 		}
 		finish(AnalysisStepStatus.FAILED, finishedAt);
+		this.failureCode = failureCode;
+		this.failureReason = failureReason;
+	}
+
+	/** 첫 리포트 생성 시도가 일시 오류로 끝났을 때 같은 단계에서 재시도한다. */
+	public void retryReportGeneration(Instant startedAt) {
+		requireReportGenerationAttempt(0, startedAt);
+		retryCount++;
+		this.startedAt = startedAt;
+	}
+
+	/** 결과 리포트를 저장한 트랜잭션에서 호출해 단계와 전체 상태를 함께 완료한다. */
+	public void completeReportGeneration(int expectedRetryCount, Instant finishedAt) {
+		requireReportGenerationAttempt(expectedRetryCount, finishedAt);
+		reportAnalysis.succeedAfterReportSaved(finishedAt);
+		markFinished(AnalysisStepStatus.SUCCEEDED, finishedAt);
+	}
+
+	public void failReportGeneration(
+		int expectedRetryCount,
+		String failureCode,
+		String failureReason,
+		Instant finishedAt
+	) {
+		requireReportGenerationAttempt(expectedRetryCount, finishedAt);
+		reportAnalysis.finishReportGenerationFailed(failureCode, failureReason, finishedAt);
+		markFinished(AnalysisStepStatus.FAILED, finishedAt);
 		this.failureCode = failureCode;
 		this.failureReason = failureReason;
 	}
@@ -114,11 +152,39 @@ public class ReportAnalysisStep extends BaseTimeEntity {
 	}
 
 	private void finish(AnalysisStepStatus result, Instant finishedAt) {
-		Objects.requireNonNull(finishedAt, "finishedAt");
-		if (startedAt != null && finishedAt.isBefore(startedAt)) {
-			throw new AnalysisException(AnalysisErrorCode.INVALID_EXECUTION_TIME);
-		}
+		validateExecutionTime(finishedAt);
+		markFinished(result, finishedAt);
+	}
+
+	private void markFinished(AnalysisStepStatus result, Instant finishedAt) {
 		this.finishedAt = finishedAt;
 		status = result;
+	}
+
+	private void validateExecutionTime(Instant time) {
+		Objects.requireNonNull(time, "time");
+		if (startedAt != null && time.isBefore(startedAt)) {
+			throw new AnalysisException(AnalysisErrorCode.INVALID_EXECUTION_TIME);
+		}
+	}
+
+	private void requireNonReportGenerationStep() {
+		if (stepCode == AnalysisStepCode.REPORT_GENERATION) {
+			throw new AnalysisException(AnalysisErrorCode.INVALID_REPORT_GENERATION_TRANSITION);
+		}
+	}
+
+	private void requireReportGenerationAttempt(int expectedRetryCount, Instant time) {
+		if (stepCode != AnalysisStepCode.REPORT_GENERATION) {
+			throw new AnalysisException(AnalysisErrorCode.INVALID_REPORT_GENERATION_TRANSITION);
+		}
+		if (status != AnalysisStepStatus.PROCESSING) {
+			throw new AnalysisException(AnalysisErrorCode.STEP_NOT_PROCESSING);
+		}
+		if (retryCount != expectedRetryCount) {
+			throw new AnalysisException(AnalysisErrorCode.STALE_REPORT_GENERATION_ATTEMPT);
+		}
+		reportAnalysis.requireScoreForReportGeneration();
+		validateExecutionTime(time);
 	}
 }

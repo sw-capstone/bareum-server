@@ -98,16 +98,36 @@ public class ReportAnalysis extends BaseTimeEntity {
 		status = AnalysisStatus.PROCESSING;
 	}
 
-	public void succeed(BigDecimal totalScore, Instant finishedAt) {
+	public void recordScore(BigDecimal totalScore) {
 		requireProcessing();
 		if (totalScore == null || totalScore.signum() < 0 || totalScore.precision() - totalScore.scale() > 3
 				|| totalScore.stripTrailingZeros().scale() > 2) {
 			throw new AnalysisException(AnalysisErrorCode.INVALID_SCORE);
 		}
+		if (this.totalScore == null) {
+			this.totalScore = totalScore;
+		} else if (this.totalScore.compareTo(totalScore) != 0) {
+			throw new AnalysisException(AnalysisErrorCode.INVALID_SCORE);
+		}
+	}
+
+	void requireScoreForReportGeneration() {
+		requireProcessing();
+		if (totalScore == null) {
+			throw new AnalysisException(AnalysisErrorCode.SCORE_NOT_RECORDED);
+		}
+	}
+
+	void succeedAfterReportSaved(Instant finishedAt) {
+		requireScoreForReportGeneration();
 		validateFinishTime(finishedAt);
-		this.totalScore = totalScore;
 		this.finishedAt = finishedAt;
 		status = AnalysisStatus.SUCCEEDED;
+	}
+
+	void finishReportGenerationFailed(String failureCode, String failureReason, Instant finishedAt) {
+		requireScoreForReportGeneration();
+		finishFailure(AnalysisStatus.REPORT_GENERATION_FAILED, failureCode, failureReason, finishedAt);
 	}
 
 	public void fail(String failureCode, String failureReason, Instant finishedAt) {
@@ -133,6 +153,7 @@ public class ReportAnalysis extends BaseTimeEntity {
 		}
 		validateFinishTime(finishedAt);
 		this.finishedAt = finishedAt;
+		totalScore = null;
 		status = AnalysisStatus.CANCELLED;
 	}
 
