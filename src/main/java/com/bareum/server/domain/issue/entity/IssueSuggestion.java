@@ -19,7 +19,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -37,9 +37,9 @@ public class IssueSuggestion extends BaseTimeEntity {
 	@Column(name = "id", nullable = false)
 	private Long id;
 
-	@ManyToOne(fetch = FetchType.LAZY, optional = false)
-	@JoinColumn(name = "issue_id", nullable = false)
-	private Issue issue;
+	@OneToOne(fetch = FetchType.LAZY, optional = false)
+	@JoinColumn(name = "issue_group_id", nullable = false, unique = true)
+	private IssueGroup issueGroup;
 
 	@JdbcTypeCode(SqlTypes.JSON)
 	@Column(name = "changes", nullable = false, columnDefinition = "jsonb")
@@ -49,19 +49,20 @@ public class IssueSuggestion extends BaseTimeEntity {
 	@Column(name = "generation_type", nullable = false, length = 30)
 	private SuggestionGenerationType generationType;
 
-	private IssueSuggestion(Issue issue, JsonNode changes, SuggestionGenerationType generationType) {
-		Objects.requireNonNull(issue, "issue");
+	private IssueSuggestion(IssueGroup issueGroup, JsonNode changes, SuggestionGenerationType generationType) {
+		Objects.requireNonNull(issueGroup, "issueGroup");
 		if (changes == null || !changes.isArray()) {
 			throw new IssueException(IssueErrorCode.INVALID_CHANGES);
 		}
 		Objects.requireNonNull(generationType, "generationType");
-		this.issue = issue;
+		this.issueGroup = issueGroup;
 		this.changes = changes.deepCopy();
 		this.generationType = generationType;
 	}
 
-	public static IssueSuggestion create(Issue issue, JsonNode changes, SuggestionGenerationType generationType) {
-		return new IssueSuggestion(issue, changes, generationType);
+	public static IssueSuggestion
+			create(IssueGroup issueGroup, JsonNode changes, SuggestionGenerationType generationType) {
+		return new IssueSuggestion(issueGroup, changes, generationType);
 	}
 
 	public JsonNode getChanges() {
