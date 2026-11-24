@@ -53,7 +53,7 @@ public interface EmailVerificationControllerDocs {
 			content = @Content(mediaType = "application/problem+json",
 				schema = @Schema(ref = "#/components/schemas/ProblemDetail"))),
 		@ApiResponse(responseCode = "429",
-			description = "인증 메일 발송 제한 초과 또는 같은 이메일 발송 대기 중(AUTH-0004)",
+			description = "인증 메일 발송 제한 초과 또는 같은 이메일 발송 대기 중(AUTH-0004), 인증 실패 제한 중(AUTH-0010)",
 			content = @Content(mediaType = "application/problem+json",
 				schema = @Schema(ref = "#/components/schemas/ProblemDetail"))),
 		@ApiResponse(responseCode = "500",
@@ -89,6 +89,7 @@ public interface EmailVerificationControllerDocs {
 			이메일·목적의 최신 요청만 확인합니다. 성공하면 인증 완료 증명을 반환하며 회원 생성이나 비밀번호 변경은 수행하지 않습니다.
 			가입용 증명은 10분간 유효합니다. 최종 사용 시 이메일·목적·유효기간·미사용 상태를 다시 검증해야 합니다.
 			실패 횟수 제한 및 목적별 증명 유효기간 설정이 없으면 확인을 차단합니다.
+			실패 한도 도달 후 기본 15분간 새 발송을 제한하며, 제한 종료 후 새 번호로 다시 인증해야 합니다.
 			이미 완료된 요청에는 새 증명을 발급하지 않습니다. 요청·응답 및 오류 매핑은 팀 검토가 필요한 초안입니다.
 			""")
 	@ApiResponses({
@@ -122,15 +123,16 @@ public interface EmailVerificationControllerDocs {
 	@Operation(
 		summary = "이메일 인증 코드 재발송",
 		description = """
-				이메일·목적에 해당하는 최신 미인증 요청의 번호를 교체합니다.
-				만료된 번호도 다시 발송할 수 있으며 검증 실패 횟수는 초기화하지 않습니다.
+				이메일·목적에 해당하는 최신 미사용 요청의 번호를 교체합니다.
+				만료된 번호도 다시 발송할 수 있으며 일반 재발송은 검증 실패 횟수를 초기화하지 않습니다.
+				실패 한도 도달 후 기본 15분이 지나 새 번호를 접수할 때만 실패 횟수를 초기화합니다.
 				인증 요청과 암호화한 발송 작업을 함께 커밋하고 별도 worker가 메일을 발송합니다.
 				회원가입 인증번호 유효기간은 SMTP 수락 시점부터 5분입니다.
 				202 접수 응답은 requestId·PENDING·expiresIn=0이며 Location에서 상태를 조회합니다.
 				대기 중에는 타이머를 시작하지 않고 SENT의 남은 시간(초)을 사용합니다.
 				최종 실패·취소는 FAILED·CANCELLED로 안내하며 인증번호 원문은 반환하지 않습니다.
 				최초 발송과 같은 발송 제한을 적용합니다. 필수 설정 누락 시 발송하지 않습니다.
-				완료 증명 분실 복구는 #54의 후속 변경으로 분리하며, 현재는 완료 증명이 있는 요청을 보존하고 503을 반환합니다.
+				완료 증명 분실·만료 시에도 재발송할 수 있습니다. 접수 시 이전 미사용 증명을 무효화하고 새 번호 확인 후 증명을 발급합니다.
 				요청·응답·오류 매핑과 인증 요청 식별 방식은 팀 검토가 필요한 구현 초안입니다.
 				""")
 	@ApiResponses({
@@ -167,7 +169,7 @@ public interface EmailVerificationControllerDocs {
 				schema = @Schema(ref = "#/components/schemas/ProblemDetail"))),
 		@ApiResponse(
 			responseCode = "429",
-			description = "인증 메일 발송 제한 초과(AUTH-0004)",
+			description = "인증 메일 발송 제한 초과(AUTH-0004), 인증 실패 제한 중(AUTH-0010)",
 			content = @Content(
 				mediaType = "application/problem+json",
 				schema = @Schema(ref = "#/components/schemas/ProblemDetail"))),
@@ -179,7 +181,7 @@ public interface EmailVerificationControllerDocs {
 				schema = @Schema(ref = "#/components/schemas/ProblemDetail"))),
 		@ApiResponse(
 			responseCode = "503",
-			description = "필수 설정 누락 또는 인증 완료 후 복구 경로 미적용(AUTH-0006)",
+			description = "필수 설정 누락 또는 인증 완료 증명 데이터 불완전(AUTH-0006)",
 			content = @Content(
 				mediaType = "application/problem+json",
 				schema = @Schema(ref = "#/components/schemas/ProblemDetail")))

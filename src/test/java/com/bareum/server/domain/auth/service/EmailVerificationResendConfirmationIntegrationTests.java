@@ -128,19 +128,23 @@ class EmailVerificationResendConfirmationIntegrationTests {
 	}
 
 	@Test
-	void resendPreservesCompletedProofUntilRecoveryPolicyIsApplied() {
+	void resendReplacesCompletedProofOnlyAfterNewCodeIsConfirmed() {
 		delivered();
 		var proof = confirm.confirm(confirmation("012345"));
 		var before = latest();
-		assertSame(AuthErrorCode.EMAIL_VERIFICATION_NOT_CONFIGURED,
-				assertThrows(AuthException.class, () -> resend.resend(request())).getBaseErrorCode());
+		resend.resend(request());
 		var after = latest();
-		assertEquals(before.getCodeHash(), after.getCodeHash());
-		assertEquals(tokens.hash(proof.verificationToken()), after.getVerificationTokenHash());
-		assertEquals(before.getVerifiedAt(), after.getVerifiedAt());
-		assertEquals(before.getVerificationExpiresAt(), after.getVerificationExpiresAt());
-		assertEquals(1L, jdbc.queryForObject(
+		assertEquals(before.getId(), after.getId());
+		assertNotEquals(before.getCodeHash(), after.getCodeHash());
+		assertNull(after.getVerificationTokenHash());
+		assertNull(after.getVerifiedAt());
+		assertNull(after.getVerificationExpiresAt());
+		assertEquals(2L, jdbc.queryForObject(
 				"SELECT count(*) FROM email_verification_outbox WHERE email=?", Long.class, email));
+		assertTrue(worker.runOnce());
+		var replacement = confirm.confirm(confirmation("654321"));
+		assertNotEquals(proof.verificationToken(), replacement.verificationToken());
+		assertEquals(tokens.hash(replacement.verificationToken()), latest().getVerificationTokenHash());
 	}
 
 	@Test
@@ -184,17 +188,14 @@ class EmailVerificationResendConfirmationIntegrationTests {
 			start.countDown();
 			Object verified = verification.get(20, TimeUnit.SECONDS);
 			Object resent = replacement.get(20, TimeUnit.SECONDS);
-			if (verified instanceof EmailVerificationConfirmResponse proof) {
-				assertSame(AuthErrorCode.EMAIL_VERIFICATION_NOT_CONFIGURED, resent);
-				assertEquals(tokens.hash(proof.verificationToken()), latest().getVerificationTokenHash());
-			} else {
+			if (!(verified instanceof EmailVerificationConfirmResponse)) {
 				assertSame(AuthErrorCode.EMAIL_VERIFICATION_INVALID, verified);
-				assertInstanceOf(EmailVerificationDeliveryResponse.class, resent);
-				assertNull(latest().getVerificationTokenHash());
-				assertTrue(worker.runOnce());
-				expectConfirmationError(AuthErrorCode.EMAIL_VERIFICATION_CODE_MISMATCH, "012345");
-				assertNotNull(confirm.confirm(confirmation("654321")).verificationToken());
 			}
+			assertInstanceOf(EmailVerificationDeliveryResponse.class, resent);
+			assertNull(latest().getVerificationTokenHash());
+			assertTrue(worker.runOnce());
+			expectConfirmationError(AuthErrorCode.EMAIL_VERIFICATION_CODE_MISMATCH, "012345");
+			assertNotNull(confirm.confirm(confirmation("654321")).verificationToken());
 		}
 	}
 

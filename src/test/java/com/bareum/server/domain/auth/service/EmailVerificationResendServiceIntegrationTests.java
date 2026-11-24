@@ -241,7 +241,7 @@ class EmailVerificationResendServiceIntegrationTests {
 
 	@ParameterizedTest
 	@ValueSource(strings = {"verified_at", "verification_token_hash", "verification_expires_at"})
-	void completedOrPartialProofRemainsUntouched(String field) {
+	void partialProofRemainsUntouched(String field) {
 		var old = existing(VerificationPurpose.SIGNUP, email);
 		Object value =
 				field.equals("verification_token_hash")
