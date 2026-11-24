@@ -49,6 +49,7 @@ import com.bareum.server.domain.member.repository.MemberRepository;
 		"auth.email-verification.minimum-send-interval-seconds=60",
 		"auth.email-verification.max-sends-per-hour=5",
 		"auth.email-verification.max-sends-per-day=20",
+		"auth.email-verification.max-verification-attempts=5",
 		"auth.email-verification.password-reset-code-ttl-seconds=420",
 		"auth.email-verification.hash-secret=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
 		"auth.email-verification.outbox.encryption-key=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
