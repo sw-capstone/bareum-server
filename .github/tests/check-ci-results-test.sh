@@ -8,7 +8,6 @@ passed=0
 baseline='{
   "changes":{"result":"success","outputs":{"server":"true","infra":"true"}},
   "static":{"result":"success"},
-  "harness":{"result":"success"},
   "secret-scan":{"result":"success"},
   "java":{"result":"success"},
   "image":{"result":"success"},
@@ -42,7 +41,7 @@ check_result 'documentation-only changes allow only planned skips' pass
 results=$(jq '.changes.outputs.infra = "false" | .["infra-integration"].result = "skipped"' <<< "$baseline")
 check_result 'server-only changes allow skipped infrastructure integration tests' pass
 
-for job in changes static harness secret-scan java image infra-unit infra-integration; do
+for job in changes static secret-scan java image infra-unit infra-integration; do
   for status in failure cancelled skipped; do
     results=$(jq --arg job "$job" --arg status "$status" '.[$job].result = $status' <<< "$baseline")
     check_result "$job $status blocks the required check" fail
@@ -51,7 +50,7 @@ for job in changes static harness secret-scan java image infra-unit infra-integr
   check_result "missing $job blocks the required check" fail
 done
 
-for job in changes static harness secret-scan; do
+for job in changes static secret-scan; do
   for status in failure cancelled skipped; do
     results=$(jq --arg job "$job" --arg status "$status" '.[$job].result = $status' <<< "$documents")
     check_result "$job $status still blocks documentation-only changes" fail

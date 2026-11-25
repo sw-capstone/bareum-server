@@ -24,7 +24,7 @@ if [[ ! "${BASE_SHA:-}" =~ ^[0-9a-f]{40}([0-9a-f]{24})?$ ]] ||
 fi
 
 if git diff --quiet --no-ext-diff --no-textconv "$BASE_SHA" "$HEAD_SHA" -- \
-  .gitleaks.toml harness/secret-scan-policy.toml; then
+  .gitleaks.toml .github/scripts/secret-scan-policy.toml; then
   printf '%s..%s\n' "$BASE_SHA" "$HEAD_SHA"
 else
   printf 'Secret scan rules changed or could not be compared; scanning head history.\n' >&2

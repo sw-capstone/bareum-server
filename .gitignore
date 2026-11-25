@@ -75,10 +75,7 @@ out/
 # 배포 잠금과 복구용 환경변수 사본
 /infra/.deploy-state/
 
-# Local harness
 .DS_Store
 .venv/
 __pycache__/
 *.py[cod]
-harness/reports/*
-!harness/reports/.gitkeep

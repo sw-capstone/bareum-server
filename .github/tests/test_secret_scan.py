@@ -10,14 +10,14 @@ from unittest.mock import patch
 from dataclasses import asdict
 from pathlib import Path
 
-from project_harness.secret_scan import ScanPolicy, SecretScanError, parse_findings, scan
+from secret_scan import ScanPolicy, SecretScanError, parse_findings, scan
 
 ROOT = Path(__file__).resolve().parents[2]
 
 
 class ReportTests(unittest.TestCase):
     def test_classification_and_metadata_only(self) -> None:
-        policy = ScanPolicy.read(ROOT / "harness/secret-scan-policy.toml")
+        policy = ScanPolicy.read(ROOT / ".github/scripts/secret-scan-policy.toml")
         raw = json.dumps([
             {"RuleID": rule, "File": "config.env", "StartLine": 1,
              "Secret": "sensitive-value", "Match": "sensitive-value", "Author": "person"}
@@ -30,19 +30,19 @@ class ReportTests(unittest.TestCase):
         self.assertNotIn("person", safe)
 
     def test_invalid_report_fails(self) -> None:
-        policy = ScanPolicy.read(ROOT / "harness/secret-scan-policy.toml")
+        policy = ScanPolicy.read(ROOT / ".github/scripts/secret-scan-policy.toml")
         for raw in ('{}', '[{"RuleID":"private-key"}]', '[{"RuleID":"private-key","File":"x","StartLine":0}]'):
             with self.subTest(raw=raw), self.assertRaises(SecretScanError):
                 parse_findings(raw, policy)
 
     def test_scanner_version_mismatch_fails(self) -> None:
-        with patch("project_harness.secret_scan.subprocess.run",
+        with patch("secret_scan.subprocess.run",
                    return_value=subprocess.CompletedProcess([], 0, stdout="0.0.0")):
             with self.assertRaises(SecretScanError):
                 scan(ROOT, "git", "--all")
 
     def test_scanner_execution_error_fails(self) -> None:
-        with patch("project_harness.secret_scan.subprocess.run", side_effect=[
+        with patch("secret_scan.subprocess.run", side_effect=[
             subprocess.CompletedProcess([], 0, stdout="8.30.1"),
             subprocess.CompletedProcess([], 1, stderr="private-value"),
         ]):
@@ -50,10 +50,10 @@ class ReportTests(unittest.TestCase):
                 scan(ROOT, "git", "--all")
 
     def test_inconsistent_exit_status_and_report_fails(self) -> None:
-        policy = ScanPolicy.read(ROOT / "harness/secret-scan-policy.toml")
-        with patch("project_harness.secret_scan.ScanPolicy.read", return_value=policy), \
-             patch("project_harness.secret_scan.Path.read_text", return_value="[]"), \
-             patch("project_harness.secret_scan.subprocess.run", side_effect=[
+        policy = ScanPolicy.read(ROOT / ".github/scripts/secret-scan-policy.toml")
+        with patch("secret_scan.ScanPolicy.read", return_value=policy), \
+             patch("secret_scan.Path.read_text", return_value="[]"), \
+             patch("secret_scan.subprocess.run", side_effect=[
                  subprocess.CompletedProcess([], 0, stdout="8.30.1"),
                  subprocess.CompletedProcess([], 10),
              ]):
@@ -67,16 +67,16 @@ class ScannerTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
-        (self.root / "harness").mkdir()
+        (self.root / ".github/scripts").mkdir(parents=True)
         shutil.copyfile(ROOT / ".gitleaks.toml", self.root / ".gitleaks.toml")
-        shutil.copyfile(ROOT / "harness/secret-scan-policy.toml", self.root / "harness/secret-scan-policy.toml")
+        shutil.copyfile(ROOT / ".github/scripts/secret-scan-policy.toml", self.root / ".github/scripts/secret-scan-policy.toml")
 
     def run_scan(self, *args: str, binary: str | None = None) -> subprocess.CompletedProcess[str]:
-        env = dict(os.environ, PYTHONPATH=str(ROOT / "harness/src"))
+        env = dict(os.environ, PYTHONPATH=str(ROOT / ".github/scripts"))
         if binary:
             env["GITLEAKS_BINARY"] = binary
         return subprocess.run(
-            ["python3", "-m", "project_harness.secret_scan", "--root", str(self.root), *args],
+            ["python3", "-m", "secret_scan", "--root", str(self.root), *args],
             env=env, capture_output=True, text=True, timeout=60,
         )
 
@@ -87,7 +87,7 @@ class ScannerTests(unittest.TestCase):
         (self.root / ".env").write_text("DB_PASSWORD=replace-me\nJWT_SECRET=${JWT_SECRET}\n", encoding="utf-8")
         result = self.run_scan("--mode", "dir")
         self.assertEqual(result.returncode, 0, result.stdout)
-        report = json.loads((self.root / "harness/reports/secret-scan.json").read_text())
+        report = json.loads((self.root / "build/reports/secret-scan.json").read_text())
         self.assertEqual(report["findings"], [])
 
     def test_ambiguous_password_warns_without_leaking_value(self) -> None:
@@ -95,7 +95,7 @@ class ScannerTests(unittest.TestCase):
         (self.root / ".env").write_text(f"DB_PASSWORD={value}\n", encoding="utf-8")
         result = self.run_scan("--mode", "dir")
         self.assertEqual(result.returncode, 0, result.stdout)
-        safe = (self.root / "harness/reports/secret-scan.json").read_text()
+        safe = (self.root / "build/reports/secret-scan.json").read_text()
         self.assertGreater(json.loads(safe)["warnings"], 0)
         self.assertNotIn(value, result.stdout + result.stderr + safe)
 
@@ -110,7 +110,7 @@ class ScannerTests(unittest.TestCase):
     def test_missing_binary_fails(self) -> None:
         result = self.run_scan("--mode", "dir", binary=str(self.root / "absent"))
         self.assertEqual(result.returncode, 2)
-        self.assertFalse((self.root / "harness/reports/secret-scan.json").exists())
+        self.assertFalse((self.root / "build/reports/secret-scan.json").exists())
 
     def test_github_classic_token_blocks_without_leaking_value(self) -> None:
         self.assert_github_token_blocks("github-pat", "ghp_" + "Ab3Cd4Ef5Gh6Ij7Kl8Mn9Op0Qr1St2Uv3Wx4")
@@ -126,7 +126,7 @@ class ScannerTests(unittest.TestCase):
         (self.root / "github.env").write_text("GITHUB_TOKEN=" + value + "\n", encoding="utf-8")
         result = self.run_scan("--mode", "dir")
         self.assertEqual(result.returncode, 1, result.stdout)
-        safe = (self.root / "harness/reports/secret-scan.json").read_text()
+        safe = (self.root / "build/reports/secret-scan.json").read_text()
         findings = json.loads(safe)["findings"]
         self.assertTrue(any(f["rule"] == rule and f["level"] == "error" for f in findings))
         self.assertNotIn(value, result.stdout + result.stderr + safe)
@@ -153,7 +153,7 @@ class ScannerTests(unittest.TestCase):
             (self.root / name).write_text(content + "\n", encoding="utf-8")
         result = self.run_scan("--mode", "dir")
         self.assertEqual(result.returncode, 0, result.stdout)
-        report = json.loads((self.root / "harness/reports/secret-scan.json").read_text())
+        report = json.loads((self.root / "build/reports/secret-scan.json").read_text())
         paths = {Path(f["path"]).name for f in report["findings"]}
         self.assertEqual(paths, set(cases) - {"hash.java"})
         self.assertNotIn(value, result.stdout + result.stderr + json.dumps(report))
@@ -178,6 +178,6 @@ class ScannerTests(unittest.TestCase):
         git("commit", "-m", "remove")
         result = self.run_scan("--log-opts=" + base + "..HEAD")
         self.assertEqual(result.returncode, 0, result.stdout)
-        report = json.loads((self.root / "harness/reports/secret-scan.json").read_text())
+        report = json.loads((self.root / "build/reports/secret-scan.json").read_text())
         self.assertGreater(report["warnings"], 0)
         self.assertTrue(all(f["commit"] for f in report["findings"]))

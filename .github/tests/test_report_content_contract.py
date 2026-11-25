@@ -3,7 +3,7 @@ import unittest
 from pathlib import Path
 from typing import Final
 
-from project_harness.schema import SchemaValidationError, validate
+from check_contracts import SchemaValidationError, validate
 
 
 CONTRACT: Final = (

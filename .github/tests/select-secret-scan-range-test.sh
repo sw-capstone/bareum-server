@@ -12,9 +12,9 @@ git -C "$repo" config user.name Fixture
 git -C "$repo" config user.email fixture@example.invalid
 git -C "$repo" config commit.gpgsign false
 git -C "$repo" config core.hooksPath /dev/null
-mkdir -p "$repo/harness"
+mkdir -p "$repo/.github/scripts"
 cp "$source_dir/../.gitleaks.toml" "$repo/.gitleaks.toml"
-cp "$source_dir/../harness/secret-scan-policy.toml" "$repo/harness/secret-scan-policy.toml"
+cp "$source_dir/scripts/secret-scan-policy.toml" "$repo/.github/scripts/secret-scan-policy.toml"
 printf 'old history\n' > "$repo/README.md"
 git -C "$repo" add .
 git -C "$repo" commit --quiet -m base
@@ -87,7 +87,7 @@ base="$unmerged"
 check_commits 'rewritten history scans newly reachable commits without the old branch' "$new_commits"
 base="$original_base"
 
-for file in .gitleaks.toml harness/secret-scan-policy.toml; do
+for file in .gitleaks.toml .github/scripts/secret-scan-policy.toml; do
   printf '\n# changed\n' >> "$repo/$file"
   git -C "$repo" add "$file"
   git -C "$repo" commit --quiet -m rules
@@ -124,21 +124,21 @@ PATH="$work/bin:$PATH" check_commits 'failed rule comparison falls back to head 
 if [[ -n "${GITLEAKS_BINARY:-}" ]]; then
   base="$original_base"
   head="$original_head"
-  export PYTHONPATH="$source_dir/../harness/src"
+  export PYTHONPATH="$source_dir/scripts"
   for event in push workflow_dispatch; do
     scan_range=$(cd "$repo" && EVENT_NAME="$event" BASE_SHA="$base" HEAD_SHA="$head" bash "$selector")
     status=0
-    python3 -m project_harness.secret_scan --root "$repo" --log-opts="$scan_range" > "$work/scan.log" 2>&1 || status=$?
+    python3 -m secret_scan --root "$repo" --log-opts="$scan_range" > "$work/scan.log" 2>&1 || status=$?
     if [[ "$status" != 1 ]]; then
       printf 'FAIL: %s must block the synthetic token in intermediate history\n' "$event" >&2
       exit 1
     fi
     if [[ "$event" == push ]]; then
       jq -e --arg commit "$intermediate" '.errors > 0 and all(.findings[]; .commit == $commit)' \
-        "$repo/harness/reports/secret-scan.json" > /dev/null
+        "$repo/build/reports/secret-scan.json" > /dev/null
     else
       jq -e --arg commit "$unmerged" '.errors > 0 and any(.findings[]; .commit == $commit)' \
-        "$repo/harness/reports/secret-scan.json" > /dev/null
+        "$repo/build/reports/secret-scan.json" > /dev/null
     fi
     passed=$((passed + 1))
     printf 'PASS: %s scanner findings match the selected history\n' "$event"
@@ -146,11 +146,11 @@ if [[ -n "${GITLEAKS_BINARY:-}" ]]; then
   event=push
   base="$removed"
   scan_range=$(cd "$repo" && EVENT_NAME="$event" BASE_SHA="$base" HEAD_SHA="$head" bash "$selector")
-  if ! python3 -m project_harness.secret_scan --root "$repo" --log-opts="$scan_range" > "$work/scan.log" 2>&1; then
+  if ! python3 -m secret_scan --root "$repo" --log-opts="$scan_range" > "$work/scan.log" 2>&1; then
     printf 'FAIL: clean push must pass despite tokens in old and unmerged history\n' >&2
     exit 1
   fi
-  jq -e '.errors == 0 and .findings == []' "$repo/harness/reports/secret-scan.json" > /dev/null
+  jq -e '.errors == 0 and .findings == []' "$repo/build/reports/secret-scan.json" > /dev/null
   passed=$((passed + 1))
   printf 'PASS: clean push is not blocked by old or unrelated findings\n'
 fi

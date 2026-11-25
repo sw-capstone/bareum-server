@@ -2,9 +2,9 @@
 
 - 상태: 결정
 - 결정일: 2026-09-08
-- 소유 역할: `harness-maintainers`
+- 소유 역할: `ci-maintainers`
 - 기준 파일(생성 예정): `bareum-server/packages/contracts/id-registry.json`
-- 현재 검사기의 `path`는 서버 저장소 내부 경로다. 웹·AI 자산을 등록하려면 저장소 식별자와 버전 참조 형식, 검증 방식을 먼저 확정한다. `../bareum-ai` 같은 상대 경로를 등록하지 않는다.
+- 레지스트리의 `path`는 서버 저장소 내부 경로다. 웹·AI 자산을 등록하려면 저장소 식별자와 버전 참조 형식, 검증 방식을 먼저 확정한다. `../bareum-ai` 같은 상대 경로를 등록하지 않는다.
 
 ## 목적
 
@@ -30,12 +30,25 @@ GitHub 이슈 번호는 작업을 추적하고, 프로젝트 ID는 여러 파일
 | `DATA` | 기준 데이터·스냅샷 | `DATA-LAW-001` |
 | `EVAL` | 평가셋·평가 설정·기준 결과 | `EVAL-REG-001` |
 | `TEST` | 핵심 통합·불변식 테스트 | `TEST-FLOW-001` |
-| `HAR` | 하네스 검사·정책 | `HAR-CI-001` |
+| `CI` | CI 검사 | `CI-SEC-001` |
 | `DEC` | 아키텍처·운영 결정 | `DEC-REPO-001` |
 
 ### 도메인
 
 초기 도메인은 `DOC`, `AUTH`, `WEB`, `SERVER`, `AI`, `REG`, `LAW`, `FLOW`, `CI`, `REPO`, `ID`, `COMMON`, `STRUCT`, `JSON`, `SCHEMA`, `SEC`를 사용한다. 새 도메인이 필요하면 기존 의미와 겹치지 않는지 확인한 뒤 이 문서와 레지스트리를 같은 PR에서 갱신한다.
+
+## 사용 종료한 ID
+
+옛 저장소 정적 검사를 정리하면서 `HAR-*` ID를 사용 종료했다. CI로 옮긴 검사는 `CI-*` ID를 새로 쓴다. ID는 재사용하지 않으며, 과거 기록의 `HAR-*`는 아래 표로 찾는다. 유형 `HAR`는 더 이상 발급하지 않는다.
+
+| 사용 종료 ID | 상태 | 대응 |
+|---|---|---|
+| `HAR-SEC-001` | `deprecated` | `CI-SEC-001` (Gitleaks 비밀정보 검사, `secret-scan` job) |
+| `HAR-SCHEMA-001` | `deprecated` | `CI-SCHEMA-001` (Schema 필수 헤더, `.github/scripts/check_contracts.py`) |
+| `HAR-SCHEMA-002` | `deprecated` | `CI-SCHEMA-002` (계약 예시의 Schema 검증, `.github/scripts/check_contracts.py`) |
+| `HAR-DOC-001` | `deprecated` | `CI-DOC-001` (저장소 밖 링크, `.github/scripts/check_markdown_links.py`) |
+| `HAR-DOC-002` | `deprecated` | `CI-DOC-002` (없는 문서 링크, `.github/scripts/check_markdown_links.py`) |
+| `HAR-POLICY-001`, `HAR-STRUCT-001`, `HAR-JSON-001`, `HAR-ID-001`~`HAR-ID-005`, `HAR-PRODUCT-001` | `deprecated` | 대응 없음. 정책 파일·필수 경로·JSON 문법·ID 레지스트리·제품 요약 표식 검사는 삭제했다 |
 
 ## 발급 대상
 
@@ -51,10 +64,10 @@ GitHub 이슈 번호는 작업을 추적하고, 프로젝트 ID는 여러 파일
 ## 발급 절차
 
 1. 팀원이 GitHub 이슈에 신규 ID 필요 여부와 제안 유형·도메인을 작성한다.
-2. `harness-maintainers`가 발급 대상인지 확인한다.
+2. `ci-maintainers`가 발급 대상인지 확인한다.
 3. 같은 유형·도메인의 마지막 번호 다음 번호를 선택한다.
 4. 담당자가 확정한 ID 레지스트리에 ID, 상태, 소유 역할과 설명을 추가한다.
-5. 하네스 검사를 실행하고 ID 등록 PR을 병합한다.
+5. ID 등록 PR을 병합한다.
 6. 기능 PR에서 이슈 번호와 발급된 ID를 함께 연결한다.
 
 주 담당자와 보조 담당자 모두 발급할 수 있지만, 같은 번호 충돌을 막기 위해 ID 등록 PR이 병합된 뒤 해당 ID를 사용한다.
@@ -64,7 +77,7 @@ GitHub 이슈 번호는 작업을 추적하고, 프로젝트 ID는 여러 파일
 - `draft`: 제안 또는 구현 중
 - `active`: 승인돼 사용 중
 - `deprecated`: 더 이상 사용하지 않지만 추적을 위해 보존
-- `owner`: 개인 이름이 아니라 `harness-maintainers`, `ai-team` 같은 역할명을 기록
+- `owner`: 개인 이름이 아니라 `ci-maintainers`, `ai-team` 같은 역할명을 기록
 
 기존 ID의 의미를 바꿔야 하면 해당 ID를 `deprecated`로 바꾸고 새 ID를 발급한다. 대체 ID가 있으면 `replaced_by`로 연결한다.
 
