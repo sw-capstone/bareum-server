@@ -49,6 +49,7 @@ import com.bareum.server.domain.member.repository.MemberRepository;
 		"auth.email-verification.minimum-send-interval-seconds=60",
 		"auth.email-verification.max-sends-per-hour=5",
 		"auth.email-verification.max-sends-per-day=20",
+		"auth.email-verification.max-verification-attempts=5",
 		"auth.email-verification.password-reset-code-ttl-seconds=420",
 		"auth.email-verification.hash-secret=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
 		"auth.email-verification.outbox.encryption-key=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
@@ -241,7 +242,7 @@ class EmailVerificationResendServiceIntegrationTests {
 
 	@ParameterizedTest
 	@ValueSource(strings = {"verified_at", "verification_token_hash", "verification_expires_at"})
-	void completedOrPartialProofRemainsUntouched(String field) {
+	void partialProofRemainsUntouched(String field) {
 		var old = existing(VerificationPurpose.SIGNUP, email);
 		Object value =
 				field.equals("verification_token_hash")

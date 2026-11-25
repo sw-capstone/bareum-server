@@ -50,10 +50,12 @@ public class EmailVerificationResendService {
 		if (verification.getConsumedAt() != null) {
 			throw new AuthException(AuthErrorCode.EMAIL_VERIFICATION_INVALID);
 		}
-		if (verification.getVerifiedAt() != null
+		if ((verification.getVerifiedAt() != null
 				|| verification.getVerificationTokenHash() != null
-				|| verification.getVerificationExpiresAt() != null) {
-			// Proof replacement is supplied by the separate #54 recovery policy change.
+				|| verification.getVerificationExpiresAt() != null)
+				&& (verification.getVerifiedAt() == null
+						|| verification.getVerificationTokenHash() == null
+						|| verification.getVerificationExpiresAt() == null)) {
 			throw new AuthException(AuthErrorCode.EMAIL_VERIFICATION_NOT_CONFIGURED);
 		}
 		String recipient =
@@ -63,6 +65,8 @@ public class EmailVerificationResendService {
 		// Reservations include in-flight jobs across initial send and resend; no live job is
 		// replaced.
 		outbox.checkCanQueue(recipient, now, properties);
+		int retainedAttempts = verification.attemptsForNewCode(now,
+				properties.getMaxVerificationAttempts());
 		if (verification.getLastSentAt() == null && !outbox.hasTerminalDelivery(verification)) {
 			throw new AuthException(AuthErrorCode.EMAIL_VERIFICATION_INVALID);
 		}
@@ -72,7 +76,7 @@ public class EmailVerificationResendService {
 			throw new AuthException(AuthErrorCode.EMAIL_SEND_FAILED);
 		}
 		String hash = codeHasher.hash(recipient, request.purpose(), code);
-		verification.queueReplacement(recipient, hash, now);
+		verification.queueReplacement(recipient, hash, now, retainedAttempts);
 		verificationRepository.flush();
 		UUID id = UUID.randomUUID();
 		byte[] encrypted =

@@ -28,6 +28,9 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class EmailVerification extends BaseTimeEntity {
 
+	// Temporary recovery policy; revisit when the team confirms the waiting period.
+	private static final long ATTEMPT_COOLDOWN_SECONDS = 900;
+
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
 	@Column(name = "id", nullable = false)
@@ -49,6 +52,9 @@ public class EmailVerification extends BaseTimeEntity {
 	@Column(name = "attempt_count", nullable = false)
 	@ColumnDefault("0")
 	private int attemptCount;
+
+	@Column(name = "attempts_blocked_until")
+	private Instant attemptsBlockedUntil;
 
 	@Column(name = "last_sent_at", nullable = true)
 	private Instant lastSentAt;
@@ -124,14 +130,55 @@ public class EmailVerification extends BaseTimeEntity {
 
 	/** Keep the request ID and failed attempts; pending codes cannot be confirmed. */
 	public void queueReplacement(String recipient, String newCodeHash, Instant queuedAt) {
+		queueReplacement(recipient, newCodeHash, queuedAt, attemptCount);
+	}
+
+	public void queueReplacement(String recipient, String newCodeHash, Instant queuedAt, int retainedAttempts) {
+		if (retainedAttempts < 0 || retainedAttempts > attemptCount) {
+			throw new IllegalArgumentException("Invalid retained verification attempts");
+		}
 		this.email = Objects.requireNonNull(recipient, "recipient");
 		this.codeHash = Objects.requireNonNull(newCodeHash, "newCodeHash");
 		this.expiresAt = Objects.requireNonNull(queuedAt, "queuedAt");
 		this.lastSentAt = null;
+		this.attemptCount = retainedAttempts;
+		this.attemptsBlockedUntil = null;
+		this.verifiedAt = null;
+		this.verificationTokenHash = null;
+		this.verificationExpiresAt = null;
 	}
 
 	public void recordFailedAttempt() {
 		this.attemptCount = Math.incrementExact(attemptCount);
+	}
+
+	public void recordFailedAttempt(Instant now, int limit) {
+		recordFailedAttempt();
+		if (attemptCount >= limit) {
+			attemptsBlockedUntil = now.plusSeconds(ATTEMPT_COOLDOWN_SECONDS);
+		}
+	}
+
+	/** Only a new code accepted after the cooldown resets the failed-attempt budget. */
+	public int attemptsForNewCode(Instant now, Integer limit) {
+		if (limit == null || limit <= 0) {
+			throw new AuthException(AuthErrorCode.EMAIL_VERIFICATION_NOT_CONFIGURED);
+		}
+		if (attemptsBlockedUntil != null) {
+			if (now.isBefore(attemptsBlockedUntil)) {
+				throw new AuthException(AuthErrorCode.EMAIL_VERIFICATION_ATTEMPTS_EXCEEDED);
+			}
+			return 0;
+		}
+		if (attemptCount >= limit) {
+			// Legacy rows have no fifth-failure timestamp; use a stable existing timestamp.
+			Instant anchor = lastSentAt != null ? lastSentAt : expiresAt;
+			if (now.isBefore(anchor.plusSeconds(ATTEMPT_COOLDOWN_SECONDS))) {
+				throw new AuthException(AuthErrorCode.EMAIL_VERIFICATION_ATTEMPTS_EXCEEDED);
+			}
+			return 0;
+		}
+		return attemptCount;
 	}
 
 	public void consume(Instant consumedAt) {

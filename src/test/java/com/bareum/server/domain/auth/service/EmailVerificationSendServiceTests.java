@@ -36,7 +36,7 @@ class EmailVerificationSendServiceTests {
 	private final EmailOutboxCipher cipher = mock(EmailOutboxCipher.class);
 	private final EmailVerificationMailSender sender = mock(EmailVerificationMailSender.class);
 	private EmailVerificationProperties policy =
-			new EmailVerificationProperties(300, 420L, 60L, 5, 20, null, 600, null);
+			new EmailVerificationProperties(300, 420L, 60L, 5, 20, 5, 600, null);
 	private EmailVerificationSendService service;
 
 	@BeforeEach

@@ -46,12 +46,13 @@ public class EmailVerificationConfirmService {
 		if (!now.isBefore(verification.getExpiresAt())) {
 			throw new AuthException(AuthErrorCode.EMAIL_VERIFICATION_EXPIRED);
 		}
-		if (verification.getAttemptCount() >= properties.getMaxVerificationAttempts()) {
+		if (verification.getAttemptsBlockedUntil() != null
+				|| verification.getAttemptCount() >= properties.getMaxVerificationAttempts()) {
 			throw new AuthException(AuthErrorCode.EMAIL_VERIFICATION_ATTEMPTS_EXCEEDED);
 		}
 		if (!codeHasher.matches(verification.getEmail(), request.purpose(), request.code(),
 				verification.getCodeHash())) {
-			verification.recordFailedAttempt();
+			verification.recordFailedAttempt(now, properties.getMaxVerificationAttempts());
 			throw new EmailVerificationCodeMismatchException();
 		}
 

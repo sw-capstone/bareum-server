@@ -46,7 +46,8 @@ public class EmailVerificationSendService {
 		outbox.checkCanQueue(recipient, now, properties);
 		int previousAttemptCount = verificationRepository
 				.findFirstByEmailIgnoreCaseAndPurposeOrderByIdDesc(recipient, request.purpose())
-				.map(EmailVerification::getAttemptCount)
+				.map(previous -> previous.attemptsForNewCode(now,
+						properties.getMaxVerificationAttempts()))
 				.orElse(0);
 		String code = codeGenerator.generate();
 		String codeHash = codeHasher.hash(recipient, request.purpose(), code);
