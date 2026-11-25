@@ -24,6 +24,5 @@
 
 - GitHub 작업은 개발 가이드를 따른다.
 - 공식 자산 ID 정책은 `docs/decisions/DEC-ID-001-id-governance.md`를 따른다.
-- 하네스 검사와 정책은 `HAR-*` ID로 추적한다.
 
 이 저장소는 `bareum-server`의 기준 루트다. 프론트엔드와 AI 구현을 이 저장소에 추가하지 않는다. 계약이 확정되면 `bareum-web`과 `bareum-ai`의 관련 소비자·제공자 검증을 함께 검토한다.

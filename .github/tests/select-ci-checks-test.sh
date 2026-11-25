@@ -52,12 +52,10 @@ check_file() {
   check_selection "$file" "$2" "${3:-false}"
 }
 
-for file in README.md AGENTS.md docs/guide/development.md .github/pull_request_template.md \
-  harness/README.md harness/AGENTS.md; do
+for file in README.md AGENTS.md docs/guide/development.md .github/pull_request_template.md; do
   check_file "$file" false
 done
-for file in harness/src/project_harness/checks.py harness/policy.json .gitleaks.toml \
-  scripts/run-harness.sh scripts/test-harness.sh scripts/run-secret-scan.sh \
+for file in .gitleaks.toml scripts/run-secret-scan.sh \
   src/main/java/App.java src/main/resources/application.yml src/main/resources/help.md src/test/java/AppTests.java \
   build.gradle.kts settings.gradle.kts gradlew gradlew.bat gradle/wrapper/gradle-wrapper.properties \
   gradle/testing.gradle.kts config/formatter/java.xml .github/compose.smoke.yml .github/fixtures/ai-nginx.conf scripts/new-script.sh \
@@ -107,10 +105,10 @@ check_selection 'infrastructure renamed into documentation runs integration test
 
 new_repo
 printf 'changed\n' > "$repo/docs/guide.md"
-mkdir -p "$repo/harness"
-printf 'changed\n' > "$repo/harness/policy.json"
+mkdir -p "$repo/src/main"
+printf 'changed\n' > "$repo/src/main/App.java"
 commit_changes
-check_selection 'documentation mixed with harness changes runs server checks' true
+check_selection 'documentation mixed with source changes runs server checks' true
 
 new_repo
 rm "$repo/src/main/java/App.java"

@@ -61,7 +61,7 @@ def parse_findings(raw: str, policy: ScanPolicy) -> list[SecretFinding]:
 
 
 def scan(root: Path, mode: str, log_opts: str) -> list[SecretFinding]:
-    policy = ScanPolicy.read(root / "harness/secret-scan-policy.toml")
+    policy = ScanPolicy.read(root / ".github/scripts/secret-scan-policy.toml")
     binary = os.environ.get("GITLEAKS_BINARY", "gitleaks")
     version = subprocess.run([binary, "version"], capture_output=True, text=True, check=True, timeout=10)
     if version.stdout.strip().removeprefix("v") != policy.gitleaks_version:
@@ -88,12 +88,12 @@ def main() -> int:
     parser.add_argument("--log-opts", default="--all")
     args = parser.parse_args()
     root = args.root.resolve()
-    report = root / "harness/reports/secret-scan.json"
+    report = root / "build/reports/secret-scan.json"
     report.parent.mkdir(parents=True, exist_ok=True)
     report.unlink(missing_ok=True)
     try:
         findings = scan(root, args.mode, args.log_opts)
-        policy = ScanPolicy.read(root / "harness/secret-scan-policy.toml")
+        policy = ScanPolicy.read(root / ".github/scripts/secret-scan-policy.toml")
         errors = sum(finding.level == "error" for finding in findings)
         warnings = len(findings) - errors
         report.write_text(json.dumps({"policy_version": policy.version, "gitleaks_version": policy.gitleaks_version,
@@ -102,12 +102,12 @@ def main() -> int:
                                      "findings": [asdict(finding) for finding in findings]}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         for finding in findings:
             # JSON escaping prevents control characters and workflow commands in filenames.
-            print(f"{finding.level.upper()} HAR-SEC-001 " + json.dumps(asdict(finding), ensure_ascii=True))
+            print(f"{finding.level.upper()} CI-SEC-001 " + json.dumps(asdict(finding), ensure_ascii=True))
         print(f"Secret scan: {errors} blocking findings, {warnings} warnings")
         return 1 if errors else 0
     except (OSError, UnicodeError, json.JSONDecodeError, tomllib.TOMLDecodeError, SecretScanError,
             subprocess.CalledProcessError, subprocess.TimeoutExpired):
-        print("ERROR HAR-SEC-001 Secret scan could not complete; inspect installation, config and Git range.")
+        print("ERROR CI-SEC-001 Secret scan could not complete; inspect installation, config and Git range.")
         return 2
 
 

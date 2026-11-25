@@ -37,7 +37,7 @@ server=false
 infra=false
 while IFS= read -r -d '' file; do
   case "$file" in
-    README.md|AGENTS.md|docs/*.md|.github/pull_request_template.md|harness/README.md|harness/AGENTS.md)
+    README.md|AGENTS.md|docs/*.md|.github/pull_request_template.md)
       ;;
     *)
       server=true

@@ -10,7 +10,7 @@ if ! jq -e '
     and ($infra == "true" or $infra == "false")
     and ($server == "true" or $infra == "false")
     and all($jobs[]; .result == "success" or .result == "skipped")
-    and (["changes", "static", "harness", "secret-scan"]
+    and (["changes", "static", "secret-scan"]
       | all(.[]; $jobs[.].result == "success"))
     and (["java", "image", "infra-unit"]
       | all(.[]; $jobs[.].result == (if $server == "true" then "success" else "skipped" end)))
