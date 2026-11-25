@@ -37,7 +37,7 @@ PostgreSQL JDBC의 [구조화된 오류 정보](https://jdbc.postgresql.org/docu
 ## 검증 결과
 
 - `./gradlew check bootJar --no-daemon`: #32 최신 리뷰 수정과 Spotless 반영 후 Java 25·PostgreSQL 17에서 전체 338개 테스트 통과, 실패·오류·건너뜀 0개, JAR 빌드 성공.
-- `spotlessApply`·`spotlessCheck` 및 하네스 정적 검사 통과. PostgreSQL 18·ARM64 이미지 검증은 선행 PR 병합 후 기존 #33 재오픈 시 CI에서 확인한다.
+- `spotlessApply`·`spotlessCheck` 및 저장소 정적 검사 통과. PostgreSQL 18·ARM64 이미지 검증은 선행 PR 병합 후 기존 #33 재오픈 시 CI에서 확인한다.
 - 회원가입 Controller 27개·OpenAPI/HTTP 1개·서비스 통합 37개, 비밀번호 정책 28개·해시 4개 통과. 약관 버전 설정 없이 DB 버전과 동의 응답을 저장하는 회귀 검증을 포함한다.
 - PostgreSQL에서 회원·동의·증명 소비의 원자성, 동시 가입, 저장 실패 후 재시도, 해시 처리 중 증명 만료, 재발송→이전 번호 거부→새 번호 확인→가입을 검증했다. A→B→A로 과거 번호가 다시 생성된 뒤에도 이전 발송 타이머는 무효이며, 최신 인증 증명으로 한 번만 가입되고 네 동의가 저장되는지 확인했다. 사전 중복 확인 직후 Google 가입 계정이 생성되는 실제 DB 경합과 다른 고유 제약 오류의 구분도 검증했다.
 - 공식 약관 데이터·실제 메일 제공자·배포 서버·프론트 브라우저 검증은 포함하지 않았다.
