@@ -452,7 +452,7 @@ CI
 
 통합 CI는 `main` 또는 `develop`을 대상으로 하는 PR에서 실행한다. 작업 브랜치 push만으로는 CI를 실행하지 않으며, 해당 PR의 브랜치에 push하면 PR 이벤트로 한 번 실행한다. `develop` push에서는 배포 워크플로가 EC2의 마지막 서버 배포 성공 SHA를 조회해 같은 CI에 `deployment_base_sha`로 전달한다. 마지막 배포 이후 문서 외 변경이 있고 선택된 검사가 모두 성공하면 이미지 게시와 배포를 진행한다. 마지막 배포 이후 등록된 문서 경로만 변경됐다면 공통 검사 후 게시와 배포를 생략한다. CI만 수동 실행하면 전체 검증을 수행하며, 수동 재배포는 `Deploy development`에서 `develop`을 선택해 실행한다.
 
-Gitleaks는 PR의 `base.sha..head.sha`, `develop` push의 `마지막 서버 배포 성공 SHA..현재 SHA`에 포함된 커밋을 검사한다. 이전 실행의 실패나 취소로 남은 커밋도 다시 검사해 후속 문서 push로 검사를 우회하지 않게 한다. `.gitleaks.toml` 또는 `.github/scripts/secret-scan-policy.toml` 변경이나 SHA 확인 실패 시에는 검사할 커밋의 전체 이력으로 대체한다. 수동 실행은 받아온 모든 브랜치와 태그의 이력을 검사한다.
+Gitleaks는 PR의 `base.sha..head.sha`, `develop` push의 `마지막 서버 배포 성공 SHA..현재 SHA`에 포함된 커밋을 검사한다. 이전 실행의 실패나 취소로 남은 커밋도 다시 검사해 후속 문서 push로 검사를 우회하지 않게 한다. `.gitleaks.toml` 또는 `.github/scripts/secret-scan-policy.toml` 변경이나 SHA 확인 실패 시에는 검사할 커밋의 전체 이력으로 대체한다. 수동 실행은 받아온 모든 브랜치와 태그의 이력을 검사한다. 세부 기준은 [`DEC-SEC-001`](../decisions/DEC-SEC-001-secret-detection.md)을 따른다.
 
 정적 검사와 Gitleaks는 서로 독립적인 job으로 바로 실행한다. Java, 이미지, 배포 모의 테스트와 인프라 통합 테스트는 변경 범위 판별 결과만 기다린 뒤 필요한 job을 병렬로 실행한다. 한 검사에서 실패해도 다른 독립 job은 계속 실행한다. 배포 모의 테스트 5개는 한 job 안에서 순서대로 실행하며, 앞 테스트가 실패해도 실행이 취소되지 않았다면 나머지 테스트를 계속 실행한다. 하나라도 실패하면 해당 job은 실패한다. 실제 인프라 통합 테스트 2개는 `fail-fast: false`인 matrix로 유지한다.
 
