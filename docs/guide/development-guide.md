@@ -301,8 +301,6 @@ git diff
 
 서버의 Spring Boot 코드는 `src/main/`, `src/test/`에 있으며 Java 25와 백엔드에서 정한 로컬 DB 연결 환경에서 `./gradlew test`로 검증할 수 있다. PR CI는 PostgreSQL 18 테스트 DB를 준비하고 `./gradlew --no-daemon check bootJar`로 포맷 검사·테스트·JAR 빌드를 실행한다. 민감정보 검사는 같은 CI 워크플로의 별도 job에서 Gitleaks가 Git 이력을 검사한다.
 
-백엔드·AI 동작, 계약 호환성, 근거·상태 보존 등 안전 불변식, 평가 데이터·성능 회귀 검사는 관련 구현과 자산이 준비된 뒤 각 저장소에 추가한다.
-
 #### Java 코드 포맷
 
 Java 운영·테스트 코드는 Spotless 8.10.4와 Eclipse 4.41 포맷터로 통일한다. 세부 설정은 [공통 XML](../../config/formatter/naver-eclipse-formatter.xml)에서 관리한다.
@@ -513,8 +511,6 @@ PYTHONPATH=.github/scripts python -m unittest discover -s .github/tests -p 'test
 웹 CI는 `npm run check`를 통해 포맷, ESLint, 단위 테스트, TypeScript 검사와 프로덕션 빌드를 실행한다.
 
 AI 저장소의 `Bareum AI CI`는 AI 앱 테스트를 실행한다.
-
-계약 호환성 검사와 제품 AI 기능·평가 검사는 실제 구현, 자산과 실행 명령이 준비된 뒤 관련 저장소에 연결한다.
 
 ## 12. CI 실패 대응
 
