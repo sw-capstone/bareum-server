@@ -24,10 +24,12 @@ import com.bareum.server.domain.report.entity.ReportParseAttempt;
 import com.bareum.server.domain.report.enums.ExtractionQuality;
 import com.bareum.server.domain.report.enums.FileFormat;
 import com.bareum.server.domain.report.enums.ParseStatus;
+import com.bareum.server.domain.report.enums.ReportFileRole;
 import com.bareum.server.domain.report.enums.ReportIntakeStatus;
 import com.bareum.server.domain.report.enums.ReportType;
 import com.bareum.server.domain.report.exception.ReportErrorCode;
 import com.bareum.server.domain.report.exception.ReportException;
+import com.bareum.server.domain.report.intake.PreparedReportFile;
 import com.bareum.server.domain.report.intake.ReportIntakePolicy;
 import com.bareum.server.domain.report.intake.ReportIntakeResult;
 import com.bareum.server.domain.report.repository.ReportContentRepository;
@@ -67,14 +69,15 @@ public class ReportIntakeCommandService {
 			var request = existing.get();
 			request.requireMatchingFingerprint(fingerprint);
 			request.requireReplayable();
-			return new Reservation(request.getId(), request.getSourceObjectKey(), result(request));
+			return new Reservation(request.getId(), request.getSourceObjectKey(), request.getProcessingDeadlineAt(),
+					result(request));
 		}
 		var now = clock.instant();
 		var request =
 				ReportIntakeRequest.reserve(member, key, fingerprint, now, now.plus(properties.processingTimeout()));
 		request.assignSourceKey(objectKey);
 		requests.save(request);
-		return new Reservation(request.getId(), objectKey, null);
+		return new Reservation(request.getId(), objectKey, request.getProcessingDeadlineAt(), null);
 	}
 
 	public void recordSource(long requestId, UploadedReportFile source) {
@@ -91,19 +94,33 @@ public class ReportIntakeCommandService {
 		request.attachReport(original);
 	}
 
-	public ParseWork startParsing(long requestId) {
-		var request = locked(requestId);
-		var now = clock.instant();
-		request.requireProcessingAt(now);
-		var report = request.getReport();
-		if (report == null || request.getParseAttempt() != null
-				|| !files.existsByReportIdAndFormatAndDeletedAtIsNull(report.getId(), FileFormat.PDF)) {
+	public void reserveConvertedPdf(long requestId, String objectKey, PreparedReportFile pdf) {
+		ReportIntakeRequest request = locked(requestId);
+		request.requireProcessingAt(clock.instant());
+		Report report = request.getReport();
+		if (report == null || request.getParseAttempt() != null) {
 			throw new ReportException(ReportErrorCode.INVALID_INTAKE_STATE);
 		}
-		var attempt = attempts.save(ReportParseAttempt.request(report));
+		ReportFile original = files.findByReportIdAndRole(report.getId(), ReportFileRole.ORIGINAL)
+				.orElseThrow(() -> new ReportException(ReportErrorCode.INVALID_INTAKE_STATE));
+		files.save(ReportFile.reserveConvertedPdf(original, objectKey, pdf));
+	}
+
+	public ParseWork startParsing(long requestId, UploadedReportFile pdf) {
+		ReportIntakeRequest request = locked(requestId);
+		Instant now = clock.instant();
+		request.requireProcessingAt(now);
+		Report report = request.getReport();
+		if (report == null || request.getParseAttempt() != null || pdf.format() != FileFormat.PDF) {
+			throw new ReportException(ReportErrorCode.INVALID_INTAKE_STATE);
+		}
+		ReportFile file = files.findByReportIdAndObjectKeyAndDeletedAtIsNull(report.getId(), pdf.objectKey())
+				.orElseThrow(() -> new ReportException(ReportErrorCode.INVALID_INTAKE_STATE));
+		file.recordPdfUpload(pdf);
+		ReportParseAttempt attempt = attempts.save(ReportParseAttempt.request(report));
 		attempt.start(now);
 		request.attachAttempt(attempt);
-		return new ParseWork(requestId, report.getId(), attempt.getId(), request.getProcessingDeadlineAt());
+		return new ParseWork(requestId, report.getId(), attempt.getId(), request.getProcessingDeadlineAt(), pdf);
 	}
 
 	/** 직전 실패와 처리 기한, 재시도 한도를 확인한 뒤 같은 원본의 새 파싱 시도를 저장한다. */
@@ -124,7 +141,8 @@ public class ReportIntakeCommandService {
 		var attempt = attempts.save(ReportParseAttempt.request(request.getReport()));
 		attempt.start(clock.instant());
 		request.attachAttempt(attempt);
-		return new ParseWork(work.requestId(), work.reportId(), attempt.getId(), request.getProcessingDeadlineAt());
+		return new ParseWork(work.requestId(), work.reportId(), attempt.getId(), request.getProcessingDeadlineAt(),
+				work.pdf());
 	}
 
 	/** 재시도 대기 중 서버가 종료돼도 원인이 남도록 현재 파싱 시도의 실패를 먼저 저장한다. */
@@ -250,20 +268,22 @@ public class ReportIntakeCommandService {
 		return new ReportIntakeResult(request.getResponseStatus(), request.getResponseBody());
 	}
 
-	/** 선점한 접수의 식별자와 원본 키 또는 재사용할 완료 응답을 전달한다. */
+	/** 선점한 접수의 식별자와 원본 키, 처리 기한과 재사용할 완료 응답을 전달한다. */
 	public record Reservation(
 		long requestId,
 		String objectKey,
+		Instant deadline,
 		ReportIntakeResult replay
 	) {
 	}
 
-	/** 외부 파싱 호출에 사용할 접수, 보고서와 파싱 시도의 식별자를 전달한다. */
+	/** 파싱할 PDF 정보와 접수, 보고서, 파싱 시도 식별자 및 처리 기한을 전달한다. */
 	public record ParseWork(
 		long requestId,
 		long reportId,
 		long attemptId,
-		Instant deadline
+		Instant deadline,
+		UploadedReportFile pdf
 	) {
 	}
 }

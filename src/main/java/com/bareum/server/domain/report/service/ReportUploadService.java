@@ -1,6 +1,8 @@
 package com.bareum.server.domain.report.service;
 
+import java.time.Clock;
 import java.time.Duration;
+import java.util.Optional;
 import java.util.UUID;
 
 import org.springframework.stereotype.Service;
@@ -10,29 +12,35 @@ import org.springframework.web.multipart.MultipartFile;
 
 import com.bareum.server.domain.report.body.pdf.PdfBodyConverter;
 import com.bareum.server.domain.report.config.ReportUploadProperties;
+import com.bareum.server.domain.report.enums.FileFormat;
 import com.bareum.server.domain.report.enums.PdfParseErrorCode;
 import com.bareum.server.domain.report.enums.ReportType;
 import com.bareum.server.domain.report.exception.ReportErrorCode;
 import com.bareum.server.domain.report.exception.ReportException;
-import com.bareum.server.domain.report.intake.PdfUploadValidator;
-import com.bareum.server.domain.report.intake.PreparedPdf;
+import com.bareum.server.domain.report.intake.PreparedReportFile;
 import com.bareum.server.domain.report.intake.ReportIntakeLimiter;
 import com.bareum.server.domain.report.intake.ReportIntakePolicy;
 import com.bareum.server.domain.report.intake.ReportIntakeResult;
+import com.bareum.server.domain.report.intake.ReportPdfConverter;
+import com.bareum.server.domain.report.intake.ReportUploadValidator;
 import com.bareum.server.domain.report.parsing.PdfParseResponse;
 import com.bareum.server.domain.report.service.command.ReportIntakeCommandService;
+import com.bareum.server.domain.report.service.command.ReportIntakeCommandService.ParseWork;
+import com.bareum.server.domain.report.service.command.ReportIntakeCommandService.Reservation;
 import com.bareum.server.domain.report.service.query.ReportIntakeQueryService;
 import com.bareum.server.domain.report.source.ReportSourceStore;
+import com.bareum.server.domain.report.source.UploadedReportFile;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
-/** DB 트랜잭션 밖에서 원본 업로드와 파싱을 실행하고 조회와 저장 서비스를 연결한다. */
+/** 트랜잭션 밖에서 원본 업로드, PDF 준비와 파싱을 실행한다. */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class ReportUploadService {
-	private final PdfUploadValidator validator;
+	private final ReportUploadValidator validator;
+	private final ReportPdfConverter reportPdfConverter;
 	private final ReportSourceStore sources;
 	private final ReportParsingService parsing;
 	private final PdfBodyConverter converter;
@@ -40,12 +48,13 @@ public class ReportUploadService {
 	private final ReportIntakeCommandService commands;
 	private final ReportUploadProperties properties;
 	private final ReportIntakeLimiter limiter;
+	private final Clock clock;
 
 	@Transactional(propagation = Propagation.NOT_SUPPORTED)
 	public ReportIntakeResult upload(long memberId, UUID key, ReportType type, MultipartFile file) {
-		var pdf = validator.prepare(file);
-		var fingerprint = validator.fingerprint(type, pdf);
-		var replay = queries.findReplay(memberId, key, fingerprint);
+		PreparedReportFile original = validator.prepare(file);
+		String fingerprint = validator.fingerprint(type, original);
+		Optional<ReportIntakeResult> replay = queries.findReplay(memberId, key, fingerprint);
 		if (replay.isPresent()) {
 			return replay.get();
 		}
@@ -55,27 +64,34 @@ public class ReportUploadService {
 					.orElseThrow(() -> new ReportException(ReportErrorCode.PDF_CAPACITY_EXCEEDED));
 		}
 		try {
-			return accept(memberId, key, type, pdf, fingerprint);
+			return accept(memberId, key, type, original, fingerprint);
 		} finally {
 			limiter.release();
 		}
 	}
 
 	/** 확보한 처리 자리 안에서 접수를 선점하고 원본 저장부터 파싱 및 결과 저장까지 수행한다. */
-	private ReportIntakeResult accept(long memberId, UUID key, ReportType type, PreparedPdf pdf, String fingerprint) {
-		var reservation =
-				commands.reserve(memberId, key, fingerprint, sources.newObjectKey(memberId));
+	private ReportIntakeResult accept(
+		long memberId,
+		UUID key,
+		ReportType type,
+		PreparedReportFile original,
+		String fingerprint
+	) {
+		Reservation reservation = commands.reserve(memberId, key, fingerprint,
+				sources.newObjectKey(memberId, original.format()));
 		if (reservation.replay() != null) {
 			return reservation.replay();
 		}
 		try {
 			properties.requireConfigured();
-			var source = sources.upload(reservation.objectKey(), pdf);
+			UploadedReportFile source = sources.upload(reservation.objectKey(), original);
 			commands.recordSource(reservation.requestId(), source);
 			commands.attachReport(reservation.requestId(), type, source);
-			var work = commands.startParsing(reservation.requestId());
-			var parsed = parsing.parse(work, source);
-			var response = parsed.response();
+			UploadedReportFile pdf = prepareViewerPdf(memberId, reservation, original, source);
+			ParseWork work = commands.startParsing(reservation.requestId(), pdf);
+			ReportParsingService.ParsedReport parsed = parsing.parse(work);
+			PdfParseResponse response = parsed.response();
 			if (response instanceof PdfParseResponse.Failed failed) {
 				return commands.fail(reservation.requestId(), mapError(failed.error().code()),
 						failed.error().code().name(),
@@ -109,6 +125,22 @@ public class ReportUploadService {
 			return commands.fail(reservation.requestId(), ReportErrorCode.INTAKE_PERSISTENCE_FAILED,
 					ReportErrorCode.INTAKE_PERSISTENCE_FAILED.getCode(), uncertainCleanupDelay());
 		}
+	}
+
+	private UploadedReportFile prepareViewerPdf(
+		long memberId,
+		Reservation reservation,
+		PreparedReportFile original,
+		UploadedReportFile source
+	) {
+		if (original.format() == FileFormat.PDF) {
+			return source;
+		}
+		Duration remaining = Duration.between(clock.instant(), reservation.deadline());
+		PreparedReportFile pdf = reportPdfConverter.convert(original, remaining);
+		String objectKey = sources.newObjectKey(memberId, FileFormat.PDF);
+		commands.reserveConvertedPdf(reservation.requestId(), objectKey, pdf);
+		return sources.upload(objectKey, pdf);
 	}
 
 	private Duration uncertainCleanupDelay() {

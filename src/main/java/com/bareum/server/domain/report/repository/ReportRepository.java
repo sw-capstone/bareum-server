@@ -17,6 +17,28 @@ public interface ReportRepository extends JpaRepository<Report, Long> {
 	@Query("select r from Report r where r.id = :id and r.member.id = :memberId")
 	Optional<Report> findOwnedForUpdate(@Param("id") Long id, @Param("memberId") Long memberId);
 
+	@Query("""
+			select content.id as contentId,
+			       coalesce(original.objectKey, converted.objectKey) as objectKey,
+			       case when original.id is not null then original.versionId else converted.versionId end as versionId
+			from Report r
+			left join ReportContent content on content.report = r
+			left join ReportFile original on original.report = r and original.role = ORIGINAL
+			    and original.format = PDF and original.deletedAt is null and original.s3DeletedAt is null
+			left join ReportFile converted on converted.report = r and converted.role = CONVERTED_PDF
+			    and converted.format = PDF and converted.deletedAt is null and converted.s3DeletedAt is null
+			where r.id = :reportId and r.member.id = :memberId and r.deletedAt is null and r.intakeCancelledAt is null
+			""")
+	Optional<PreviewTarget> findOwnedPreview(long reportId, long memberId);
+
 	@Query("select count(a) > 0 from ReportAnalysis a where a.content.report.id = :reportId")
 	boolean hasAnalyses(@Param("reportId") Long reportId);
+
+	interface PreviewTarget {
+		Long getContentId();
+
+		String getObjectKey();
+
+		String getVersionId();
+	}
 }

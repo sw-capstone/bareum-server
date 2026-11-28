@@ -31,6 +31,7 @@ SCHEMA_EXAMPLES = {
     "packages/contracts/report-intake/1.0.0/success.schema.json": "packages/contracts/report-intake/1.0.0/examples/success.example.json",
     "packages/contracts/report-intake/1.0.0/failure.schema.json": "packages/contracts/report-intake/1.0.0/examples/failure.example.json",
     "packages/contracts/report-intake/1.0.0/source-deletion.schema.json": "packages/contracts/report-intake/1.0.0/examples/source-deletion.example.json",
+    "packages/contracts/report-intake/1.0.0/preview.schema.json": "packages/contracts/report-intake/1.0.0/examples/preview.example.json",
 }
 
 Finding = tuple[str, str, str]

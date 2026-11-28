@@ -9,7 +9,7 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 
 import com.bareum.server.domain.report.entity.ReportFile;
-import com.bareum.server.domain.report.enums.FileFormat;
+import com.bareum.server.domain.report.enums.ReportFileRole;
 
 import jakarta.persistence.LockModeType;
 
@@ -22,7 +22,9 @@ public interface ReportFileRepository extends JpaRepository<ReportFile, Long> {
 	@Lock(LockModeType.PESSIMISTIC_WRITE)
 	List<ReportFile> findByReportIdOrderById(Long reportId);
 
-	boolean existsByReportIdAndFormatAndDeletedAtIsNull(Long reportId, FileFormat format);
+	Optional<ReportFile> findByReportIdAndRole(Long reportId, ReportFileRole role);
+
+	Optional<ReportFile> findByReportIdAndObjectKeyAndDeletedAtIsNull(Long reportId, String objectKey);
 
 	@Query(value = """
 			SELECT f.id FROM report_file f

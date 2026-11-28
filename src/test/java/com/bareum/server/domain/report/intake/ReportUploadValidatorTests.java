@@ -11,17 +11,19 @@ import java.util.HexFormat;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.web.multipart.MultipartFile;
 
+import com.bareum.server.domain.report.enums.FileFormat;
 import com.bareum.server.domain.report.enums.ReportType;
 import com.bareum.server.domain.report.exception.ReportErrorCode;
 import com.bareum.server.domain.report.exception.ReportException;
 
-/** PDF 업로드의 파일 제한, 파일명 정리와 요청 지문 계산을 검증한다. */
-class PdfUploadValidatorTests {
-	private final PdfUploadValidator validator = new PdfUploadValidator();
+/** 보고서 업로드의 파일 제한, 파일명 정리와 요청 지문 계산을 검증한다. */
+class ReportUploadValidatorTests {
+	private final ReportUploadValidator validator = new ReportUploadValidator();
 	private final byte[] bytes = "%PDF-1.7\nfixture".getBytes(StandardCharsets.US_ASCII);
 
 	@Test
@@ -59,12 +61,22 @@ class PdfUploadValidatorTests {
 	}
 
 	@Test
-	void rejectsEmptyAndNonPdfPayloads() {
+	void rejectsEmptyAndMismatchedPayloads() {
 		rejects(ReportErrorCode.FILE_METADATA_REQUIRED, file("report.pdf", new byte[0]));
 		rejects(ReportErrorCode.UNSUPPORTED_FILE_TYPE,
 				file("report.pdf", "not a pdf".getBytes(StandardCharsets.UTF_8)));
 		rejects(ReportErrorCode.UNSUPPORTED_FILE_TYPE, file("report.docx", bytes));
 		rejects(ReportErrorCode.UNSUPPORTED_FILE_TYPE, new MockMultipartFile("file", "report.pdf", "image/png", bytes));
+	}
+
+	@ParameterizedTest
+	@EnumSource(value = FileFormat.class, names = {"DOCX", "HWPX"})
+	void recognizesTheOfficeFileEvenWithAGenericBrowserContentType(FileFormat format) throws Exception {
+		byte[] zip = {0x50, 0x4b, 0x03, 0x04};
+		PreparedReportFile prepared = validator.prepare(
+				new MockMultipartFile("file", "보고서" + format.extension(), "application/octet-stream", zip));
+		assertEquals(format, prepared.format());
+		assertArrayEquals(zip, prepared.openStream().readAllBytes());
 	}
 
 	@ParameterizedTest

@@ -8,7 +8,7 @@ import com.bareum.server.domain.report.exception.ReportErrorCode;
 import com.bareum.server.domain.report.exception.ReportException;
 import com.bareum.server.domain.report.intake.ReportIntakePolicy;
 
-/** S3에 저장된 원본의 식별 정보. 다운로드 자격은 저장하지 않는다. */
+/** S3에 저장된 보고서 파일의 식별 정보. 다운로드 자격은 저장하지 않는다. */
 public record UploadedReportFile(
 	FileFormat format,
 	String objectKey,

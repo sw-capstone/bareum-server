@@ -1,0 +1,5 @@
+{
+  "reportId": 101,
+  "pdfUrl": "https://files.example.invalid/reports/7/report.pdf?signature=example",
+  "expiresAt": "2026-11-24T03:10:00Z"
+}

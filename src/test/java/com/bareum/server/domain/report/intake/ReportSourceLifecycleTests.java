@@ -2,6 +2,7 @@ package com.bareum.server.domain.report.intake;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
@@ -80,15 +81,21 @@ class ReportSourceLifecycleTests {
 		var report = IntakeFixtures.report(IntakeFixtures.member());
 		var original = ReportFile.original(report, new UploadedReportFile(FileFormat.DOCX, "reports/original.docx",
 				"원본.docx", 100, IntakeFixtures.HASH, "original-version", IntakeFixtures.NOW));
-		var converted = ReportFile.convertedPdf(original, IntakeFixtures.source("reports/display.pdf"));
+		PreparedReportFile pdf = new PreparedReportFile(FileFormat.PDF,
+				"%PDF-1.7\nlifecycle-fixture".getBytes(StandardCharsets.US_ASCII), "원본.pdf");
+		String convertedKey = "reports/display.pdf";
+		ReportFile converted = ReportFile.reserveConvertedPdf(original, convertedKey, pdf);
 		assertSame(report, converted.getReport());
 		assertEquals(ReportFileRole.CONVERTED_PDF, converted.getRole());
 		assertEquals(FileFormat.PDF, converted.getFormat());
+		assertNull(converted.getVersionId());
+		converted.recordPdfUpload(new UploadedReportFile(FileFormat.PDF, convertedKey, pdf.filename(), pdf.sizeBytes(),
+				pdf.sha256(), "converted-version", IntakeFixtures.NOW));
+		assertEquals("converted-version", converted.getVersionId());
 		assertThrows(ReportException.class,
-				() -> ReportFile.convertedPdf(original, IntakeFixtures.source(original.getObjectKey())));
+				() -> ReportFile.reserveConvertedPdf(original, original.getObjectKey(), pdf));
 		var originalPdf = IntakeFixtures.original(report);
-		assertThrows(ReportException.class, () -> ReportFile.convertedPdf(originalPdf,
-				IntakeFixtures.source("reports/duplicate.pdf")));
+		assertThrows(ReportException.class, () -> ReportFile.reserveConvertedPdf(originalPdf, convertedKey, pdf));
 	}
 
 	@Test
