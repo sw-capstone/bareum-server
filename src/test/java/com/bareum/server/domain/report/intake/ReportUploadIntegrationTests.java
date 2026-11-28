@@ -21,6 +21,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -63,6 +64,7 @@ import tools.jackson.databind.json.JsonMapper;
 class ReportUploadIntegrationTests {
 	private static final UploadParserFixture API = new UploadParserFixture();
 	private static final byte[] PDF = "%PDF-1.7\nintake-fixture".getBytes(StandardCharsets.US_ASCII);
+	private static final byte[] ZIP_HEADER = {0x50, 0x4b, 0x03, 0x04};
 	private final HttpClient client = HttpClient.newHttpClient();
 	private final JsonMapper mapper = JsonMapper.builder().build();
 	@LocalServerPort
@@ -81,6 +83,8 @@ class ReportUploadIntegrationTests {
 	private ReportSourceStore sources;
 	@MockitoSpyBean
 	private ReportContentRepository contents;
+	@MockitoSpyBean
+	private ReportPdfConverter reportPdfConverter;
 	private Member member;
 	private String token;
 
@@ -95,13 +99,14 @@ class ReportUploadIntegrationTests {
 		member = members.saveAndFlush(
 				Member.createLocal("upload-" + UUID.randomUUID() + "@example.invalid", "tester", "test-hash"));
 		token = sessions.issue(new ValidatedMember(member.getId(), member.getPasswordHash())).accessToken();
-		when(sources.newObjectKey(anyLong()))
-				.thenAnswer(i -> "reports/" + i.getArgument(0) + "/" + UUID.randomUUID() + ".pdf");
+		when(sources.newObjectKey(anyLong(), any(FileFormat.class)))
+				.thenAnswer(i -> "reports/" + i.getArgument(0) + "/" + UUID.randomUUID()
+						+ i.<FileFormat>getArgument(1).extension());
 		when(sources.upload(anyString(), any())).thenAnswer(i -> {
 			assertFalse(TransactionSynchronizationManager.isActualTransactionActive());
-			PreparedPdf pdf = i.getArgument(1);
-			return new UploadedReportFile(FileFormat.PDF, i.getArgument(0), pdf.filename(), pdf.sizeBytes(),
-					pdf.sha256(), "version-fixture", Instant.now());
+			PreparedReportFile file = i.getArgument(1);
+			return new UploadedReportFile(file.format(), i.getArgument(0), file.filename(), file.sizeBytes(),
+					file.sha256(), "version-fixture", Instant.now());
 		});
 		when(sources.presign(any())).thenAnswer(i -> {
 			assertFalse(TransactionSynchronizationManager.isActualTransactionActive());
@@ -164,6 +169,7 @@ class ReportUploadIntegrationTests {
 		assertEquals(result, json(repeated));
 		assertEquals(1, API.calls.get());
 		verify(sources, times(1)).upload(anyString(), any());
+		verifyNoInteractions(reportPdfConverter);
 		var changed = upload(key, "RESULT", "report.pdf", PDF, 1, token);
 		assertEquals(409, changed.statusCode());
 	}
@@ -243,35 +249,76 @@ class ReportUploadIntegrationTests {
 		}
 	}
 
-	@Test
-	void choosesTheLiveConvertedPdfForAnOfficeDocument() throws Exception {
-		HttpResponse<String> uploaded = upload(UUID.randomUUID(), "PLAN", "report.pdf", PDF, 1, token);
+	@ParameterizedTest
+	@EnumSource(value = FileFormat.class, names = {"DOCX", "HWPX"})
+	void parsesAndPreviewsTheSameConvertedPdfForAnOfficeDocument(FileFormat format) throws Exception {
+		UUID key = UUID.randomUUID();
+		String filename = "report" + format.extension();
+		PreparedReportFile pdf = new PreparedReportFile(FileFormat.PDF, PDF, "report.pdf");
+		doAnswer(invocation -> {
+			assertFalse(TransactionSynchronizationManager.isActualTransactionActive());
+			PreparedReportFile original = invocation.getArgument(0);
+			assertEquals(format, original.format());
+			assertArrayEquals(ZIP_HEADER, original.openStream().readAllBytes());
+			return pdf;
+		}).when(reportPdfConverter).convert(any(), any());
+
+		HttpResponse<String> uploaded = upload(key, "PLAN", filename, ZIP_HEADER, 1, token, format.getMediaType());
 		assertEquals(201, uploaded.statusCode(), uploaded.body());
 		long reportId = json(uploaded).get("reportId").asLong();
-		jdbc.update("UPDATE report_file SET file_format='HWPX', filename='report.hwpx' WHERE report_id=?", reportId);
-		HttpResponse<String> missing = preview(reportId, token);
-		assertEquals(404, missing.statusCode(), missing.body());
-		assertEquals("REPORT-0059", json(missing).get("code").asString());
-		verify(sources, never()).presignPreview(anyString(), any());
+		String originalKey = jdbc.queryForObject(
+				"SELECT object_key FROM report_file WHERE report_id=? AND file_role='ORIGINAL' AND filename=?",
+				String.class, reportId, filename);
+		String convertedKey = jdbc.queryForObject(
+				"SELECT object_key FROM report_file WHERE report_id=? AND file_role='CONVERTED_PDF' AND sha256=?",
+				String.class, reportId, pdf.sha256());
+		assertNotEquals(originalKey, convertedKey);
+		assertTrue(originalKey.endsWith(format.extension()));
+		assertTrue(convertedKey.endsWith(".pdf"));
+		assertEquals(convertedKey, API.received.get("source").get("objectKey").asString());
+		verify(sources).presign(
+				argThat(file -> file.objectKey().equals(convertedKey) && "version-fixture".equals(file.versionId())));
 
-		String convertedKey = "reports/" + member.getId() + "/" + UUID.randomUUID() + ".pdf";
-		jdbc.update(
-				"""
-						INSERT INTO report_file(report_id, file_role, file_format, filename, size_bytes, sha256, object_key, version_id)
-						VALUES (?, 'CONVERTED_PDF', 'PDF', 'report.pdf', 100, ?, ?, 'converted-version')
-						""",
-				reportId, "a".repeat(64), convertedKey);
 		URI convertedUrl = URI.create("https://files.example.invalid/converted.pdf?signature=fixture");
-		when(sources.presignPreview(convertedKey, "converted-version"))
+		when(sources.presignPreview(convertedKey, "version-fixture"))
 				.thenReturn(new DownloadSource(convertedUrl, Instant.now().plusSeconds(600)));
 		HttpResponse<String> converted = preview(reportId, token);
 		assertEquals(200, converted.statusCode(), converted.body());
 		assertEquals(convertedUrl.toString(), json(converted).get("pdfUrl").asString());
+		HttpResponse<String> repeated = upload(key, "PLAN", filename, ZIP_HEADER, 1, token, format.getMediaType());
+		assertEquals(201, repeated.statusCode(), repeated.body());
+		assertEquals(json(uploaded), json(repeated));
+		assertEquals(1, API.calls.get());
+		verify(sources, times(2)).upload(anyString(), any());
+		verify(reportPdfConverter).convert(any(), any());
+
 		jdbc.update("UPDATE report_file SET deleted_at=now(), cleanup_after=now() WHERE object_key=?", convertedKey);
 		HttpResponse<String> removed = preview(reportId, token);
 		assertEquals(404, removed.statusCode(), removed.body());
 		assertEquals("REPORT-0059", json(removed).get("code").asString());
-		verify(sources).presignPreview(convertedKey, "converted-version");
+		verify(sources).presignPreview(convertedKey, "version-fixture");
+	}
+
+	@Test
+	void malformedOfficePackageFailsBeforeParsingAndSchedulesOnlyTheOriginalForCleanup() throws Exception {
+		UUID key = UUID.randomUUID();
+		HttpResponse<String> result = upload(key, "PLAN", "report.docx", ZIP_HEADER, 1, token,
+				FileFormat.DOCX.getMediaType());
+		assertEquals(422, result.statusCode(), result.body());
+		assertEquals("REPORT-0061", json(result).get("code").asString());
+		assertFalse(json(result).has("parseAttemptId"));
+		long reportId = json(result).get("reportId").asLong();
+		assertEquals("FAILED", jdbc.queryForObject("SELECT status FROM report_intake_request WHERE report_id=?",
+				String.class, reportId));
+		assertEquals(1, jdbc.queryForObject("""
+				SELECT count(*) FROM report_file
+				WHERE report_id=? AND file_role='ORIGINAL' AND cleanup_after IS NOT NULL AND deleted_at IS NOT NULL
+				""", Integer.class, reportId));
+		assertEquals(0, jdbc.queryForObject("SELECT count(*) FROM report_content WHERE report_id=?",
+				Integer.class, reportId));
+		assertEquals(404, preview(reportId, token).statusCode());
+		assertEquals(0, API.calls.get());
+		verify(sources).upload(anyString(), any());
 	}
 
 	@Test
@@ -379,7 +426,7 @@ class ReportUploadIntegrationTests {
 		assertEquals(0,
 				jdbc.queryForObject("SELECT count(*) FROM report WHERE member_id=?", Integer.class, member.getId()));
 		doAnswer(i -> {
-			PreparedPdf pdf = i.getArgument(1);
+			PreparedReportFile pdf = i.getArgument(1);
 			return new UploadedReportFile(FileFormat.PDF, i.getArgument(0), pdf.filename(), pdf.sizeBytes(),
 					pdf.sha256(), "version-fixture", Instant.now());
 		}).when(sources).upload(anyString(), any());
@@ -551,6 +598,18 @@ class ReportUploadIntegrationTests {
 
 	private HttpResponse<String> upload(UUID key, String type, String filename, byte[] bytes, int files, String access)
 			throws Exception {
+		return upload(key, type, filename, bytes, files, access, "application/pdf");
+	}
+
+	private HttpResponse<String> upload(
+		UUID key,
+		String type,
+		String filename,
+		byte[] bytes,
+		int files,
+		String access,
+		String mediaType
+	) throws Exception {
 		String boundary = "bareum-test-boundary";
 		var body = new ByteArrayOutputStream();
 		body.writeBytes(
@@ -558,7 +617,7 @@ class ReportUploadIntegrationTests {
 						.getBytes(StandardCharsets.UTF_8));
 		for (int i = 0; i < files; i++) {
 			body.writeBytes(("--" + boundary + "\r\nContent-Disposition: form-data; name=\"file\"; filename=\""
-					+ filename + "\"\r\nContent-Type: application/pdf\r\n\r\n").getBytes(StandardCharsets.UTF_8));
+					+ filename + "\"\r\nContent-Type: " + mediaType + "\r\n\r\n").getBytes(StandardCharsets.UTF_8));
 			body.writeBytes(bytes);
 			body.writeBytes("\r\n".getBytes(StandardCharsets.US_ASCII));
 		}

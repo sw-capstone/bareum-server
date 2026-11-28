@@ -27,8 +27,8 @@
     "/reports": {
       "post": {
         "operationId": "uploadReport",
-        "summary": "PDF 보고서 동기 접수",
-        "description": "원본 S3 저장, 파싱, 공통 본문과 파싱 이력 저장이 끝난 뒤 응답한다. PARTIAL도 성공이며 경고를 반환한다. 분석은 별도 요청한다. Spring 인스턴스별 신규 접수 동시 처리 수를 제한한다. 제한 초과 시 S3 저장과 접수 기록 생성 없이 503을 반환하며 같은 멱등 키로 나중에 다시 접수할 수 있다. 완료된 멱등 결과 재사용은 처리 자리를 점유하지 않는다.",
+        "summary": "보고서 파일 동기 접수",
+        "description": "REPORT-002. 원본을 S3에 저장한다. PDF는 원본을 사용하고 HWPX와 DOCX는 PDF로 변환해 S3에 저장한다. 분석 화면의 뷰어와 공통 파서에 같은 PDF를 사용한다. PDF 준비, 파싱, 공통 본문과 파싱 이력 저장이 끝난 뒤 응답한다. PARTIAL도 성공이며 경고를 반환한다. 변환에 실패하면 접수를 실패 처리한다. 분석은 접수 성공 후 별도로 요청한다. Spring 인스턴스별 신규 접수 동시 처리 수를 제한한다. 제한 초과 시 S3 저장과 접수 기록 생성 없이 503을 반환하며 같은 멱등 키로 나중에 다시 접수할 수 있다. 완료된 멱등 결과 재사용은 처리 자리를 점유하지 않는다.",
         "parameters": [
           {
             "in": "header",
@@ -56,7 +56,7 @@
                   "file": {
                     "type": "string",
                     "format": "binary",
-                    "description": "비어 있지 않은 PDF 원본 1개. 중복 파일 파트는 허용하지 않는다.",
+                    "description": "비어 있지 않은 PDF(.pdf), HWPX(.hwpx), DOCX(.docx) 원본 중 하나를 file 파트로 보낸다. 확장자는 대소문자에 관계없이 확인한다. PDF 파일 파트의 Content-Type을 지정할 때는 application/pdf 또는 application/octet-stream을 사용한다. 60페이지 제한은 파싱에 사용하는 PDF에 적용한다.",
                     "x-max-size-bytes": 20000000,
                     "x-max-page-count": 60
                   },
@@ -114,7 +114,7 @@
             }
           },
           "413": {
-            "description": "20,000,000바이트 초과",
+            "description": "원본 파일 또는 변환 PDF가 20,000,000바이트를 초과함(REPORT-0034)",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -124,7 +124,7 @@
             }
           },
           "415": {
-            "description": "미지원 파일 형식",
+            "description": "미지원 확장자, 확장자와 일치하지 않는 파일 헤더 또는 미지원 PDF 파일 파트 Content-Type(REPORT-0043)",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -134,7 +134,7 @@
             }
           },
           "422": {
-            "description": "60페이지 초과, 손상, 암호화 또는 추출 가능한 본문 없음",
+            "description": "PDF 변환 실패(REPORT-0061), PDF 60페이지 초과, 손상되거나 암호화된 PDF 또는 추출 가능한 본문 없음",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -164,7 +164,7 @@
             }
           },
           "503": {
-            "description": "Spring 신규 접수 또는 AI 파싱 처리 용량 부족",
+            "description": "Spring 신규 접수 또는 AI 파싱 처리 용량 부족, PDF 변환 실행 불가(REPORT-0062)",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -174,7 +174,7 @@
             }
           },
           "504": {
-            "description": "AI 응답 본문 수신을 포함한 대기시간 또는 접수 기한 초과",
+            "description": "AI 응답 본문 수신을 포함한 대기시간 또는 접수 기한 초과, PDF 변환 제한 시간 초과(REPORT-0063)",
             "content": {
               "application/problem+json": {
                 "schema": {

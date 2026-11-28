@@ -7,6 +7,7 @@ import com.bareum.server.domain.report.enums.FileFormat;
 import com.bareum.server.domain.report.enums.ReportFileRole;
 import com.bareum.server.domain.report.exception.ReportErrorCode;
 import com.bareum.server.domain.report.exception.ReportException;
+import com.bareum.server.domain.report.intake.PreparedReportFile;
 import com.bareum.server.domain.report.source.UploadedReportFile;
 import com.bareum.server.global.entity.BaseTimeEntity;
 
@@ -77,29 +78,50 @@ public class ReportFile extends BaseTimeEntity {
 	@Column(name = "s3_deleted_at")
 	private Instant s3DeletedAt;
 
-	private ReportFile(Report report, ReportFileRole role, UploadedReportFile file) {
+	private ReportFile(
+		Report report,
+		ReportFileRole role,
+		FileFormat format,
+		String filename,
+		long sizeBytes,
+		String sha256,
+		String objectKey,
+		String versionId
+	) {
 		this.report = Objects.requireNonNull(report, "report");
 		report.requireActiveIntake();
 		this.role = role;
-		format = file.format();
-		filename = file.originalFilename();
-		sizeBytes = file.sizeBytes();
-		sha256 = file.sha256();
-		objectKey = file.objectKey();
-		versionId = file.versionId();
+		this.format = format;
+		this.filename = filename;
+		this.sizeBytes = sizeBytes;
+		this.sha256 = sha256;
+		this.objectKey = objectKey;
+		this.versionId = versionId;
 	}
 
 	public static ReportFile original(Report report, UploadedReportFile file) {
-		return new ReportFile(report, ReportFileRole.ORIGINAL, file);
+		return new ReportFile(report, ReportFileRole.ORIGINAL, file.format(), file.originalFilename(), file.sizeBytes(),
+				file.sha256(), file.objectKey(), file.versionId());
 	}
 
-	public static ReportFile convertedPdf(ReportFile original, UploadedReportFile pdf) {
+	public static ReportFile reserveConvertedPdf(ReportFile original, String objectKey, PreparedReportFile pdf) {
 		if (original.role != ReportFileRole.ORIGINAL || original.format == FileFormat.PDF
 				|| original.deletedAt != null || pdf.format() != FileFormat.PDF
-				|| original.objectKey.equals(pdf.objectKey())) {
+				|| objectKey == null || objectKey.isBlank() || original.objectKey.equals(objectKey)) {
 			throw new ReportException(ReportErrorCode.FILE_METADATA_REQUIRED);
 		}
-		return new ReportFile(original.report, ReportFileRole.CONVERTED_PDF, pdf);
+		return new ReportFile(original.report, ReportFileRole.CONVERTED_PDF, FileFormat.PDF, pdf.filename(),
+				pdf.sizeBytes(), pdf.sha256(), objectKey, null);
+	}
+
+	public void recordPdfUpload(UploadedReportFile pdf) {
+		if (format != FileFormat.PDF || pdf.format() != format || deletedAt != null
+				|| !objectKey.equals(pdf.objectKey()) || !filename.equals(pdf.originalFilename())
+				|| sizeBytes != pdf.sizeBytes() || !Objects.equals(sha256, pdf.sha256())
+				|| (versionId != null && !versionId.equals(pdf.versionId()))) {
+			throw new ReportException(ReportErrorCode.INTAKE_REPORT_MISMATCH);
+		}
+		versionId = pdf.versionId();
 	}
 
 	public void scheduleDeletion(Instant deletedAt, Instant cleanupAfter) {

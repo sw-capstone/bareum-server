@@ -69,10 +69,10 @@ public enum ReportErrorCode implements BaseErrorCode {
 	INVALID_INTAKE_STATE(HttpStatus.CONFLICT, "REPORT-0040", "현재 접수 상태에서는 처리할 수 없습니다."),
 	INVALID_INTAKE_RESULT(HttpStatus.INTERNAL_SERVER_ERROR, "REPORT-0041", "접수 결과 기록이 올바르지 않습니다."),
 	INTAKE_REPORT_MISMATCH(HttpStatus.INTERNAL_SERVER_ERROR, "REPORT-0042", "접수 기록과 보고서의 원본 또는 소유자가 일치하지 않습니다."),
-	UNSUPPORTED_FILE_TYPE(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "REPORT-0043", "PDF 파일만 접수할 수 있습니다."),
-	INVALID_FILE_COUNT(HttpStatus.BAD_REQUEST, "REPORT-0044", "file 필드로 PDF 파일 1개를 보내주세요."),
+	UNSUPPORTED_FILE_TYPE(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "REPORT-0043", "PDF, HWPX, DOCX 파일을 접수할 수 있습니다."),
+	INVALID_FILE_COUNT(HttpStatus.BAD_REQUEST, "REPORT-0044", "file 필드로 보고서 파일 1개를 보내주세요."),
 	FILE_READ_FAILED(HttpStatus.BAD_REQUEST, "REPORT-0045", "업로드한 파일을 읽을 수 없습니다."),
-	SOURCE_STORAGE_FAILED(HttpStatus.BAD_GATEWAY, "REPORT-0046", "원본 파일 저장소와 통신할 수 없습니다."),
+	SOURCE_STORAGE_FAILED(HttpStatus.BAD_GATEWAY, "REPORT-0046", "보고서 파일 저장소와 통신할 수 없습니다."),
 	UPLOAD_NOT_CONFIGURED(HttpStatus.SERVICE_UNAVAILABLE, "REPORT-0047", "보고서 접수 연동 설정이 준비되지 않았습니다."),
 	PAGE_LIMIT_EXCEEDED(HttpStatus.UNPROCESSABLE_CONTENT, "REPORT-0048", "PDF는 최대 60페이지까지 접수할 수 있습니다."),
 	PDF_ENCRYPTED(HttpStatus.UNPROCESSABLE_CONTENT, "REPORT-0049", "암호화된 PDF는 접수할 수 없습니다."),
@@ -86,7 +86,12 @@ public enum ReportErrorCode implements BaseErrorCode {
 	INTAKE_PROCESSING_TIMEOUT(HttpStatus.GATEWAY_TIMEOUT, "REPORT-0057", "보고서 접수 처리 기한을 초과했습니다."),
 	PREVIEW_NOT_READY(HttpStatus.CONFLICT, "REPORT-0058", "보고서 PDF가 아직 준비되지 않았습니다."),
 	PREVIEW_PDF_NOT_FOUND(HttpStatus.NOT_FOUND, "REPORT-0059", "보고서 PDF 파일을 찾을 수 없습니다."),
-	PREVIEW_URL_FAILED(HttpStatus.BAD_GATEWAY, "REPORT-0060", "보고서 PDF 접근 URL을 발급할 수 없습니다.");
+	PREVIEW_URL_FAILED(HttpStatus.BAD_GATEWAY, "REPORT-0060", "보고서 PDF 접근 URL을 발급할 수 없습니다."),
+
+	// 뷰어용 PDF 변환
+	PDF_CONVERSION_FAILED(HttpStatus.UNPROCESSABLE_CONTENT, "REPORT-0061", "보고서를 PDF로 변환할 수 없습니다."),
+	PDF_CONVERSION_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "REPORT-0062", "보고서 PDF 변환을 실행할 수 없습니다."),
+	PDF_CONVERSION_TIMEOUT(HttpStatus.GATEWAY_TIMEOUT, "REPORT-0063", "보고서 PDF 변환 제한 시간을 초과했습니다.");
 
 	private final HttpStatus httpStatus;
 	private final String code;

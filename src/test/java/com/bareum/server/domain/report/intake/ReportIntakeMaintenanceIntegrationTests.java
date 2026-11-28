@@ -87,11 +87,11 @@ class ReportIntakeMaintenanceIntegrationTests {
 		when(clock.getZone()).thenReturn(ZoneOffset.UTC);
 		member = members.saveAndFlush(
 				Member.createLocal("maintenance-" + UUID.randomUUID() + "@example.invalid", "tester", "hash"));
-		when(sources.newObjectKey(anyLong()))
+		when(sources.newObjectKey(anyLong(), eq(FileFormat.PDF)))
 				.thenAnswer(i -> "reports/" + i.getArgument(0) + "/" + UUID.randomUUID() + ".pdf");
 		when(sources.upload(anyString(), any())).thenAnswer(i -> {
 			assertFalse(TransactionSynchronizationManager.isActualTransactionActive());
-			PreparedPdf pdf = i.getArgument(1);
+			PreparedReportFile pdf = i.getArgument(1);
 			return new UploadedReportFile(FileFormat.PDF, i.getArgument(0), pdf.filename(), pdf.sizeBytes(),
 					pdf.sha256(), "version-1", now.get());
 		});
@@ -342,16 +342,14 @@ class ReportIntakeMaintenanceIntegrationTests {
 		commands.attachReport(request.requestId(), ReportType.PLAN, source);
 		long report = requestValue(request.requestId(), "report_id", Long.class);
 		assertEquals(ReportErrorCode.INVALID_INTAKE_STATE,
-				assertThrows(ReportException.class, () -> commands.startParsing(request.requestId()))
+				assertThrows(ReportException.class, () -> commands.startParsing(request.requestId(), source))
 						.getBaseErrorCode());
 		if (converted) {
-			jdbc.update(
-					"""
-							INSERT INTO report_file (report_id, file_role, file_format, filename, size_bytes, object_key, version_id)
-							VALUES (?, 'CONVERTED_PDF', 'PDF', 'preview.pdf', 100, ?, 'version-2')
-							""",
-					report, convertedKey);
-			commands.startParsing(request.requestId());
+			PreparedReportFile pdf = new PreparedReportFile(FileFormat.PDF,
+					"%PDF-1.7\nconverted-fixture".getBytes(StandardCharsets.US_ASCII), "preview.pdf");
+			commands.reserveConvertedPdf(request.requestId(), convertedKey, pdf);
+			commands.startParsing(request.requestId(), new UploadedReportFile(FileFormat.PDF, convertedKey,
+					pdf.filename(), pdf.sizeBytes(), pdf.sha256(), "version-2", now.get()));
 		}
 
 		var result =
@@ -372,6 +370,34 @@ class ReportIntakeMaintenanceIntegrationTests {
 		assertEquals(storedFiles, jdbc.queryForObject(
 				"SELECT count(*) FROM report_file WHERE report_id=? AND s3_deleted_at IS NOT NULL", Integer.class,
 				report));
+	}
+
+	@Test
+	void interruptedConvertedUploadRetainsItsKeyAndCleansTheDiscoveredVersion() {
+		String originalKey = "reports/original.docx";
+		String convertedKey = "reports/converted.pdf";
+		var request = commands.reserve(member.getId(), UUID.randomUUID(), IntakeFixtures.HASH, originalKey);
+		UploadedReportFile original = new UploadedReportFile(FileFormat.DOCX, originalKey, "original.docx", 100L,
+				IntakeFixtures.HASH, "original-version", now.get());
+		commands.recordSource(request.requestId(), original);
+		commands.attachReport(request.requestId(), ReportType.PLAN, original);
+		PreparedReportFile pdf = new PreparedReportFile(FileFormat.PDF,
+				"%PDF-1.7\nconverted-fixture".getBytes(StandardCharsets.US_ASCII), "original.pdf");
+		commands.reserveConvertedPdf(request.requestId(), convertedKey, pdf);
+		when(sources.findVersions(convertedKey)).thenReturn(List.of("converted-version"));
+
+		advance(341);
+		maintenance.recoverInterruptedRequests();
+		maintenance.deleteSources();
+		verify(sources, never()).delete(anyString(), anyString());
+		advance(370);
+		maintenance.deleteSources();
+
+		verify(sources).delete(originalKey, "original-version");
+		verify(sources).delete(convertedKey, "converted-version");
+		assertEquals(2, jdbc.queryForObject(
+				"SELECT count(*) FROM report_file WHERE report_id=? AND s3_deleted_at IS NOT NULL", Integer.class,
+				requestValue(request.requestId(), "report_id", Long.class)));
 	}
 
 	/** 버전 조회 실패는 미완료로 남기고 다른 원본의 정리는 계속 진행하는지 검증한다. */
@@ -402,7 +428,7 @@ class ReportIntakeMaintenanceIntegrationTests {
 				now.get());
 		commands.recordSource(request.requestId(), source);
 		commands.attachReport(request.requestId(), ReportType.PLAN, source);
-		var work = commands.startParsing(request.requestId());
+		var work = commands.startParsing(request.requestId(), source);
 		commands.recordRetryableFailure(work, PdfParseErrorCode.CAPACITY_EXCEEDED.name());
 		var error = assertThrows(ReportException.class, () -> sourceCommands.request(member.getId(), work.reportId()));
 		assertEquals(ReportErrorCode.SOURCE_IN_USE, error.getBaseErrorCode());

@@ -32,14 +32,15 @@ public class ReportParsingService {
 	private final ReportIntakeCommandService commands;
 	private final Clock clock;
 
-	/** 원본을 다시 올리지 않고 새 URL과 시도 이력으로 일시적 파싱 실패를 기한 안에서 1회 재시도한다. */
-	public ParsedReport parse(ParseWork first, UploadedReportFile source) {
-		var work = first;
+	/** 같은 PDF에 새 URL을 발급해 일시적 파싱 실패를 기한 안에서 1회 재시도한다. */
+	public ParsedReport parse(ParseWork first) {
+		ParseWork work = first;
 		for (int additional = 0;; additional++) {
 			commands.requireParsingActive(work);
-			var download = sources.presign(source);
+			UploadedReportFile pdf = work.pdf();
+			ReportSourceStore.DownloadSource download = sources.presign(pdf);
 			var request = new PdfParseRequest(work.reportId(), work.attemptId(), new PdfParseRequest.Source(
-					source.objectKey(), source.originalFilename(), source.sizeBytes(), source.sha256(),
+					pdf.objectKey(), pdf.originalFilename(), pdf.sizeBytes(), pdf.sha256(),
 					download.url(), download.expiresAt().atOffset(ZoneOffset.UTC)));
 			var remaining = Duration.between(clock.instant(), work.deadline());
 			if (remaining.isZero() || remaining.isNegative()) {

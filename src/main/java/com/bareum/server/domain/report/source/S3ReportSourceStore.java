@@ -1,6 +1,7 @@
 package com.bareum.server.domain.report.source;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
@@ -17,7 +18,7 @@ import com.bareum.server.domain.report.config.ReportUploadProperties;
 import com.bareum.server.domain.report.enums.FileFormat;
 import com.bareum.server.domain.report.exception.ReportErrorCode;
 import com.bareum.server.domain.report.exception.ReportException;
-import com.bareum.server.domain.report.intake.PreparedPdf;
+import com.bareum.server.domain.report.intake.PreparedReportFile;
 
 import lombok.RequiredArgsConstructor;
 import software.amazon.awssdk.core.exception.SdkException;
@@ -28,11 +29,12 @@ import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
 import software.amazon.awssdk.services.s3.model.ListObjectVersionsRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+import software.amazon.awssdk.services.s3.model.PutObjectResponse;
 import software.amazon.awssdk.services.s3.model.S3Exception;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.s3.presigner.model.PresignedGetObjectRequest;
 
-/** S3에 원본과 메타데이터를 저장하고 해당 버전의 다운로드 URL을 발급한다. */
+/** S3에 보고서 파일과 메타데이터를 저장하고 해당 버전의 다운로드 URL을 발급한다. */
 @RequiredArgsConstructor
 public final class S3ReportSourceStore implements ReportSourceStore {
 	private final Supplier<S3Client> clients;
@@ -41,26 +43,27 @@ public final class S3ReportSourceStore implements ReportSourceStore {
 	private final Clock clock;
 
 	@Override
-	public String newObjectKey(long memberId) {
-		return properties.keyPrefix() + memberId + "/" + UUID.randomUUID() + ".pdf";
+	public String newObjectKey(long memberId, FileFormat format) {
+		return properties.keyPrefix() + memberId + "/" + UUID.randomUUID() + format.extension();
 	}
 
 	@Override
-	public UploadedReportFile upload(String objectKey, PreparedPdf pdf) {
+	public UploadedReportFile upload(String objectKey, PreparedReportFile file) {
 		properties.requireConfigured();
 		PutObjectRequest request = PutObjectRequest.builder()
 				.bucket(properties.bucket())
 				.key(objectKey)
-				.contentType("application/pdf")
-				.contentLength(pdf.sizeBytes())
-				.checksumSHA256(Base64.getEncoder().encodeToString(HexFormat.of().parseHex(pdf.sha256())))
-				.metadata(Map.of("sha256", pdf.sha256(), "size-bytes", Long.toString(pdf.sizeBytes()),
+				.contentType(file.format().getMediaType())
+				.contentLength(file.sizeBytes())
+				.checksumSHA256(Base64.getEncoder().encodeToString(HexFormat.of().parseHex(file.sha256())))
+				.metadata(Map.of("sha256", file.sha256(), "size-bytes", Long.toString(file.sizeBytes()),
 						"filename-base64",
-						Base64.getEncoder().encodeToString(pdf.filename().getBytes(StandardCharsets.UTF_8))))
+						Base64.getEncoder().encodeToString(file.filename().getBytes(StandardCharsets.UTF_8))))
 				.build();
-		try (var input = pdf.openStream()) {
-			var result = clients.get().putObject(request, RequestBody.fromInputStream(input, pdf.sizeBytes()));
-			return new UploadedReportFile(FileFormat.PDF, objectKey, pdf.filename(), pdf.sizeBytes(), pdf.sha256(),
+		try (InputStream input = file.openStream()) {
+			PutObjectResponse result =
+					clients.get().putObject(request, RequestBody.fromInputStream(input, file.sizeBytes()));
+			return new UploadedReportFile(file.format(), objectKey, file.filename(), file.sizeBytes(), file.sha256(),
 					result.versionId(), clock.instant());
 		} catch (SdkException | IOException exception) {
 			throw new ReportException(ReportErrorCode.SOURCE_STORAGE_FAILED);
