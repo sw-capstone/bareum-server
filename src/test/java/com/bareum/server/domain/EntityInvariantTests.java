@@ -11,7 +11,10 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 import com.bareum.server.domain.analysis.entity.ReportAnalysis;
+import com.bareum.server.domain.analysis.entity.ReportAnalysisStep;
 import com.bareum.server.domain.analysis.enums.AnalysisStatus;
+import com.bareum.server.domain.analysis.enums.AnalysisStepCode;
+import com.bareum.server.domain.analysis.enums.AnalysisStepStatus;
 import com.bareum.server.domain.analysis.exception.AnalysisErrorCode;
 import com.bareum.server.domain.analysis.exception.AnalysisException;
 import com.bareum.server.domain.member.entity.Member;
@@ -28,9 +31,10 @@ import com.bareum.server.domain.report.exception.ReportErrorCode;
 import com.bareum.server.domain.report.exception.ReportException;
 
 class EntityInvariantTests {
+	private static final Instant STARTED_AT = Instant.parse("2026-11-23T10:00:00Z");
 
 	@Test
-	void immutableBodiesProtectFrozenContentAndDrafts() {
+	void parsedBodyAndItsTextUnitsAreImmutable() {
 		List<Block> blocks = new ArrayList<>(body("original").blocks());
 		ReportBody input = new ReportBody("1.0.0", "UNICODE_CODE_POINT", SourceFormat.TEXT,
 				List.of(), blocks, List.of(), List.of());
@@ -38,65 +42,125 @@ class EntityInvariantTests {
 		ReportContent baseline = ReportContent.create(report(), validated);
 		blocks.clear();
 		assertEquals("original", text(baseline));
-		baseline.freeze();
 		assertThrows(UnsupportedOperationException.class, () -> baseline.getContent().blocks().clear());
 		assertThrows(UnsupportedOperationException.class,
 				() -> ((TextBlock)baseline.getContent().blocks().getFirst()).units().clear());
-		ReportContent draft = ReportContent.draftFrom(baseline);
-		assertSame(baseline.getContent(), draft.getContent());
-		draft.replaceContent(ValidatedReportBody.from(body("edited")));
-		assertEquals("original", text(baseline));
-		assertEquals("edited", text(draft));
-		assertEquals(2, draft.getRevision());
-		assertEquals(ReportErrorCode.FROZEN_CONTENT_CANNOT_BE_EDITED,
-				assertThrows(ReportException.class, () -> baseline.replaceContent(validated)).getBaseErrorCode());
 	}
 
 	@Test
-	void creationAndReplacementRejectNullWithoutChangingDraft() {
-		ReportBody valid = body("original");
-		ReportContent draft = ReportContent.create(report(), ValidatedReportBody.from(valid));
+	void creationRejectsMissingParsedBody() {
 		assertEquals(ReportErrorCode.INVALID_CONTENT,
 				assertThrows(ReportException.class, () -> ReportContent.create(report(), null)).getBaseErrorCode());
-		assertEquals(ReportErrorCode.INVALID_CONTENT,
-				assertThrows(ReportException.class, () -> draft.replaceContent(null)).getBaseErrorCode());
-		assertEquals(valid, draft.getContent());
-		assertEquals(1, draft.getRevision());
+	}
+
+	@Test
+	void scoringCompletesBeforeTheReportAndKeepsTheAnalysisInProgress() {
+		var analysis = processingAnalysis();
+		var scoring = ReportAnalysisStep.create(AnalysisStepCode.SCORING, analysis);
+		var generation = ReportAnalysisStep.create(AnalysisStepCode.REPORT_GENERATION, analysis);
+		scoring.start(STARTED_AT);
+		assertEquals(AnalysisErrorCode.SCORE_NOT_RECORDED,
+				assertThrows(AnalysisException.class, () -> generation.start(STARTED_AT)).getBaseErrorCode());
+
+		analysis.recordScore(BigDecimal.TEN);
+		scoring.succeed(STARTED_AT.plusSeconds(1));
+		analysis.recordScore(new BigDecimal("10.00"));
+		assertEquals(AnalysisErrorCode.INVALID_SCORE,
+				assertThrows(AnalysisException.class, () -> analysis.recordScore(BigDecimal.ONE)).getBaseErrorCode());
+		assertEquals(BigDecimal.TEN, analysis.getTotalScore());
+		assertEquals(AnalysisStepStatus.SUCCEEDED, scoring.getStatus());
+		assertEquals(AnalysisStatus.PROCESSING, analysis.getStatus());
+		assertNull(analysis.getFinishedAt());
+
+		generation.start(STARTED_AT.plusSeconds(2));
+		var resultReport = generation.completeReportGeneration(0, "분석 요약", STARTED_AT.plusSeconds(3));
+		assertEquals(AnalysisStatus.SUCCEEDED, analysis.getStatus());
+		assertEquals(AnalysisStepStatus.SUCCEEDED, generation.getStatus());
+		assertEquals(generation.getFinishedAt(), analysis.getFinishedAt());
+		assertSame(analysis, resultReport.getReportAnalysis());
+		assertEquals("분석 요약", resultReport.getSummary());
+		assertEquals(analysis.getFinishedAt(), resultReport.getGeneratedAt());
+	}
+
+	@Test
+	void reportGenerationRetriesTheSameStepOnceAndIgnoresTheOldAttempt() {
+		var analysis = processingAnalysis();
+		analysis.recordScore(BigDecimal.TEN);
+		var generation = ReportAnalysisStep.create(AnalysisStepCode.REPORT_GENERATION, analysis);
+		generation.start(STARTED_AT.plusSeconds(1));
+		Instant retryStartedAt = STARTED_AT.plusSeconds(2);
+		generation.retryReportGeneration(retryStartedAt);
+
+		assertEquals(1, generation.getRetryCount());
+		assertEquals(retryStartedAt, generation.getStartedAt());
+		assertEquals(AnalysisStepStatus.PROCESSING, generation.getStatus());
+		assertEquals(AnalysisStatus.PROCESSING, analysis.getStatus());
+		assertEquals(AnalysisErrorCode.STALE_REPORT_GENERATION_ATTEMPT,
+				assertThrows(AnalysisException.class, () -> generation.retryReportGeneration(STARTED_AT.plusSeconds(3)))
+						.getBaseErrorCode());
+		assertEquals(AnalysisErrorCode.STALE_REPORT_GENERATION_ATTEMPT,
+				assertThrows(AnalysisException.class,
+						() -> generation.completeReportGeneration(0, "이전 결과", STARTED_AT.plusSeconds(3)))
+						.getBaseErrorCode());
+		assertEquals(AnalysisStatus.PROCESSING, analysis.getStatus());
+
+		var resultReport = generation.completeReportGeneration(1, "재시도 결과", STARTED_AT.plusSeconds(4));
+		assertEquals(AnalysisStatus.SUCCEEDED, analysis.getStatus());
+		assertEquals(AnalysisStepStatus.SUCCEEDED, generation.getStatus());
+		assertEquals("재시도 결과", resultReport.getSummary());
+		assertEquals(BigDecimal.TEN, analysis.getTotalScore());
+	}
+
+	@Test
+	void finalReportGenerationFailurePreservesTheScoreAndRecordsTheCause() {
+		var analysis = processingAnalysis();
+		analysis.recordScore(BigDecimal.TEN);
+		var generation = ReportAnalysisStep.create(AnalysisStepCode.REPORT_GENERATION, analysis);
+		generation.start(STARTED_AT.plusSeconds(1));
+		generation.retryReportGeneration(STARTED_AT.plusSeconds(2));
+		Instant finishedAt = STARTED_AT.plusSeconds(3);
+		generation.failReportGeneration(1, "REPORT_TIMEOUT", "리포트 생성 시간 초과", finishedAt);
+
+		assertEquals(AnalysisStatus.REPORT_GENERATION_FAILED, analysis.getStatus());
+		assertEquals(AnalysisStepStatus.FAILED, generation.getStatus());
+		assertEquals(BigDecimal.TEN, analysis.getTotalScore());
+		assertEquals("REPORT_TIMEOUT", analysis.getFailureCode());
+		assertEquals(analysis.getFailureCode(), generation.getFailureCode());
+		assertEquals("리포트 생성 시간 초과", analysis.getFailureReason());
+		assertEquals(finishedAt, analysis.getFinishedAt());
+		assertEquals(finishedAt, generation.getFinishedAt());
 	}
 
 	@Test
 	void cancelledAnalysisRejectsLateCompletion() {
-		ReportContent content = ReportContent.create(report(), ValidatedReportBody.from(body("original")));
-		content.freeze();
-		ReportAnalysis analysis = ReportAnalysis.request(content, UUID.randomUUID(), "v1", "v1");
-		Instant now = Instant.now();
-		analysis.start(now);
-		analysis.cancel(now.plusSeconds(1));
+		var analysis = processingAnalysis();
+		analysis.recordScore(BigDecimal.TEN);
+		var generation = ReportAnalysisStep.create(AnalysisStepCode.REPORT_GENERATION, analysis);
+		generation.start(STARTED_AT.plusSeconds(1));
+		analysis.cancel(STARTED_AT.plusSeconds(2));
 		assertEquals(AnalysisErrorCode.ANALYSIS_NOT_PROCESSING,
-				assertThrows(AnalysisException.class, () -> analysis.succeed(BigDecimal.TEN, now.plusSeconds(2)))
+				assertThrows(AnalysisException.class,
+						() -> generation.completeReportGeneration(0, "취소된 결과", STARTED_AT.plusSeconds(3)))
 						.getBaseErrorCode());
 		assertEquals(AnalysisStatus.CANCELLED, analysis.getStatus());
 		assertNull(analysis.getTotalScore());
 	}
 
 	@Test
-	void analysisRequiresFrozenInput() {
+	void analysisUsesTheFixedParsedBody() {
 		ReportContent content = ReportContent.create(report(), ValidatedReportBody.from(body("original")));
-		assertEquals(AnalysisErrorCode.INPUT_NOT_FROZEN, assertThrows(AnalysisException.class,
-				() -> ReportAnalysis.request(content, UUID.randomUUID(), "v1", "v1")).getBaseErrorCode());
+		assertSame(content, ReportAnalysis.request(content, UUID.randomUUID(), "v1", "v1").getContent());
 	}
 
-	@Test
-	void textReportHasNoFileMetadata() {
-		Report report = Report.createFromText(member(), ReportType.PLAN, "title");
-		assertNull(report.getSourceObjectKey());
-		assertNull(report.getFileFormat());
-		assertNull(report.getOriginalFilename());
-		assertNull(report.getFileSizeBytes());
+	private ReportAnalysis processingAnalysis() {
+		ReportContent content = ReportContent.create(report(), ValidatedReportBody.from(body("original")));
+		ReportAnalysis analysis = ReportAnalysis.request(content, UUID.randomUUID(), "v1", "v1");
+		analysis.start(STARTED_AT);
+		return analysis;
 	}
 
 	private Report report() {
-		return Report.createFromText(member(), ReportType.PLAN, "title");
+		return Report.create(member(), ReportType.PLAN);
 	}
 
 	private ReportBody body(String text) {

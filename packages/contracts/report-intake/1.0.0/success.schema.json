@@ -10,8 +10,7 @@
     "parseAttemptId",
     "parseStatus",
     "extractionQuality",
-    "warnings",
-    "sourceExpiresAt"
+    "warnings"
   ],
   "properties": {
     "reportId": {
@@ -43,10 +42,6 @@
       "items": {
         "$ref": "#/$defs/warning"
       }
-    },
-    "sourceExpiresAt": {
-      "type": "string",
-      "format": "date-time"
     }
   },
   "$defs": {

@@ -76,7 +76,7 @@ public class ReportParseAttempt extends BaseTimeEntity {
 
 	private ReportParseAttempt(Report report) {
 		Objects.requireNonNull(report, "report");
-		report.requireSourceAvailable();
+		report.requireActiveIntake();
 		this.processStatus = ParseStatus.PENDING;
 		this.extractionWarnings = JsonNodeFactory.instance.arrayNode();
 		this.report = report;

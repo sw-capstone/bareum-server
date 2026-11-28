@@ -16,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.bareum.server.domain.member.entity.Member;
 import com.bareum.server.domain.report.dto.response.ReportUploadResponse;
 import com.bareum.server.domain.report.entity.Report;
+import com.bareum.server.domain.report.entity.ReportFile;
 import com.bareum.server.domain.report.entity.ReportIntakeRequest;
 import com.bareum.server.domain.report.entity.ReportParseAttempt;
 import com.bareum.server.domain.report.enums.ExtractionQuality;
@@ -51,14 +52,16 @@ class ReportIntakeStorageIntegrationTests {
 		assertEquals(2, jdbc.queryForObject("SELECT count(*) FROM report_intake_request WHERE request_key = ?",
 				Integer.class, key));
 		assertThrows(DataIntegrityViolationException.class, () -> jdbc.update("""
-				INSERT INTO report_intake_request(member_id,request_key,request_fingerprint,status,requested_at)
-				VALUES(?,?,?,'PROCESSING',now())
+				INSERT INTO report_intake_request(member_id,request_key,request_fingerprint,status,requested_at,
+				                                 processing_deadline_at)
+				VALUES(?,?,?,'PROCESSING',now(),now() + INTERVAL '1 minute')
 				""", first.getId(), key, IntakeFixtures.HASH));
 	}
 
 	@Test
 	void expandedErrorColumnAndSourceIdentitySurviveReload() {
 		Report report = persistReport(persistMember());
+		var original = persistOriginal(report);
 		var attempt = ReportParseAttempt.request(report);
 		attempt.start(IntakeFixtures.NOW);
 		attempt.fail("SOURCE_DOWNLOAD_TEMPORARY_FAILURE", IntakeFixtures.NOW.plusSeconds(1));
@@ -68,8 +71,10 @@ class ReportIntakeStorageIntegrationTests {
 		entities.clear();
 		var reloaded = entities.find(ReportParseAttempt.class, id);
 		assertEquals("SOURCE_DOWNLOAD_TEMPORARY_FAILURE", reloaded.getErrorCode());
-		assertEquals(IntakeFixtures.HASH, reloaded.getReport().getSourceSha256());
-		assertEquals("version-1", reloaded.getReport().getSourceVersionId());
+		var source = entities.find(ReportFile.class, original.getId());
+		assertEquals(reloaded.getReport().getId(), source.getReport().getId());
+		assertEquals(IntakeFixtures.HASH, source.getSha256());
+		assertEquals("version-1", source.getVersionId());
 	}
 
 	@Test
@@ -100,9 +105,7 @@ class ReportIntakeStorageIntegrationTests {
 		attempt.complete(content, ExtractionQuality.PARTIAL, mapper.createArrayNode(),
 				IntakeFixtures.NOW.plusSeconds(1));
 		entities.persist(attempt);
-		var request = IntakeFixtures.request(member);
-		request.assignSourceKey(report.getSourceObjectKey());
-		request.recordUploadedSource(IntakeFixtures.source(report.getSourceObjectKey()));
+		var request = attachOriginal(persistOriginal(report));
 		request.attachAttempt(attempt);
 		request.complete(201, mapper.valueToTree(ReportUploadResponse.from(attempt)),
 				IntakeFixtures.NOW.plusSeconds(2));
@@ -120,15 +123,26 @@ class ReportIntakeStorageIntegrationTests {
 	}
 
 	@Test
+	void reportCanBeStoredBeforeItsFirstAttempt() {
+		var report = persistReport(persistMember());
+		var request = attachOriginal(persistOriginal(report));
+		entities.persist(request);
+		entities.flush();
+		entities.clear();
+
+		var loaded = entities.find(ReportIntakeRequest.class, request.getId());
+		assertEquals(report.getId(), loaded.getReport().getId());
+		assertNull(loaded.getParseAttempt());
+	}
+
+	@Test
 	void databaseRejectsAnAttemptPairedWithAnotherReport() {
 		Member member = persistMember();
 		Report report = persistReport(member);
 		Report otherReport = persistReport(member);
 		var attempt = ReportParseAttempt.request(report);
 		entities.persist(attempt);
-		var request = IntakeFixtures.request(member);
-		request.assignSourceKey(report.getSourceObjectKey());
-		request.recordUploadedSource(IntakeFixtures.source(report.getSourceObjectKey()));
+		var request = attachOriginal(persistOriginal(report));
 		request.attachAttempt(attempt);
 		entities.persist(request);
 		entities.flush();
@@ -175,18 +189,17 @@ class ReportIntakeStorageIntegrationTests {
 		attempt.start(IntakeFixtures.NOW);
 		attempt.fail("PARSER_FAILED", IntakeFixtures.NOW.plusSeconds(1));
 		entities.persist(attempt);
-		var request = IntakeFixtures.request(member);
-		request.assignSourceKey(report.getSourceObjectKey());
-		request.recordUploadedSource(IntakeFixtures.source(report.getSourceObjectKey()));
+		var original = persistOriginal(report);
+		var request = attachOriginal(original);
 		request.attachAttempt(attempt);
 		request.complete(500, mapper.createObjectNode(), IntakeFixtures.NOW.plusSeconds(2));
-		report.scheduleSourceCleanup(IntakeFixtures.NOW.plusSeconds(2));
+		original.scheduleDeletion(IntakeFixtures.NOW.plusSeconds(2), IntakeFixtures.NOW.plusSeconds(2));
 		entities.persist(request);
 		entities.flush();
 		var now = IntakeFixtures.NOW.plusSeconds(90_000);
 		var job = new ReportIntakeRetentionJob(commands, Clock.fixed(now, ZoneOffset.UTC));
 		assertEquals(0, job.purgeExpiredRequests());
-		report.markSourceDeleted(now);
+		original.markS3Deleted(now);
 		entities.flush();
 		assertEquals(1, job.purgeExpiredRequests());
 		assertEquals(1, jdbc.queryForObject("SELECT count(*) FROM report WHERE id = ?", Integer.class, report.getId()));
@@ -224,6 +237,20 @@ class ReportIntakeStorageIntegrationTests {
 		Report report = IntakeFixtures.report(member);
 		entities.persist(report);
 		return report;
+	}
+
+	private ReportFile persistOriginal(Report report) {
+		var original = IntakeFixtures.original(report);
+		entities.persist(original);
+		return original;
+	}
+
+	private ReportIntakeRequest attachOriginal(ReportFile file) {
+		var request = IntakeFixtures.request(file.getReport().getMember());
+		request.assignSourceKey(file.getObjectKey());
+		request.recordUploadedSource(IntakeFixtures.source(file.getObjectKey()));
+		request.attachReport(file);
+		return request;
 	}
 
 	private ReportIntakeRequest terminalRequest(Member member) {

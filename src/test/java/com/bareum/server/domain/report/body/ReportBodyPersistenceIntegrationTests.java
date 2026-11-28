@@ -10,6 +10,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,7 +19,6 @@ import com.bareum.server.domain.report.body.ReportBody.TextBlock;
 import com.bareum.server.domain.report.body.ReportBody.Unit;
 import com.bareum.server.domain.report.entity.Report;
 import com.bareum.server.domain.report.entity.ReportContent;
-import com.bareum.server.domain.report.enums.ContentStatus;
 import com.bareum.server.domain.report.enums.ReportType;
 import com.bareum.server.domain.report.enums.SourceFormat;
 
@@ -114,38 +114,21 @@ class ReportBodyPersistenceIntegrationTests {
 	}
 
 	@Test
-	void replacesDraftWithoutChangingFrozenBaseline() throws Exception {
-		ReportBody original = codec.read(BodyFixtures.contract("1.0.0", "direct-input"));
-		ReportContent baseline = ReportContent.create(persistReport(), ValidatedReportBody.from(original));
-		baseline.freeze();
-		entityManager.persist(baseline);
-		ReportContent draft = ReportContent.draftFrom(baseline);
-		entityManager.persist(draft);
+	void databaseAllowsOnlyOneParsedBodyPerReport() throws Exception {
+		String json = BodyFixtures.contract("1.0.0", "pdf");
+		Report report = persistReport();
+		var content = ReportContent.create(report, ValidatedReportBody.from(codec.read(json)));
+		entityManager.persist(content);
 		entityManager.flush();
-		Long baselineId = baseline.getId();
-		Long draftId = draft.getId();
-		entityManager.clear();
-
-		ReportBody replacement = codec.read(BodyFixtures.contract("1.0.0", "partial-table"));
-		entityManager.find(ReportContent.class, draftId).replaceContent(ValidatedReportBody.from(replacement));
-		entityManager.flush();
-		entityManager.clear();
-
-		ReportContent reloadedBaseline = entityManager.find(ReportContent.class, baselineId);
-		ReportContent reloadedDraft = entityManager.find(ReportContent.class, draftId);
-		assertEquals(original, reloadedBaseline.getContent());
-		assertEquals(ContentStatus.FROZEN, reloadedBaseline.getStatus());
-		assertEquals(1, reloadedBaseline.getRevision());
-		assertEquals(replacement, reloadedDraft.getContent());
-		assertEquals(ContentStatus.DRAFT, reloadedDraft.getStatus());
-		assertEquals(2, reloadedDraft.getRevision());
-		assertEquals(baselineId, reloadedDraft.getBaseContent().getId());
+		assertThrows(DataIntegrityViolationException.class, () -> jdbc.update(
+				"INSERT INTO report_content (report_id, content) VALUES (?, CAST(? AS jsonb))",
+				report.getId(), json));
 	}
 
 	private Report persistReport() {
 		Member member = Member.createLocal("body-" + UUID.randomUUID() + "@example.invalid", "tester", "hash");
 		entityManager.persist(member);
-		Report report = Report.createFromText(member, ReportType.PLAN, "본문 저장 테스트");
+		Report report = Report.create(member, ReportType.PLAN);
 		entityManager.persist(report);
 		return report;
 	}

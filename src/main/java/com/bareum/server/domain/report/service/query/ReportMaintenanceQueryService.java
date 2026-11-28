@@ -7,8 +7,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.bareum.server.domain.report.config.ReportIntakeProperties;
+import com.bareum.server.domain.report.repository.ReportFileRepository;
 import com.bareum.server.domain.report.repository.ReportIntakeRequestRepository;
-import com.bareum.server.domain.report.repository.ReportRepository;
 
 import lombok.RequiredArgsConstructor;
 
@@ -18,7 +18,7 @@ import lombok.RequiredArgsConstructor;
 @Transactional(readOnly = true)
 public class ReportMaintenanceQueryService {
 	private final ReportIntakeRequestRepository requests;
-	private final ReportRepository reports;
+	private final ReportFileRepository files;
 	private final ReportIntakeProperties properties;
 
 	public List<Long> expiredRequests(Instant now, long afterId) {
@@ -29,7 +29,7 @@ public class ReportMaintenanceQueryService {
 		return requests.findOrphanCleanupIds(now, afterId, properties.maintenanceBatchSize());
 	}
 
-	public List<Long> reportSources(Instant now, long afterId) {
-		return reports.findSourceCleanupIds(now, afterId, properties.maintenanceBatchSize());
+	public List<Long> reportFiles(Instant now, long afterId) {
+		return files.findCleanupIds(now, afterId, properties.maintenanceBatchSize());
 	}
 }

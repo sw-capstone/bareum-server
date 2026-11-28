@@ -9,7 +9,6 @@ import com.bareum.server.domain.analysis.enums.AnalysisStatus;
 import com.bareum.server.domain.analysis.exception.AnalysisErrorCode;
 import com.bareum.server.domain.analysis.exception.AnalysisException;
 import com.bareum.server.domain.report.entity.ReportContent;
-import com.bareum.server.domain.report.enums.ContentStatus;
 import com.bareum.server.global.entity.BaseTimeEntity;
 
 import jakarta.persistence.Column;
@@ -59,6 +58,9 @@ public class ReportAnalysis extends BaseTimeEntity {
 	@Column(name = "finished_at", nullable = true)
 	private Instant finishedAt;
 
+	@Column(name = "deleted_at")
+	private Instant deletedAt;
+
 	@Column(name = "failure_code", nullable = true, length = 30)
 	private String failureCode;
 
@@ -75,9 +77,6 @@ public class ReportAnalysis extends BaseTimeEntity {
 		Objects.requireNonNull(content, "content");
 		Objects.requireNonNull(requestKey, "requestKey");
 		content.getReport().requireActiveIntake();
-		if (content.getStatus() != ContentStatus.FROZEN) {
-			throw new AnalysisException(AnalysisErrorCode.INPUT_NOT_FROZEN);
-		}
 		this.content = content;
 		this.requestKey = requestKey;
 		this.status = AnalysisStatus.PENDING;
@@ -102,16 +101,36 @@ public class ReportAnalysis extends BaseTimeEntity {
 		status = AnalysisStatus.PROCESSING;
 	}
 
-	public void succeed(BigDecimal totalScore, Instant finishedAt) {
+	public void recordScore(BigDecimal totalScore) {
 		requireProcessing();
 		if (totalScore == null || totalScore.signum() < 0 || totalScore.precision() - totalScore.scale() > 3
 				|| totalScore.stripTrailingZeros().scale() > 2) {
 			throw new AnalysisException(AnalysisErrorCode.INVALID_SCORE);
 		}
+		if (this.totalScore == null) {
+			this.totalScore = totalScore;
+		} else if (this.totalScore.compareTo(totalScore) != 0) {
+			throw new AnalysisException(AnalysisErrorCode.INVALID_SCORE);
+		}
+	}
+
+	void requireScoreForReportGeneration() {
+		requireProcessing();
+		if (totalScore == null) {
+			throw new AnalysisException(AnalysisErrorCode.SCORE_NOT_RECORDED);
+		}
+	}
+
+	void finishReportGenerationSucceeded(Instant finishedAt) {
+		requireScoreForReportGeneration();
 		validateFinishTime(finishedAt);
-		this.totalScore = totalScore;
 		this.finishedAt = finishedAt;
 		status = AnalysisStatus.SUCCEEDED;
+	}
+
+	void finishReportGenerationFailed(String failureCode, String failureReason, Instant finishedAt) {
+		requireScoreForReportGeneration();
+		finishFailure(AnalysisStatus.REPORT_GENERATION_FAILED, failureCode, failureReason, finishedAt);
 	}
 
 	public void fail(String failureCode, String failureReason, Instant finishedAt) {
@@ -137,7 +156,18 @@ public class ReportAnalysis extends BaseTimeEntity {
 		}
 		validateFinishTime(finishedAt);
 		this.finishedAt = finishedAt;
+		totalScore = null;
 		status = AnalysisStatus.CANCELLED;
+	}
+
+	public void softDelete(Instant deletedAt) {
+		if (status == AnalysisStatus.PENDING || status == AnalysisStatus.PROCESSING) {
+			throw new AnalysisException(AnalysisErrorCode.ANALYSIS_IN_PROGRESS);
+		}
+		Objects.requireNonNull(deletedAt, "deletedAt");
+		if (this.deletedAt == null) {
+			this.deletedAt = deletedAt;
+		}
 	}
 
 	private void requireProcessing() {

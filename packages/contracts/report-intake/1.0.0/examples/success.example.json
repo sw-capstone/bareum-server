@@ -4,6 +4,5 @@
   "parseAttemptId": 201,
   "parseStatus": "SUCCEEDED",
   "extractionQuality": "COMPLETE",
-  "warnings": [],
-  "sourceExpiresAt": "2026-12-04T03:00:00Z"
+  "warnings": []
 }
